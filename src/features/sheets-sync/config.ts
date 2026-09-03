@@ -1,0 +1,139 @@
+/**
+ * Spreadsheet config persistence — one active config per user (upsert on the
+ * active row; other rows are never needed). Stored jsonb mapping is
+ * re-parsed at the trust boundary via mappingSchema.
+ */
+import { and, desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { db } from "@/server/db";
+import { spreadsheetConfigs, users } from "@/server/db/schema";
+import { env } from "@/server/env";
+import { mappingSchema, type SheetMapping } from "./mapping";
+
+export interface SpreadsheetConfigDTO {
+  id: string;
+  spreadsheetId: string;
+  worksheetName: string;
+  mapping: SheetMapping;
+  timezone: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const upsertSyncConfigSchema = z.object({
+  spreadsheetId: z.string().min(5),
+  worksheetName: z.string().min(1),
+  mapping: mappingSchema,
+  timezone: z.string().min(1).optional(),
+});
+
+type SpreadsheetConfigRow = typeof spreadsheetConfigs.$inferSelect;
+
+function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
+  // Re-parsed at the boundary — a corrupt jsonb fails loudly here.
+  const mapping = mappingSchema.parse(row.mapping);
+  return {
+    id: row.id,
+    spreadsheetId: row.spreadsheetId,
+    worksheetName: row.worksheetName,
+    mapping,
+    timezone: row.timezone,
+    active: row.active,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** The user's single active spreadsheet config, or null. */
+export async function getSyncConfig(
+  userId: string,
+): Promise<SpreadsheetConfigDTO | null> {
+  const rows = await db
+    .select()
+    .from(spreadsheetConfigs)
+    .where(
+      and(
+        eq(spreadsheetConfigs.userId, userId),
+        eq(spreadsheetConfigs.active, true),
+      ),
+    )
+    .orderBy(desc(spreadsheetConfigs.updatedAt))
+    .limit(1);
+  return rows.length > 0 ? toConfigDTO(rows[0]) : null;
+}
+
+/** User's stored IANA timezone (fallback: the app default). */
+export async function getUserTimezone(userId: string): Promise<string> {
+  const rows = await db
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return rows.length > 0 ? rows[0].timezone : env.DEFAULT_TIMEZONE;
+}
+
+/**
+ * Create or replace the user's active config — one active config per user.
+ * Input is parsed, never trusted raw. Timezone defaults to the user's stored
+ * IANA timezone.
+ */
+export async function upsertSyncConfig(
+  userId: string,
+  input: unknown,
+): Promise<SpreadsheetConfigDTO> {
+  const parsed = upsertSyncConfigSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(`Invalid sync config: ${firstIssueMessage(parsed.error)}`);
+  }
+  const { spreadsheetId, worksheetName, mapping, timezone } = parsed.data;
+  const resolvedTimezone = timezone ?? (await getUserTimezone(userId));
+
+  const existing = await db
+    .select()
+    .from(spreadsheetConfigs)
+    .where(
+      and(
+        eq(spreadsheetConfigs.userId, userId),
+        eq(spreadsheetConfigs.active, true),
+      ),
+    )
+    .orderBy(desc(spreadsheetConfigs.updatedAt))
+    .limit(1);
+
+  if (existing.length > 0) {
+    const [updated] = await db
+      .update(spreadsheetConfigs)
+      .set({
+        spreadsheetId,
+        worksheetName,
+        mapping,
+        timezone: resolvedTimezone,
+        active: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(spreadsheetConfigs.id, existing[0].id))
+      .returning();
+    return toConfigDTO(updated);
+  }
+
+  const [created] = await db
+    .insert(spreadsheetConfigs)
+    .values({
+      userId,
+      spreadsheetId,
+      worksheetName,
+      mapping,
+      timezone: resolvedTimezone,
+      active: true,
+    })
+    .returning();
+  return toConfigDTO(created);
+}
+
+function firstIssueMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "invalid input";
+  const path = issue.path.map(String).join(".");
+  return `${path || "body"}: ${issue.message}`;
+}
