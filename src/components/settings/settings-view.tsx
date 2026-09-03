@@ -230,8 +230,11 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
 
   function validate(): string[] {
     const errors: string[] = [];
-    if (form.spreadsheetId.trim().length < 5) {
-      errors.push("Spreadsheet ID must be at least 5 characters.");
+    const spreadsheetId = form.spreadsheetId.trim();
+    if (spreadsheetId.length > 0 && spreadsheetId.length < 5) {
+      errors.push(
+        "Spreadsheet ID must be at least 5 characters, or empty for file-only sync.",
+      );
     }
     if (form.worksheetName.trim().length === 0) {
       errors.push("Worksheet name is required.");
@@ -269,7 +272,9 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
       await apiFetch("/api/sync-config", {
         method: "PUT",
         body: JSON.stringify({
-          spreadsheetId: form.spreadsheetId.trim(),
+          spreadsheetId: form.spreadsheetId.trim().length > 0
+            ? form.spreadsheetId.trim()
+            : undefined,
           worksheetName: form.worksheetName.trim(),
           timezone: form.timezone.trim(),
           mapping: {
@@ -317,11 +322,13 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Google Sheets</CardTitle>
+            <CardTitle>Google Sheets &amp; file sync</CardTitle>
             <CardDescription>
               Where the reviewed day lands. Column letters map TETRA fields to
               worksheet cells — verify them against the actual workbook before
-              the first sync.
+              the first sync. Google needs a spreadsheet ID; the file path
+              (upload .xlsx/.csv on the Reports page) uses only the worksheet
+              name and these mappings.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -344,7 +351,12 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                 )}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label htmlFor="spreadsheet-id">Spreadsheet ID</Label>
+                    <Label htmlFor="spreadsheet-id">
+                      Spreadsheet ID{" "}
+                      <span className="font-normal text-muted-foreground">
+                        (optional for file sync)
+                      </span>
+                    </Label>
                     <Input
                       id="spreadsheet-id"
                       className="h-11 font-mono"
@@ -355,7 +367,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                           spreadsheetId: e.target.value,
                         }))
                       }
-                      placeholder="1AbC…"
+                      placeholder="Only needed for Google sync"
                       autoComplete="off"
                       spellCheck={false}
                       data-testid="settings-spreadsheet-id"
@@ -376,6 +388,10 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                       placeholder="Sheet1"
                       autoComplete="off"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      For file sync this must match the tab name inside your
+                      .xlsx (or just the first CSV column layout).
+                    </p>
                   </div>
                 </div>
 

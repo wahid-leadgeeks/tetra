@@ -27,6 +27,7 @@ import {
   formatDayShort,
 } from "@/components/timeline/time";
 import { SyncPreviewDialog } from "@/components/reports/sync-preview-dialog";
+import { FileSyncDialog } from "@/components/reports/file-sync-dialog";
 import { formatHuman } from "@/lib/time";
 import type {
   DaySummaryDTO,
@@ -99,6 +100,7 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
   const [fetchKey, setFetchKey] = useState(0);
 
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [fileSyncOpen, setFileSyncOpen] = useState(false);
   const [marking, setMarking] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -367,6 +369,15 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
             <Button
               variant="outline"
               className="h-11 px-4"
+              onClick={() => setFileSyncOpen(true)}
+              data-testid="sync-file-button"
+              title="No Google account needed — upload the report file, get it back updated"
+            >
+              Sync to file
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 px-4"
               onClick={() => void handleSync()}
               disabled={syncing}
               data-testid="sync-button"
@@ -423,6 +434,13 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         dayKey={dayKey}
+      />
+
+      <FileSyncDialog
+        open={fileSyncOpen}
+        onOpenChange={setFileSyncOpen}
+        dayKey={dayKey}
+        onSynced={refresh}
       />
     </div>
   );
