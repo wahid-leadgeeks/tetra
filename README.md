@@ -81,9 +81,18 @@ pnpm test:e2e
 
 ## Google Sheets
 
-Configure:
-- spreadsheet ID
-- worksheet/tab
+TETRA can sync the reviewed day two ways — both use the same column mapping
+and the same audit trail:
+
+- **Google Sheets** (needs a spreadsheet ID + Google credentials): direct
+  narrow cell writes to the live workbook.
+- **File sync** (no Google account): on the Reports page, upload the report
+  workbook (`.xlsx` or `.csv`), and download it back with exactly the mapped
+  cells updated. Nothing is stored server-side.
+
+Configure (shared by both paths):
+- spreadsheet ID (Google path only)
+- worksheet/tab name
 - date-row strategy
 - attendance columns
 - break columns
