@@ -127,6 +127,7 @@ export function LoginForm({ googleEnabled, devLoginEnabled }: LoginFormProps) {
                     onChange={(event) => setEmail(event.target.value)}
                     disabled={pending !== null}
                     required
+                    suppressHydrationWarning
                   />
                 </div>
                 <div className="flex flex-col gap-2">
