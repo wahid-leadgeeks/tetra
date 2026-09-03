@@ -22,7 +22,8 @@ export interface SpreadsheetConfigDTO {
 }
 
 export const upsertSyncConfigSchema = z.object({
-  spreadsheetId: z.string().min(5),
+  /** Optional for file-based sync — Google sync requires it. */
+  spreadsheetId: z.string().min(5).optional().default("file"),
   worksheetName: z.string().min(1),
   mapping: mappingSchema,
   timezone: z.string().min(1).optional(),
