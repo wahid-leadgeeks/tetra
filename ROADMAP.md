@@ -1,56 +1,59 @@
 # TETRA Roadmap
 
+MVP (Phases 0–4) is complete and verified: lint/typecheck/build green, 81 unit
+tests, critical E2E flow passing.
+
 ## Phase 0 — Foundation
-- [ ] Initialize Next.js.
-- [ ] TypeScript strict mode.
-- [ ] Tailwind + shadcn.
-- [ ] PostgreSQL + Drizzle.
-- [ ] Authentication.
-- [ ] Environment validation.
-- [ ] CI.
-- [ ] Vitest + Playwright.
-- [ ] Seed categories.
+- [x] Initialize Next.js.
+- [x] TypeScript strict mode.
+- [x] Tailwind + shadcn.
+- [x] PostgreSQL + Drizzle.
+- [x] Authentication.
+- [x] Environment validation.
+- [x] CI.
+- [x] Vitest + Playwright.
+- [x] Seed categories.
 
 ## Phase 1 — Attendance
-- [ ] Clock in/out.
-- [ ] Break start/end.
-- [ ] Daily attendance calculation.
-- [ ] Timezone handling.
-- [ ] Validation.
-- [ ] Tests.
+- [x] Clock in/out.
+- [x] Break start/end.
+- [x] Daily attendance calculation.
+- [x] Timezone handling.
+- [x] Validation.
+- [x] Tests.
 
 ## Phase 2 — Activity Timer
-- [ ] Start/stop.
-- [ ] Pause/resume.
-- [ ] Category picker.
-- [ ] Task creation.
-- [ ] Recent tasks.
-- [ ] Timeline.
-- [ ] Manual entry.
-- [ ] Edit/delete.
-- [ ] Overlap validation.
+- [x] Start/stop.
+- [x] Pause/resume.
+- [x] Category picker.
+- [x] Task creation.
+- [x] Recent tasks.
+- [x] Timeline.
+- [x] Manual entry.
+- [x] Edit/delete.
+- [x] Overlap validation.
 
 ## Phase 3 — Daily Review
-- [ ] Daily aggregation.
-- [ ] Category totals.
-- [ ] Gap detection.
-- [ ] Overlap warnings.
-- [ ] Review state.
-- [ ] Correction workflow.
+- [x] Daily aggregation.
+- [x] Category totals.
+- [x] Gap detection.
+- [x] Overlap warnings.
+- [x] Review state.
+- [x] Correction workflow.
 
 ## Phase 4 — Google Sheets
-- [ ] OAuth Sheets permission.
-- [ ] Spreadsheet configuration.
-- [ ] Worksheet configuration.
-- [ ] Column mapping.
-- [ ] Date-row matching.
-- [ ] Sync preview.
-- [ ] Narrow cell writes.
-- [ ] Idempotent sync.
-- [ ] Sync history.
-- [ ] Retry.
-- [ ] Failure state.
-- [ ] Production workbook verification.
+- [ ] OAuth Sheets permission. (requires a real Google Cloud project)
+- [x] Spreadsheet configuration.
+- [x] Worksheet configuration.
+- [x] Column mapping.
+- [x] Date-row matching.
+- [x] Sync preview.
+- [x] Narrow cell writes.
+- [x] Idempotent sync.
+- [x] Sync history.
+- [x] Retry.
+- [x] Failure state.
+- [ ] Production workbook verification. (requires the production workbook + credentials)
 
 ## Phase 5 — Convenience
 - [ ] Quick-start tasks.
