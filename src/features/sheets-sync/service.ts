@@ -67,7 +67,7 @@ export async function previewSync(
 ): Promise<SyncPreviewDTO> {
   const config = await getSyncConfig(userId);
   if (!config) throw new SyncNotConfiguredError("No spreadsheet configured");
-  const sheets = getSheetsClient();
+  const sheets = await getSheetsClient();
   if (!sheets) {
     throw new SyncNotConfiguredError(
       "Google Sheets credentials not configured",
@@ -108,7 +108,7 @@ export async function executeSync(
 
   const config = await getSyncConfig(userId);
   if (!config) throw new SyncNotConfiguredError("No spreadsheet configured");
-  const sheets = getSheetsClient();
+  const sheets = await getSheetsClient();
   if (!sheets) {
     throw new SyncNotConfiguredError(
       "Google Sheets credentials not configured",
