@@ -26,7 +26,10 @@ const CATEGORIES: { key: string; name: string; sortOrder: number }[] = [
 ];
 
 async function main() {
-  const sql = postgres(process.env.DATABASE_URL ?? "", { max: 1 });
+  // Empty-string DATABASE_URL must fall through to the dev default —
+  // postgres("") would silently connect as the OS user.
+  const url = process.env.DATABASE_URL || "postgresql://tetra:tetra_dev@localhost:5432/tetra";
+  const sql = postgres(url, { max: 1 });
   const db = drizzle(sql);
   for (const c of CATEGORIES) {
     await db
