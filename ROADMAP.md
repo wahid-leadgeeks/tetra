@@ -53,6 +53,7 @@ tests, critical E2E flow passing.
 - [x] Sync history.
 - [x] Retry.
 - [x] Failure state.
+- [x] Optional file-based sync (.xlsx/.csv upload → download) without Google auth.
 - [ ] Production workbook verification. (requires the production workbook + credentials)
 
 ## Phase 5 — Convenience
