@@ -29,9 +29,9 @@ jobs:
       ALLOW_DEV_LOGIN: "true"
     steps:
       - uses: actions/checkout@v4
+      # pnpm version comes from package.json "packageManager" — single
+      # source of truth; specifying "version" here too makes the action fail.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 24
