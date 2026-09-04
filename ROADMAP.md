@@ -59,11 +59,11 @@ tests, critical E2E flow passing.
 ## Phase 5 — Convenience
 - [x] Quick-start tasks.
 - [x] Favorites.
-- [ ] Keyboard shortcuts.
-- [ ] Mobile polish.
+- [x] Keyboard shortcuts.
+- [x] Mobile polish.
 - [ ] Notifications.
 - [x] Weekly summary.
-- [ ] Monthly summary.
+- [x] Monthly summary.
 
 ## Phase 6 — Integrations
 - [ ] Google Calendar.
