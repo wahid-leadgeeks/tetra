@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { StartTaskDialog } from "@/components/today/start-task-dialog";
 import { QuickStart } from "@/components/today/quick-start";
+import { StickyTaskBar } from "@/components/today/sticky-task-bar";
 import { formatStopwatch } from "@/components/today/timer";
 import { useStopwatch } from "@/components/today/use-stopwatch";
+import { useTodayShortcuts } from "@/components/today/use-today-shortcuts";
 import { useTodayState, type PendingAction } from "@/components/today/use-today-state";
 import { cn } from "@/lib/utils";
 import { formatHuman, zonedClock } from "@/lib/time";
@@ -98,6 +100,21 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
   const showSkeleton = loadState === "loading" && summary === null;
   const showError = loadState === "error" && summary === null;
 
+  useTodayShortcuts({
+    attendanceOpen: isWorking,
+    canClockIn: attendance === null,
+    hasActiveEntry: activeEntry !== null,
+    isRunning: activeEntry?.status === "active",
+    isPaused: activeEntry?.status === "paused",
+    onBreak,
+    busy,
+    clockIn,
+    openLogActivity: () => setLogActivityOpen(true),
+    toggleBreak: () => void (onBreak ? endBreak() : startBreak()),
+    togglePauseResume: () =>
+      void (activeEntry?.status === "paused" ? resumeTask() : pauseTask()),
+  });
+
   return (
     <div className="flex flex-col gap-10">
       <header className="flex flex-col gap-3">
@@ -172,6 +189,18 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
               onLogActivity={() => setLogActivityOpen(true)}
             />
           )}
+
+          {activeEntry ? (
+            <StickyTaskBar
+              key={`sticky-${activeEntry.id}`}
+              entry={activeEntry}
+              initialNowMs={initialNowMs}
+              busy={busy}
+              onPause={pauseTask}
+              onResume={resumeTask}
+              onStop={stopTask}
+            />
+          ) : null}
 
           <QuickStart timeZone={timezone} refresh={() => void refresh()} />
 
