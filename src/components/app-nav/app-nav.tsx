@@ -12,24 +12,51 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Kbd } from "@/components/keyboard/kbd";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
   testId: string;
+  shortcut: string;
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
-  { href: "/", label: "Today", icon: CalendarDays, testId: "nav-today" },
-  { href: "/timeline", label: "Timeline", icon: Clock, testId: "nav-timeline" },
-  { href: "/tasks", label: "Tasks", icon: ListTodo, testId: "nav-tasks" },
-  { href: "/reports", label: "Reports", icon: BarChart3, testId: "nav-reports" },
+  {
+    href: "/",
+    label: "Today",
+    icon: CalendarDays,
+    testId: "nav-today",
+    shortcut: "1",
+  },
+  {
+    href: "/timeline",
+    label: "Timeline",
+    icon: Clock,
+    testId: "nav-timeline",
+    shortcut: "2",
+  },
+  {
+    href: "/tasks",
+    label: "Tasks",
+    icon: ListTodo,
+    testId: "nav-tasks",
+    shortcut: "3",
+  },
+  {
+    href: "/reports",
+    label: "Reports",
+    icon: BarChart3,
+    testId: "nav-reports",
+    shortcut: "4",
+  },
   {
     href: "/settings",
     label: "Settings",
     icon: Settings,
     testId: "nav-settings",
+    shortcut: "5",
   },
 ];
 
@@ -61,6 +88,9 @@ export function SidebarNav() {
           >
             <item.icon aria-hidden className="size-4.5 shrink-0" />
             {item.label}
+            <Kbd aria-hidden="true" className="ml-auto">
+              {item.shortcut}
+            </Kbd>
           </Link>
         );
       })}
