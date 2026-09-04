@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { MobileNav, SidebarNav } from "@/components/app-nav/app-nav";
 import { SignOutButton } from "@/components/app-nav/sign-out-button";
 import { Wordmark } from "@/components/app-nav/wordmark";
+import { KeyboardNav } from "@/components/keyboard/keyboard-nav";
 import { auth } from "@/server/auth";
 
 /**
@@ -42,6 +43,7 @@ export default async function AppLayout({
       </div>
 
       <MobileNav />
+      <KeyboardNav />
     </div>
   );
 }
