@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StartTaskDialog } from "@/components/today/start-task-dialog";
+import { QuickStart } from "@/components/today/quick-start";
 import { formatStopwatch } from "@/components/today/timer";
 import { useStopwatch } from "@/components/today/use-stopwatch";
 import { useTodayState, type PendingAction } from "@/components/today/use-today-state";
@@ -171,6 +172,8 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
               onLogActivity={() => setLogActivityOpen(true)}
             />
           )}
+
+          <QuickStart timeZone={timezone} refresh={() => void refresh()} />
 
           <section aria-labelledby="today-totals" className="flex flex-col gap-4">
             <h2

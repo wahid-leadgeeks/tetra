@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Play, TriangleAlert } from "lucide-react";
+import { Play, Star, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
 import { formatDateTime } from "@/components/timeline/time";
+import { cn } from "@/lib/utils";
 import type { CategoryDTO, TaskDTO } from "@/lib/types";
 
 interface TasksViewProps {
@@ -86,6 +87,34 @@ export function TasksView({ timeZone }: TasksViewProps) {
     }
   }
 
+  async function handleToggleFavorite(task: TaskDTO) {
+    const next = !task.isFavorite;
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, isFavorite: next } : t)),
+    );
+    try {
+      const updated = await apiFetch<TaskDTO>(
+        `/api/tasks/${task.id}/favorite`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ isFavorite: next }),
+        },
+      );
+      setTasks((prev) =>
+        prev.map((t) => (t.id === updated.id ? updated : t)),
+      );
+    } catch (err) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id ? { ...t, isFavorite: task.isFavorite } : t,
+        ),
+      );
+      toast.error(
+        err instanceof Error ? err.message : "Could not update favorite.",
+      );
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
       <header>
@@ -135,7 +164,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
         </Card>
       ) : (
         <ul className="grid gap-3" data-testid="tasks-list">
-          {tasks.map((task) => (
+          {tasks.map((task, index) => (
             <li key={task.id}>
               <Card size="sm" className="gap-0 px-4 py-4 sm:px-5">
                 <div className="flex items-center gap-3 sm:gap-4">
@@ -152,6 +181,22 @@ export function TasksView({ timeZone }: TasksViewProps) {
                       </p>
                     )}
                   </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
+                    data-testid={`favorite-toggle-${index}`}
+                    aria-label={`Toggle favorite for ${task.name}`}
+                    aria-pressed={task.isFavorite}
+                    onClick={() => void handleToggleFavorite(task)}
+                  >
+                    <Star
+                      aria-hidden
+                      className={cn(
+                        task.isFavorite && "fill-amber-500 text-amber-500",
+                      )}
+                    />
+                  </Button>
                   <Button
                     className="h-11 px-5"
                     onClick={() => void handleStart(task)}
