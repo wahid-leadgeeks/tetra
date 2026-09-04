@@ -57,12 +57,12 @@ tests, critical E2E flow passing.
 - [ ] Production workbook verification. (requires the production workbook + credentials)
 
 ## Phase 5 — Convenience
-- [ ] Quick-start tasks.
-- [ ] Favorites.
+- [x] Quick-start tasks.
+- [x] Favorites.
 - [ ] Keyboard shortcuts.
 - [ ] Mobile polish.
 - [ ] Notifications.
-- [ ] Weekly summary.
+- [x] Weekly summary.
 - [ ] Monthly summary.
 
 ## Phase 6 — Integrations
