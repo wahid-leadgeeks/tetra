@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TriangleAlert, Wrench } from "lucide-react";
+import { TriangleAlert, Wrench, CalendarRange } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -206,6 +206,18 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
           timeZone={timeZone}
           onChange={handleDayChange}
         />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" className="h-11 px-4">
+            <Link
+              href={`/reports/week?date=${dayKey}`}
+              aria-label="Weekly summary"
+              data-testid="week-link"
+            >
+              <CalendarRange aria-hidden />
+              Week
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <Separator className="my-6" />
