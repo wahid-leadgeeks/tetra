@@ -39,6 +39,7 @@ export async function listRecentTasks(
     id: row.id,
     name: row.name,
     categoryId: row.categoryId,
+    isFavorite: row.isFavorite,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
   }));
 }
