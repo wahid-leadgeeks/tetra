@@ -24,7 +24,7 @@ export async function listCategories(): Promise<CategoryDTO[]> {
   }));
 }
 
-/** Most recently used tasks, for the quick-pick row. */
+/** Most recently used tasks, for the quick-pick row. Favorites pin first. */
 export async function listRecentTasks(
   userId: string,
   limit = 8,
@@ -33,7 +33,11 @@ export async function listRecentTasks(
     .select()
     .from(tasks)
     .where(eq(tasks.userId, userId))
-    .orderBy(sql`${tasks.lastUsedAt} desc nulls last`, asc(tasks.name))
+    .orderBy(
+      desc(tasks.isFavorite),
+      sql`${tasks.lastUsedAt} desc nulls last`,
+      asc(tasks.name),
+    )
     .limit(limit);
   return rows.map((row) => ({
     id: row.id,
