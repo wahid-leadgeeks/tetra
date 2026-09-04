@@ -28,11 +28,11 @@ jobs:
       DEFAULT_TIMEZONE: Asia/Jakarta
       ALLOW_DEV_LOGIN: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # pnpm version comes from package.json "packageManager" — single
       # source of truth; specifying "version" here too makes the action fail.
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: pnpm
