@@ -24,6 +24,7 @@ export interface TaskDTO {
   id: string;
   name: string;
   categoryId: string;
+  isFavorite: boolean;
   lastUsedAt: string | null;
 }
 

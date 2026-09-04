@@ -64,6 +64,7 @@ export const tasks = pgTable(
     categoryId: uuid("category_id")
       .notNull()
       .references(() => categories.id),
+    isFavorite: boolean("is_favorite").notNull().default(false),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()

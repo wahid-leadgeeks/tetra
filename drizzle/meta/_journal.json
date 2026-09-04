@@ -8,6 +8,13 @@
       "when": 1788451964201,
       "tag": "0000_silly_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788483978902,
+      "tag": "0001_lucky_taskmaster",
+      "breakpoints": true
     }
   ]
 }
