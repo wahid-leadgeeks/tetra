@@ -42,6 +42,10 @@ export interface TimeEntryDTO {
   source: EntrySource;
   /** Server-calculated minutes, paused time excluded. Null while active. */
   durationMinutes: number | null;
+  /** Paused seconds banked server-side (excludes an open pause span). */
+  pausedSeconds: number;
+  /** Start of the currently open pause; null unless status is "paused". */
+  pausedAt: string | null;
 }
 
 export interface BreakDTO {

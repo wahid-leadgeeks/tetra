@@ -202,6 +202,8 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
     notes: entry.notes,
     source: entry.source,
     durationMinutes: entry.status === "active" ? null : minutes,
+    pausedSeconds: entry.pausedSeconds,
+    pausedAt: entry.pausedAt?.toISOString() ?? null,
   }));
 
   return {

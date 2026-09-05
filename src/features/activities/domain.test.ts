@@ -341,6 +341,8 @@ describe("toTimeEntryDTO", () => {
       notes: "deploy notes",
       source: "manual",
       durationMinutes: 110,
+      pausedSeconds: 600,
+      pausedAt: null,
     });
   });
 
@@ -362,6 +364,8 @@ describe("toTimeEntryDTO", () => {
       status: "paused",
       pausedAt: T(9, 30),
     });
-    expect(toTimeEntryDTO(paused, task, category, NOW).durationMinutes).toBeNull();
+    const pausedDto = toTimeEntryDTO(paused, task, category, NOW);
+    expect(pausedDto.durationMinutes).toBeNull();
+    expect(pausedDto.pausedAt).toBe("2026-09-03T09:30:00.000Z");
   });
 });

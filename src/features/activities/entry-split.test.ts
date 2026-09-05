@@ -139,6 +139,8 @@ function makeEntryDTO(id: string): TimeEntryDTO {
     notes: null,
     source: "manual",
     durationMinutes: 30,
+    pausedSeconds: 0,
+    pausedAt: null,
   };
 }
 

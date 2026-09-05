@@ -200,5 +200,7 @@ export function toTimeEntryDTO(
     notes: entry.notes,
     source: entry.source,
     durationMinutes: running ? null : entryDurationMinutes(entry, now),
+    pausedSeconds: entry.pausedSeconds,
+    pausedAt: entry.pausedAt === null ? null : entry.pausedAt.toISOString(),
   };
 }
