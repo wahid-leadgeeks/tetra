@@ -266,6 +266,13 @@ describe("splitTimeEntry", () => {
       notes: null,
       source: "manual",
     });
+    // And both overlap checks exclude the original row — the row still
+    // spans the full range during validation, so the second segment must
+    // not be checked against its own origin
+    expect(fetchEntriesInRangeMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchEntriesInRangeMock.mock.calls) {
+      expect(call[4]).toBe("entry-1");
+    }
     // And the day is flagged changed and both DTOs are returned
     expect(markDayChangedMock).toHaveBeenCalledWith(
       expect.anything(),
