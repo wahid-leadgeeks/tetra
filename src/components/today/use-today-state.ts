@@ -171,6 +171,16 @@ export function useTodayState(timezone: string) {
 
   const startTask = useCallback(
     async (input: StartTaskInput): Promise<TimeEntryDTO | null> => {
+      // Starting a task while not clocked in opens the work day first, at
+      // the same moment — one less step, same audit trail (two rows).
+      if (summary?.attendance == null) {
+        const attendance = await post<AttendanceDTO>(
+          "clock-in",
+          "/api/attendance/start",
+        );
+        if (attendance === null) return null;
+        toast.success("Work day started");
+      }
       const entry = await post<TimeEntryDTO>(
         "start-task",
         "/api/time-entries/start",
@@ -182,7 +192,7 @@ export function useTodayState(timezone: string) {
       }
       return entry;
     },
-    [post, settle],
+    [post, settle, summary],
   );
 
   const stopTask = useCallback(async (): Promise<boolean> => {
