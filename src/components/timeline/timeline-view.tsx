@@ -4,10 +4,14 @@
  * Timeline — the day's activities and breaks as calm cards, interleaved by
  * time (DESIGN.md "Timeline"). GET /api/days/:date is the single source;
  * every mutation refetches it and refreshes the router.
+ *
+ * Gaps between consecutive items render an inline "Fill gap" action that
+ * opens the entry dialog pre-filled with the gap's exact boundaries;
+ * completed entry cards offer Split (DESIGN.md timeline actions).
  */
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Coffee, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { Coffee, Pencil, Plus, Scissors, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +28,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
 import { DayNavigator } from "@/components/timeline/day-navigator";
-import { EntryDialog } from "@/components/timeline/entry-dialog";
+import { EntryDialog, type EntryPrefill } from "@/components/timeline/entry-dialog";
+import { SplitEntryDialog } from "@/components/timeline/split-entry-dialog";
 import { formatClock } from "@/components/timeline/time";
 import { formatHuman } from "@/lib/time";
 import type {
@@ -37,6 +42,57 @@ import type {
 type TimelineItem =
   | { kind: "entry"; entry: TimeEntryDTO }
   | { kind: "break"; breakItem: BreakDTO };
+
+/** Matches the daily summary's gap-warning threshold (5 minutes). */
+const GAP_THRESHOLD_MINUTES = 5;
+
+interface TimelineGap {
+  /** Index of the item the gap follows. */
+  afterIndex: number;
+  fromIso: string;
+  toIso: string;
+  fromClock: string;
+  toClock: string;
+  minutes: number;
+}
+
+function itemStart(item: TimelineItem): string {
+  return item.kind === "entry" ? item.entry.startedAt : item.breakItem.startedAt;
+}
+
+function itemEnd(item: TimelineItem): string | null {
+  return item.kind === "entry" ? item.entry.endedAt : item.breakItem.endedAt;
+}
+
+/**
+ * Gaps between consecutive items (activities and breaks alike) wider than
+ * the threshold — exactly the spans a "fill this gap" backfill should cover.
+ * Items with no end yet (running task / open break) never bound a gap.
+ */
+function gapsBetweenItems(
+  items: TimelineItem[],
+  timeZone: string,
+): TimelineGap[] {
+  const gaps: TimelineGap[] = [];
+  for (let i = 0; i + 1 < items.length; i += 1) {
+    const prevEnd = itemEnd(items[i]!);
+    const nextStart = itemStart(items[i + 1]!);
+    if (prevEnd === null) continue;
+    const minutes = Math.floor(
+      (Date.parse(nextStart) - Date.parse(prevEnd)) / 60_000,
+    );
+    if (minutes <= GAP_THRESHOLD_MINUTES) continue;
+    gaps.push({
+      afterIndex: i,
+      fromIso: prevEnd,
+      toIso: nextStart,
+      fromClock: formatClock(prevEnd, timeZone),
+      toClock: formatClock(nextStart, timeZone),
+      minutes,
+    });
+  }
+  return gaps;
+}
 
 function interleave(summary: DaySummaryDTO): TimelineItem[] {
   const items: TimelineItem[] = [
@@ -105,7 +161,9 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [addPrefill, setAddPrefill] = useState<EntryPrefill | null>(null);
   const [editEntry, setEditEntry] = useState<TimeEntryDTO | null>(null);
+  const [splitEntry, setSplitEntry] = useState<TimeEntryDTO | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<TimeEntryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -177,7 +235,14 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   }
 
   const items = summary ? interleave(summary) : [];
+  const gaps = items.length > 1 ? gapsBetweenItems(items, timeZone) : [];
+  const gapAfter = new Map(gaps.map((gap) => [gap.afterIndex, gap]));
   const hasActivity = items.length > 0;
+
+  function openAddDialog(prefill: EntryPrefill | null) {
+    setAddPrefill(prefill);
+    setAddOpen(true);
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
@@ -188,7 +253,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           </h1>
           <Button
             className="h-11 px-4"
-            onClick={() => setAddOpen(true)}
+            onClick={() => openAddDialog(null)}
             data-testid="add-missing-entry"
           >
             <Plus aria-hidden />
@@ -248,7 +313,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           </p>
           <Button
             className="h-11 px-4"
-            onClick={() => setAddOpen(true)}
+            onClick={() => openAddDialog(null)}
             data-testid="add-missing-entry"
           >
             <Plus aria-hidden />
@@ -257,103 +322,158 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         </Card>
       ) : (
         <ol className="grid gap-3" data-testid="timeline">
-          {items.map((item) =>
-            item.kind === "entry" ? (
-              <li key={`entry-${item.entry.id}`}>
-                <Card size="sm" className="gap-0 px-4 py-4 sm:px-5">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <p className="w-12 shrink-0 pt-0.5 text-sm font-medium tabular-nums text-muted-foreground">
-                      {formatClock(item.entry.startedAt, timeZone)}
-                    </p>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-muted-foreground">
-                        {item.entry.categoryName}
+          {items.map((item, index) => {
+            const gapBefore = gapAfter.get(index - 1) ?? null;
+            return (
+              <Fragment
+                key={
+                  item.kind === "entry"
+                    ? `entry-${item.entry.id}`
+                    : `break-${item.breakItem.id}`
+                }
+              >
+                {gapBefore ? (
+                  <li className="flex items-center gap-3 py-1">
+                    <div
+                      aria-hidden
+                      className="h-px flex-1 border-t border-dashed border-border"
+                    />
+                    <button
+                      type="button"
+                      data-testid="fill-gap-button"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-full border border-dashed border-input px-4 text-sm text-muted-foreground outline-none transition-colors select-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                      title={`Fill the ${formatHuman(gapBefore.minutes)} gap from ${gapBefore.fromClock} to ${gapBefore.toClock}`}
+                      aria-label={`Fill the ${formatHuman(gapBefore.minutes)} gap from ${gapBefore.fromClock} to ${gapBefore.toClock}`}
+                      onClick={() =>
+                        openAddDialog({
+                          start: gapBefore.fromClock,
+                          end: gapBefore.toClock,
+                        })
+                      }
+                    >
+                      <Plus aria-hidden className="size-4" />
+                      Fill {formatHuman(gapBefore.minutes)} gap
+                    </button>
+                    <div
+                      aria-hidden
+                      className="h-px flex-1 border-t border-dashed border-border"
+                    />
+                  </li>
+                ) : null}
+              {item.kind === "entry" ? (
+                <li>
+                  <Card size="sm" className="gap-0 px-4 py-4 sm:px-5">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <p className="w-12 shrink-0 pt-0.5 text-sm font-medium tabular-nums text-muted-foreground">
+                        {formatClock(item.entry.startedAt, timeZone)}
                       </p>
-                      <p className="truncate font-heading text-base font-medium">
-                        {item.entry.taskName}
-                      </p>
-                      {item.entry.notes && (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                          {item.entry.notes}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-muted-foreground">
+                          {item.entry.categoryName}
                         </p>
-                      )}
+                        <p className="truncate font-heading text-base font-medium">
+                          {item.entry.taskName}
+                        </p>
+                        {item.entry.notes && (
+                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                            {item.entry.notes}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        {item.entry.status === "completed" ? (
+                          <p className="font-heading text-base font-semibold tabular-nums">
+                            {item.entry.durationMinutes !== null
+                              ? formatHuman(item.entry.durationMinutes)
+                              : "—"}
+                          </p>
+                        ) : (
+                          <StatusBadge status={item.entry.status} />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t pt-3">
                       {item.entry.status === "completed" ? (
-                        <p className="font-heading text-base font-semibold tabular-nums">
-                          {item.entry.durationMinutes !== null
-                            ? formatHuman(item.entry.durationMinutes)
-                            : "—"}
-                        </p>
-                      ) : (
-                        <StatusBadge status={item.entry.status} />
-                      )}
+                        <Button
+                          variant="ghost"
+                          className="h-11 px-3"
+                          onClick={() => setSplitEntry(item.entry)}
+                          aria-label={`Split ${item.entry.taskName}`}
+                          data-testid="split-entry-button"
+                        >
+                          <Scissors aria-hidden />
+                          Split
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        className="h-11 px-3"
+                        onClick={() => setEditEntry(item.entry)}
+                        aria-label={`Edit ${item.entry.taskName}`}
+                      >
+                        <Pencil aria-hidden />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="h-11 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDeleteEntry(item.entry)}
+                        aria-label={`Delete ${item.entry.taskName}`}
+                      >
+                        <Trash2 aria-hidden />
+                        Delete
+                      </Button>
                     </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-end gap-1 border-t pt-3">
-                    <Button
-                      variant="ghost"
-                      className="h-11 px-3"
-                      onClick={() => setEditEntry(item.entry)}
-                      aria-label={`Edit ${item.entry.taskName}`}
-                    >
-                      <Pencil aria-hidden />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-11 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setDeleteEntry(item.entry)}
-                      aria-label={`Delete ${item.entry.taskName}`}
-                    >
-                      <Trash2 aria-hidden />
-                      Delete
-                    </Button>
-                  </div>
-                </Card>
-              </li>
-            ) : (
-              <li key={`break-${item.breakItem.id}`}>
-                <Card
-                  size="sm"
-                  className="gap-0 bg-muted/40 px-4 py-3 sm:px-5"
-                >
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <p className="w-12 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
-                      {formatClock(item.breakItem.startedAt, timeZone)}
-                    </p>
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <Coffee
-                        aria-hidden
-                        className="size-4 shrink-0 text-muted-foreground"
-                      />
-                      <p className="font-medium text-muted-foreground">
-                        Break
+                  </Card>
+                </li>
+              ) : (
+                <li>
+                  <Card
+                    size="sm"
+                    className="gap-0 bg-muted/40 px-4 py-3 sm:px-5"
+                  >
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <p className="w-12 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
+                        {formatClock(item.breakItem.startedAt, timeZone)}
+                      </p>
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <Coffee
+                          aria-hidden
+                          className="size-4 shrink-0 text-muted-foreground"
+                        />
+                        <p className="font-medium text-muted-foreground">
+                          Break
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
+                        {item.breakItem.endedAt === null
+                          ? "On break"
+                          : item.breakItem.durationMinutes !== null
+                            ? formatHuman(item.breakItem.durationMinutes)
+                            : "—"}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
-                      {item.breakItem.endedAt === null
-                        ? "On break"
-                        : item.breakItem.durationMinutes !== null
-                          ? formatHuman(item.breakItem.durationMinutes)
-                          : "—"}
-                    </p>
-                  </div>
-                </Card>
-              </li>
-            ),
-          )}
+                  </Card>
+                </li>
+              )}
+              </Fragment>
+            );
+          })}
         </ol>
       )}
 
       <EntryDialog
         open={addOpen}
-        onOpenChange={setAddOpen}
+        onOpenChange={(open) => {
+          if (!open) setAddPrefill(null);
+          setAddOpen(open);
+        }}
         mode="create"
         dayKey={dayKey}
         timeZone={timeZone}
         categories={categories}
         categoriesError={categoriesError}
+        prefill={addPrefill}
         onSaved={refresh}
       />
 
@@ -368,6 +488,18 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         categories={categories}
         categoriesError={categoriesError}
         entry={editEntry}
+        onSaved={refresh}
+      />
+
+      <SplitEntryDialog
+        open={splitEntry !== null}
+        onOpenChange={(open) => {
+          if (!open) setSplitEntry(null);
+        }}
+        entry={splitEntry}
+        dayKey={dayKey}
+        timeZone={timeZone}
+        categories={categories}
         onSaved={refresh}
       />
 
