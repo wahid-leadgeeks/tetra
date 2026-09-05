@@ -94,6 +94,10 @@ export interface SyncCellDTO {
   a1: string;
   value: string;
   columnLabel: string;
+  /** "notes" marks a compiled category-notes cell (editable in the preview). */
+  cellType?: "value" | "notes";
+  /** Present on notes cells: the category the compiled notes belong to. */
+  categoryKey?: string;
 }
 
 export interface SyncPreviewDTO {

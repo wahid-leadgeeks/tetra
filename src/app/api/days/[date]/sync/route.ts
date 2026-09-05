@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { CATEGORY_KEYS } from "@/features/sheets-sync/mapping";
 import {
   executeSync,
   previewSync,
@@ -8,6 +10,11 @@ import {
 import { auth } from "@/server/auth";
 
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const syncOptionsSchema = z.object({
+  includeNotes: z.boolean().optional(),
+  notes: z.record(z.enum(CATEGORY_KEYS), z.string()).optional(),
+});
 
 interface SyncRouteContext {
   params: Promise<{ date: string }>;
@@ -60,7 +67,7 @@ export async function GET(
 
 /** Execute the sync after review. Idempotent; retriable on 502. */
 export async function POST(
-  _req: NextRequest,
+  request: NextRequest,
   ctx: SyncRouteContext,
 ): Promise<NextResponse> {
   const authResult = await requireUserId();
@@ -71,10 +78,26 @@ export async function POST(
     return jsonError(400, "Invalid date, expected YYYY-MM-DD");
   }
 
+  const body = await request.json().catch(() => ({}));
+  const parsedOptions = syncOptionsSchema.safeParse(body);
+  if (!parsedOptions.success) {
+    return jsonError(400, firstIssue(parsedOptions.error));
+  }
+
   try {
-    const result = await executeSync(authResult.userId, date);
+    const result = await executeSync(authResult.userId, date, {
+      includeNotes: parsedOptions.data.includeNotes,
+      notes: parsedOptions.data.notes,
+    });
     return NextResponse.json(result);
   } catch (err) {
     return syncErrorResponse(err);
   }
+}
+
+function firstIssue(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "Invalid sync options";
+  const path = issue.path.map(String).join(".");
+  return `${path || "body"}: ${issue.message}`;
 }

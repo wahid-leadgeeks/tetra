@@ -36,12 +36,26 @@ const categoriesSchema = z.strictObject({
   other_tasks: columnLetter,
 });
 
+/** Optional per-category notes columns (September 2026 layout: I,K,M,O,Q,S,U,W). */
+const categoryNotesSchema = z.strictObject({
+  website_management: columnLetter,
+  cyber_security: columnLetter,
+  technology_innovation: columnLetter,
+  infrastructure_management: columnLetter,
+  research: columnLetter,
+  meeting: columnLetter,
+  training: columnLetter,
+  other_tasks: columnLetter,
+});
+
 /**
  * Maps TETRA fields to worksheet columns.
  * `headerRow` is the 1-based row number of the header; the date scan starts
  * on the row AFTER it. When absent, row 1 is treated as data.
- * `notesColumn` is accepted for future use — the MVP payload never writes the
- * notes cell (manual notes in the sheet must never be overwritten).
+ * `categoryNotes` maps each category to the adjacent freeform-notes column.
+ * It is optional so configs stored before it existed keep parsing; when
+ * absent, sync never writes any notes cell (manual notes in the sheet are
+ * never overwritten). `notesColumn` is accepted for legacy configs only.
  */
 export const mappingSchema = z.strictObject({
   dateColumn: columnLetter,
@@ -54,13 +68,14 @@ export const mappingSchema = z.strictObject({
   categories: categoriesSchema,
   headerRow: z.number().int().min(1).optional(),
   notesColumn: columnLetter.optional(),
+  categoryNotes: categoryNotesSchema.optional(),
 });
 
 export type SheetMapping = z.infer<typeof mappingSchema>;
 
 /**
- * Example configuration from ARCHITECTURE.md — illustrative only.
- * Production mapping must be verified against the actual workbook.
+ * Verified against the September 2026 workbook: time columns B–G, each
+ * category's duration column (H..V) paired with its notes column (I..W).
  */
 export const DEFAULT_SHEET_MAPPING = {
   dateColumn: "A",
@@ -79,5 +94,15 @@ export const DEFAULT_SHEET_MAPPING = {
     meeting: "R",
     training: "T",
     other_tasks: "V",
+  },
+  categoryNotes: {
+    website_management: "I",
+    cyber_security: "K",
+    technology_innovation: "M",
+    infrastructure_management: "O",
+    research: "Q",
+    meeting: "S",
+    training: "U",
+    other_tasks: "W",
   },
 } satisfies SheetMapping;

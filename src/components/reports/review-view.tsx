@@ -446,6 +446,7 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         dayKey={dayKey}
+        onSynced={refresh}
       />
 
       <FileSyncDialog

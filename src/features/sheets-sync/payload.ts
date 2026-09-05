@@ -4,7 +4,12 @@
  */
 import { createHash } from "node:crypto";
 import { formatHMM, zonedClock } from "@/lib/time";
-import type { CategoryTotalDTO, DaySummaryDTO, SyncCellDTO } from "@/lib/types";
+import type {
+  CategoryTotalDTO,
+  DaySummaryDTO,
+  SyncCellDTO,
+  TimeEntryDTO,
+} from "@/lib/types";
 import { CATEGORY_KEYS, type CategoryKey, type SheetMapping } from "./mapping";
 
 /** How the date cell value renders: "2026-09-03" (iso) vs "9/3/2026" (display). */
@@ -16,6 +21,13 @@ export interface BuildSyncPayloadOptions {
   rowNumber: number;
   /** IANA timezone the summary was computed in — clock values render in it. */
   timezone: string;
+  /**
+   * Write compiled category notes into the mapped notes columns.
+   * Defaults to true; the preview toggle can turn it off per sync.
+   */
+  includeNotes?: boolean;
+  /** Preview-dialog edits replacing the compiled notes per category. */
+  notesOverrides?: Partial<Record<CategoryKey, string>>;
 }
 
 export interface SyncPayload {
@@ -46,7 +58,9 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
  *   the honest value.
  * - Totals and every category cell: H:MM via formatHMM; unmapped categories
  *   write "0:00".
- * - The notes column is intentionally NOT written (see mapping.ts).
+ * - Category notes cells (mapping.categoryNotes): one cell per category with
+ *   compiled notes — see compileCategoryNotes. A category with no compiled
+ *   notes gets NO cell, so an empty sync can never blank a manual note.
  */
 export function buildSyncPayload(
   summary: DaySummaryDTO,
@@ -94,6 +108,7 @@ export function buildSyncPayload(
       value: formatHMM(categoryMinutes(summary.byCategory, key)),
       columnLabel: CATEGORY_LABELS[key],
     })),
+    ...notesCells(summary, mapping, options),
   ];
 
   return {
@@ -103,6 +118,59 @@ export function buildSyncPayload(
         : displayDateValue(summary.workDate),
     cells,
   };
+}
+
+/**
+ * Compiled per-category notes for the notes columns (I, K, M, O, Q, S, U, W):
+ * the day's completed entries, notes first with the task name as fallback,
+ * deduplicated in first-occurrence order, joined by newlines to match the
+ * sheet's manual format.
+ */
+export function compileCategoryNotes(
+  entries: readonly TimeEntryDTO[],
+): Map<CategoryKey, string> {
+  const notesByCategory = new Map<CategoryKey, string[]>();
+  for (const entry of entries) {
+    if (entry.status !== "completed") continue;
+    const key = CATEGORY_KEYS.find((k) => k === entry.categoryKey);
+    if (key === undefined) continue;
+    const text = entry.notes?.trim() || entry.taskName.trim();
+    if (!text) continue;
+    const list = notesByCategory.get(key) ?? [];
+    if (!list.includes(text)) list.push(text);
+    notesByCategory.set(key, list);
+  }
+  return new Map(
+    [...notesByCategory.entries()].map(([k, v]) => [k, v.join("\n")]),
+  );
+}
+
+/**
+ * Notes cells are emitted only when the mapping configures notes columns,
+ * notes are included, and the final value is non-empty — an empty value never
+ * produces a cell, so sync never blanks a manual note in the sheet.
+ */
+function notesCells(
+  summary: DaySummaryDTO,
+  mapping: SheetMapping,
+  options: BuildSyncPayloadOptions,
+): SyncCellDTO[] {
+  const { rowNumber, includeNotes = true, notesOverrides } = options;
+  if (!includeNotes || mapping.categoryNotes === undefined) return [];
+  const compiled = compileCategoryNotes(summary.timeEntries);
+  const cells: SyncCellDTO[] = [];
+  for (const key of CATEGORY_KEYS) {
+    const value = notesOverrides?.[key] ?? compiled.get(key) ?? "";
+    if (value.trim().length === 0) continue;
+    cells.push({
+      a1: `${mapping.categoryNotes[key]}${rowNumber}`,
+      value,
+      columnLabel: `${CATEGORY_LABELS[key]} Notes`,
+      cellType: "notes",
+      categoryKey: key,
+    });
+  }
+  return cells;
 }
 
 /**
