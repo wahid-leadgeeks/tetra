@@ -154,7 +154,10 @@ function SyncPreviewBody({
           Exactly these cells will be written — nothing else.
         </DialogDescription>
       </DialogHeader>
-      <div data-testid="sync-preview">
+      <div
+        data-testid="sync-preview"
+        className="max-h-[70vh] overflow-y-auto pr-1"
+      >
         {loading ? (
           <div className="grid gap-2" aria-label="Loading preview">
             {[0, 1, 2, 3, 4].map((i) => (
