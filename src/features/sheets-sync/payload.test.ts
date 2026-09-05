@@ -46,6 +46,8 @@ function makeEntry(overrides: Partial<TimeEntryDTO> = {}): TimeEntryDTO {
     notes: null,
     source: "manual",
     durationMinutes: 60,
+    pausedSeconds: 0,
+    pausedAt: null,
     ...overrides,
   };
 }

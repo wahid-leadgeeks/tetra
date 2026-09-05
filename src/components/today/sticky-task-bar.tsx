@@ -25,8 +25,8 @@ interface StickyTaskBarProps {
  * the task name, a live timer, and large Pause/Stop touch targets. Hidden
  * on desktop, where the full ActiveTaskCard carries the same controls.
  *
- * Mirrors ActiveTaskCard: it owns a useStopwatch instance and marks it
- * paused/resumed after the corresponding mutation succeeds.
+ * Mirrors ActiveTaskCard's stopwatch: pause state derives from the entry,
+ * so both surfaces always agree.
  */
 export function StickyTaskBar({
   entry,
@@ -36,16 +36,13 @@ export function StickyTaskBar({
   onResume,
   onStop,
 }: StickyTaskBarProps) {
-  const { elapsedMs, paused, markPaused, markResumed } = useStopwatch(
-    entry,
-    initialNowMs,
-  );
+  const { elapsedMs, paused } = useStopwatch(entry, initialNowMs);
 
   async function handleTogglePause() {
     if (paused) {
-      if (await onResume()) markResumed();
+      await onResume();
     } else {
-      if (await onPause()) markPaused();
+      await onPause();
     }
   }
 

@@ -65,6 +65,8 @@ function day(
       notes: null,
       source: "timer",
       durationMinutes: 60,
+      pausedSeconds: 0,
+      pausedAt: null,
     })),
     totals: { attendanceMinutes, breakMinutes, workMinutes },
     byCategory: CATS.map((c) => ({

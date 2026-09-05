@@ -517,16 +517,13 @@ function ActiveTaskCard({
   onStopTask,
   onSwitchTask,
 }: ActiveTaskCardProps) {
-  const { elapsedMs, paused, markPaused, markResumed } = useStopwatch(
-    entry,
-    initialNowMs,
-  );
+  const { elapsedMs, paused } = useStopwatch(entry, initialNowMs);
 
   async function handleTogglePause() {
     if (paused) {
-      if (await onResumeTask()) markResumed();
+      await onResumeTask();
     } else {
-      if (await onPauseTask()) markPaused();
+      await onPauseTask();
     }
   }
 
@@ -642,21 +639,35 @@ function EmptyStateCard({
             <div className="flex flex-col gap-1.5">
               <p className="text-base font-medium">Start your work day</p>
               <p className="text-sm text-muted-foreground">
-                Clock in to begin tracking your time.
+                Clock in to begin tracking your time — or just start a task
+                and the day opens with it.
               </p>
             </div>
-            <Button
-              type="button"
-              className="h-11 px-6"
-              data-testid="clock-in"
-              disabled={busy}
-              onClick={onClockIn}
-            >
-              {clockInPending ? (
-                <Loader2 aria-hidden className="animate-spin" />
-              ) : null}
-              Start Work
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                className="h-11 px-6"
+                data-testid="clock-in"
+                disabled={busy}
+                onClick={onClockIn}
+              >
+                {clockInPending ? (
+                  <Loader2 aria-hidden className="animate-spin" />
+                ) : null}
+                Start Work
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 px-6"
+                data-testid="log-activity"
+                disabled={busy}
+                onClick={onLogActivity}
+              >
+                <Plus aria-hidden />
+                Log Activity
+              </Button>
+            </div>
           </>
         ) : mode === "no-task" ? (
           <>
