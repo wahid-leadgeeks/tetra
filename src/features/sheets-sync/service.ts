@@ -14,6 +14,7 @@ import { getDaySummary } from "@/features/daily-summary/service";
 import type { SyncPreviewDTO, SyncCellDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { dailyAttendance } from "@/server/db/schema";
+import type { CategoryKey } from "./mapping";
 import { SyncNotConfiguredError, SheetsApiError } from "./errors";
 import {
   getSyncConfig,
@@ -31,6 +32,16 @@ import {
 
 /** Date rows are scanned within the first 2000 worksheet rows. */
 const DATE_SCAN_MAX_ROWS = 2000;
+
+/**
+ * Per-sync choices from the preview dialog: whether compiled category notes
+ * are written to the mapped notes columns, plus user edits of those notes.
+ * Defaults mirror the preview toggle: notes included, unedited.
+ */
+export interface SyncOptions {
+  includeNotes?: boolean;
+  notes?: Partial<Record<CategoryKey, string>>;
+}
 
 export interface SyncResult {
   status: "success";
@@ -85,6 +96,7 @@ export async function previewSync(
     dateValueFormat: "iso",
     rowNumber,
     timezone,
+    includeNotes: true,
   });
   return { workDate: dayKey, rowNumber, cells };
 }
@@ -99,6 +111,7 @@ export async function previewSync(
 export async function executeSync(
   userId: string,
   dayKey: string,
+  options: SyncOptions = {},
 ): Promise<SyncResult> {
   const timezone = await getUserTimezone(userId);
   const summary = await getDaySummary(userId, dayKey, timezone);
@@ -132,6 +145,8 @@ export async function executeSync(
     dateValueFormat: "iso",
     rowNumber,
     timezone,
+    includeNotes: options.includeNotes ?? true,
+    notesOverrides: options.notes,
   });
   const payloadHash = computePayloadHash(rowNumber, cells);
   const writeCtx: SyncAttemptContext = { ...readCtx, payloadHash };

@@ -6,6 +6,18 @@ import {
   type SheetMapping,
 } from "./mapping";
 
+/** Paired notes columns for the September 2026 workbook layout. */
+const CATEGORY_NOTES: NonNullable<SheetMapping["categoryNotes"]> = {
+  website_management: "I",
+  cyber_security: "K",
+  technology_innovation: "M",
+  infrastructure_management: "O",
+  research: "Q",
+  meeting: "S",
+  training: "U",
+  other_tasks: "W",
+};
+
 /** A valid mapping shaped like ARCHITECTURE.md's example, with optionals set. */
 const VALID_MAPPING: SheetMapping = {
   dateColumn: "A",
@@ -27,7 +39,17 @@ const VALID_MAPPING: SheetMapping = {
   },
   headerRow: 1,
   notesColumn: "H",
+  categoryNotes: CATEGORY_NOTES,
 };
+
+/** VALID_MAPPING minus every optional field — a pre-categoryNotes config. */
+function minimalMapping(): Record<string, unknown> {
+  const minimal = { ...VALID_MAPPING } as Record<string, unknown>;
+  delete minimal.headerRow;
+  delete minimal.notesColumn;
+  delete minimal.categoryNotes;
+  return minimal;
+}
 
 describe("mappingSchema", () => {
   it("accepts the DEFAULT_SHEET_MAPPING from ARCHITECTURE.md", () => {
@@ -36,6 +58,26 @@ describe("mappingSchema", () => {
     const result = mappingSchema.safeParse(DEFAULT_SHEET_MAPPING);
     // Then it is valid and covers all 8 seeded category keys
     expect(result.success).toBe(true);
+  });
+
+  it("parses DEFAULT_SHEET_MAPPING with the paired notes columns", () => {
+    // Given the verified September 2026 workbook mapping
+    // When parsed
+    const result = mappingSchema.safeParse(DEFAULT_SHEET_MAPPING);
+    // Then every category carries its notes column (H..V → I..W)
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.categoryNotes).toEqual({
+        website_management: "I",
+        cyber_security: "K",
+        technology_innovation: "M",
+        infrastructure_management: "O",
+        research: "Q",
+        meeting: "S",
+        training: "U",
+        other_tasks: "W",
+      });
+    }
   });
 
   it("accepts a full mapping with optional headerRow and notesColumn", () => {
@@ -52,13 +94,47 @@ describe("mappingSchema", () => {
 
   it("accepts a mapping without the optional fields", () => {
     // Given a valid mapping with optionals omitted
-    const minimal = { ...VALID_MAPPING } as Record<string, unknown>;
-    delete minimal.headerRow;
-    delete minimal.notesColumn;
+    const minimal = minimalMapping();
     // When parsed
     const result = mappingSchema.safeParse(minimal);
     // Then it succeeds
     expect(result.success).toBe(true);
+  });
+
+  it("rejects a partial categoryNotes mapping", () => {
+    // Given a mapping that configures only the meeting notes column
+    const candidate = {
+      ...minimalMapping(),
+      categoryNotes: { meeting: "S" },
+    };
+    // When parsed
+    const result = mappingSchema.safeParse(candidate);
+    // Then validation fails — all 8 seeded keys are required
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a categoryNotes column that is not an A1 column letter", () => {
+    // Given a notes mapping with a lowercase column
+    const candidate = {
+      ...VALID_MAPPING,
+      categoryNotes: { ...CATEGORY_NOTES, training: "u" },
+    };
+    // When parsed
+    const result = mappingSchema.safeParse(candidate);
+    // Then validation fails
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a categoryNotes mapping with an unknown category key", () => {
+    // Given notes columns for a category that is not seeded
+    const candidate = {
+      ...VALID_MAPPING,
+      categoryNotes: { ...CATEGORY_NOTES, team_building: "X" },
+    };
+    // When parsed
+    const result = mappingSchema.safeParse(candidate);
+    // Then validation fails
+    expect(result.success).toBe(false);
   });
 
   it("rejects a column that is not an A1 column letter", () => {
