@@ -1,7 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Coffee, Loader2, Pause, Play, Plus, Square } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowRightLeft,
+  Coffee,
+  Loader2,
+  Pause,
+  Play,
+  Plus,
+  Square,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,13 +24,14 @@ import {
 import { StartTaskDialog } from "@/components/today/start-task-dialog";
 import { QuickStart } from "@/components/today/quick-start";
 import { StickyTaskBar } from "@/components/today/sticky-task-bar";
+import { SwitchTaskDialog } from "@/components/today/switch-task-dialog";
 import { formatStopwatch } from "@/components/today/timer";
 import { useStopwatch } from "@/components/today/use-stopwatch";
 import { useTodayShortcuts } from "@/components/today/use-today-shortcuts";
 import { useTodayState, type PendingAction } from "@/components/today/use-today-state";
 import { cn } from "@/lib/utils";
-import { formatHuman, zonedClock } from "@/lib/time";
-import type { TimeEntryDTO } from "@/lib/types";
+import { formatHuman, minutesBetween, zonedClock } from "@/lib/time";
+import type { AttendanceDTO, TimeEntryDTO } from "@/lib/types";
 
 interface TodayScreenProps {
   timezone: string;
@@ -31,6 +40,9 @@ interface TodayScreenProps {
 }
 
 type StatusTone = "working" | "paused" | "break" | "off";
+
+/** Daily work target (PRD: 8h/day, 40h/week — displayed only, never enforced). */
+const TARGET_MINUTES = 480;
 
 const STATUS_STYLES: Record<StatusTone, { label: string; dot: string }> = {
   working: { label: "Working", dot: "bg-emerald-500" },
@@ -62,6 +74,7 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
   } = useTodayState(timezone);
 
   const [logActivityOpen, setLogActivityOpen] = useState(false);
+  const [switchTaskOpen, setSwitchTaskOpen] = useState(false);
   const [stopWorkConfirmOpen, setStopWorkConfirmOpen] = useState(false);
 
   const attendance = summary?.attendance ?? null;
@@ -84,6 +97,20 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
       : activeEntry?.status === "paused"
         ? "paused"
         : "working";
+
+  /**
+   * "End Break & Resume" path: one click ends the break and resumes the
+   * paused task. Paused here means the task was paused before the break —
+   * the natural flow when stepping away.
+   */
+  const breakResumeTarget =
+    onBreak && activeEntry?.status === "paused" ? activeEntry : null;
+
+  async function handleEndBreak() {
+    if (await endBreak()) {
+      if (breakResumeTarget) await resumeTask();
+    }
+  }
 
   const dateLabel = useMemo(
     () =>
@@ -168,6 +195,7 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
               onPauseTask={pauseTask}
               onResumeTask={resumeTask}
               onStopTask={stopTask}
+              onSwitchTask={() => setSwitchTaskOpen(true)}
             />
           ) : (
             <EmptyStateCard
@@ -231,6 +259,13 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
                 </dd>
               </div>
             </dl>
+            <TargetProgress
+              workMinutes={summary?.totals.workMinutes ?? 0}
+              activeEntry={activeEntry}
+              attendance={attendance}
+              timezone={timezone}
+              initialNowMs={initialNowMs}
+            />
           </section>
 
           <div className="flex flex-col gap-3">
@@ -256,14 +291,20 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
                   className="h-11"
                   data-testid={onBreak ? "break-end" : "break-start"}
                   disabled={busy}
-                  onClick={() => void (onBreak ? endBreak() : startBreak())}
+                  onClick={() =>
+                    void (onBreak ? handleEndBreak() : startBreak())
+                  }
                 >
                   {pending === "break-start" || pending === "break-end" ? (
                     <Loader2 aria-hidden className="animate-spin" />
                   ) : (
                     <Coffee aria-hidden />
                   )}
-                  {onBreak ? "End Break" : "Break"}
+                  {breakResumeTarget
+                    ? `End Break & Resume ${truncateTask(breakResumeTarget.taskName)}`
+                    : onBreak
+                      ? "End Break"
+                      : "Break"}
                 </Button>
                 <Button
                   type="button"
@@ -286,6 +327,15 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
         onOpenChange={setLogActivityOpen}
         onStart={startTask}
       />
+
+      {activeEntry ? (
+        <SwitchTaskDialog
+          open={switchTaskOpen}
+          onOpenChange={setSwitchTaskOpen}
+          currentTaskName={activeEntry.taskName}
+          onSwitch={startTask}
+        />
+      ) : null}
 
       <Dialog
         open={stopWorkConfirmOpen}
@@ -345,6 +395,103 @@ function LoadingCard() {
   );
 }
 
+/** Button-friendly task name: keep the first 18 chars plus an ellipsis. */
+function truncateTask(name: string): string {
+  return name.length > 20 ? `${name.slice(0, 18)}…` : name;
+}
+
+interface TargetProgressProps {
+  workMinutes: number;
+  activeEntry: TimeEntryDTO | null;
+  attendance: AttendanceDTO | null;
+  timezone: string;
+  initialNowMs: number;
+}
+
+/**
+ * Progress toward the 8-hour daily target. `workMinutes` is server truth as
+ * of the last fetch; while a task runs, minutes elapsed since the server
+ * timestamp are added live (never double-counted — the server already
+ * counted up to fetch time). The projected wrap-up extrapolates the current
+ * work-per-attendance pace to a clock-out time. Display only.
+ */
+function TargetProgress({
+  workMinutes,
+  activeEntry,
+  attendance,
+  timezone,
+  initialNowMs,
+}: TargetProgressProps) {
+  const [nowMs, setNowMs] = useState(initialNowMs);
+
+  useEffect(() => {
+    if (activeEntry === null || activeEntry.status !== "active") return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [activeEntry]);
+
+  const running = activeEntry !== null && activeEntry.status === "active";
+  const liveMinutes = running
+    ? minutesBetween(new Date(initialNowMs), new Date(nowMs))
+    : 0;
+  const totalWork = workMinutes + liveMinutes;
+  const pct = Math.min(100, Math.round((totalWork / TARGET_MINUTES) * 100));
+  const remaining = Math.max(0, TARGET_MINUTES - totalWork);
+
+  let projected: string | null = null;
+  if (attendance?.status === "open" && totalWork > 0) {
+    const elapsed = minutesBetween(
+      new Date(attendance.clockInAt),
+      new Date(nowMs),
+    );
+    if (elapsed > 0) {
+      const pace = totalWork / elapsed;
+      const projectedDayMinutes = Math.ceil(TARGET_MINUTES / pace);
+      projected = zonedClock(
+        new Date(Date.parse(attendance.clockInAt) + projectedDayMinutes * 60_000),
+        timezone,
+      );
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-2"
+      data-testid="target-progress-block"
+      aria-label={`Daily target progress: ${formatHuman(totalWork)} of ${formatHuman(TARGET_MINUTES)}`}
+    >
+      <div className="flex items-baseline justify-between">
+        <p className="text-base text-muted-foreground">Target</p>
+        <p className="text-xl font-semibold tabular-nums" data-testid="target-progress-label">
+          {formatHuman(Math.floor(totalWork))} / {formatHuman(TARGET_MINUTES)}{" "}
+          <span className="text-base font-normal text-muted-foreground">
+            ({pct}%)
+          </span>
+        </p>
+      </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={TARGET_MINUTES}
+        aria-valuenow={Math.floor(totalWork)}
+        data-testid="target-progress"
+        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-sm text-muted-foreground" data-testid="target-progress-remaining">
+        {remaining > 0
+          ? `${formatHuman(Math.ceil(remaining))} left`
+          : "Target reached"}
+        {projected && remaining > 0 ? ` · wrap up around ${projected}` : ""}
+      </p>
+    </div>
+  );
+}
+
 interface ActiveTaskCardProps {
   entry: TimeEntryDTO;
   initialNowMs: number;
@@ -353,6 +500,7 @@ interface ActiveTaskCardProps {
   onPauseTask: () => Promise<boolean>;
   onResumeTask: () => Promise<boolean>;
   onStopTask: () => Promise<boolean>;
+  onSwitchTask: () => void;
 }
 
 /**
@@ -367,6 +515,7 @@ function ActiveTaskCard({
   onPauseTask,
   onResumeTask,
   onStopTask,
+  onSwitchTask,
 }: ActiveTaskCardProps) {
   const { elapsedMs, paused, markPaused, markResumed } = useStopwatch(
     entry,
@@ -420,6 +569,21 @@ function ActiveTaskCard({
               <Pause aria-hidden />
             )}
             {paused ? "Resume" : "Pause"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 min-w-28 px-5"
+            data-testid="switch-task"
+            disabled={busy}
+            onClick={onSwitchTask}
+          >
+            {pending === "start-task" ? (
+              <Loader2 aria-hidden className="animate-spin" />
+            ) : (
+              <ArrowRightLeft aria-hidden />
+            )}
+            Switch Task
           </Button>
           <Button
             type="button"
