@@ -65,6 +65,15 @@ tests, critical E2E flow passing.
 - [x] Weekly summary.
 - [x] Monthly summary.
 
+## Phase 5.5 — September Workflow Friction (from the 2026-09 workbook analysis)
+- [x] Today target progress (8h) with projected wrap-up time.
+- [x] Auto clock-in when a task starts while not clocked in.
+- [x] 1-tap task switcher on the active task card.
+- [x] End Break & Resume previous task in one click.
+- [x] Timeline inline fill-gap buttons and split-entry dialog.
+- [x] ±15m time nudges in the entry edit dialog.
+- [x] Category notes compiled into the sheet notes columns (I, K, M, O, Q, S, U, W) with preview toggle and editable preview.
+
 ## Phase 6 — Integrations
 - [ ] Google Calendar.
 - [ ] Meeting suggestions.
