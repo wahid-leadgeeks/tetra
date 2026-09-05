@@ -132,11 +132,14 @@ export async function splitTimeEntry(
       timeZone,
       now,
     );
+    // The original row still spans the full range at validation time —
+    // exclude it, or the second segment always conflicts with itself.
     const after = await fetchEntriesInRange(
       tx,
       userId,
       plan.second.startedAt,
       plan.second.endedAt,
+      entry.id,
     );
     validateNoOverlap(
       {
