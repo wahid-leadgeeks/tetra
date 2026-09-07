@@ -12,7 +12,7 @@
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Coffee, Pencil, Plus, Scissors, Trash2, TriangleAlert } from "lucide-react";
+import { Coffee, Download, Pencil, Plus, Scissors, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -170,6 +170,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const [splitEntry, setSplitEntry] = useState<TimeEntryDTO | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<TimeEntryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,6 +239,21 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
     }
   }
 
+  async function handlePull() {
+    setPulling(true);
+    try {
+      await apiFetch<DaySummaryDTO>(`/api/days/${dayKey}/pull`, {
+        method: "POST",
+      });
+      toast.success("Tracking data pulled from Google Sheet!");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Pull failed.");
+    } finally {
+      setPulling(false);
+    }
+  }
+
   const items = summary ? interleave(summary) : [];
   const gaps = items.length > 1 ? gapsBetweenItems(items, timeZone) : [];
   const gapAfter = new Map(gaps.map((gap) => [gap.afterIndex, gap]));
@@ -255,14 +271,27 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             Timeline
           </h1>
-          <Button
-            className="h-11 px-4"
-            onClick={() => openAddDialog(null)}
-            data-testid="add-missing-entry"
-          >
-            <Plus aria-hidden />
-            Add missing entry
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-11 px-4"
+              onClick={() => void handlePull()}
+              disabled={pulling}
+              data-testid="pull-from-sheet"
+              title="Pull this day's entries and times directly from your Google Sheet"
+            >
+              <Download className="mr-2 size-4" />
+              {pulling ? "Pulling…" : "Pull from Sheet"}
+            </Button>
+            <Button
+              className="h-11 px-4"
+              onClick={() => openAddDialog(null)}
+              data-testid="add-missing-entry"
+            >
+              <Plus aria-hidden />
+              Add missing entry
+            </Button>
+          </div>
         </div>
         <DayNavigator
           dayKey={dayKey}

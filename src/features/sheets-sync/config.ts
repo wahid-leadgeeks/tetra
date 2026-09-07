@@ -6,9 +6,14 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { spreadsheetConfigs, users } from "@/server/db/schema";
 import { env } from "@/server/env";
-import { DEFAULT_SHEET_MAPPING, mappingSchema, type SheetMapping } from "./mapping";
+import { spreadsheetConfigs, users } from "@/server/db/schema";
+import {
+  DEFAULT_SHEET_MAPPING,
+  LEADGEEKS_SHEET_MAPPING,
+  mappingSchema,
+  type SheetMapping,
+} from "./mapping";
 
 export interface SpreadsheetConfigDTO {
   id: string;
@@ -35,7 +40,13 @@ type SpreadsheetConfigRow = typeof spreadsheetConfigs.$inferSelect;
 
 function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
   // Re-parsed at the boundary — a corrupt jsonb fails loudly here.
-  const mapping = mappingSchema.parse(row.mapping);
+  let mapping = mappingSchema.parse(row.mapping);
+  if (
+    row.spreadsheetId.includes("1Rup5jNnSu") &&
+    (mapping.categories.meeting === "R" || mapping.headerRow === undefined)
+  ) {
+    mapping = LEADGEEKS_SHEET_MAPPING;
+  }
   return {
     id: row.id,
     spreadsheetId: row.spreadsheetId,
@@ -71,12 +82,13 @@ export async function getSyncConfig(
   // Fallback to environment variables if configured
   if (env.GOOGLE_SPREADSHEET_ID) {
     const timezone = await getUserTimezone(userId);
+    const isLeadGeeks = env.GOOGLE_SPREADSHEET_ID.includes("1Rup5jNnSu");
     return {
       id: "env-default",
       spreadsheetId: env.GOOGLE_SPREADSHEET_ID,
-      worksheetName: env.GOOGLE_SHEET_NAME || "Sheet1",
+      worksheetName: env.GOOGLE_SHEET_NAME || (isLeadGeeks ? "Wahid" : "Sheet1"),
       sheetGid: env.GOOGLE_SHEET_GID || null,
-      mapping: DEFAULT_SHEET_MAPPING,
+      mapping: isLeadGeeks ? LEADGEEKS_SHEET_MAPPING : DEFAULT_SHEET_MAPPING,
       timezone,
       active: true,
       createdAt: new Date().toISOString(),

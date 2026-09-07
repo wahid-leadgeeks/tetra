@@ -149,12 +149,38 @@ export function useTodayState(timezone: string) {
   }, [post, settle]);
 
   const clockOut = useCallback(async (): Promise<boolean> => {
-    const attendance = await post<AttendanceDTO>(
-      "clock-out",
-      "/api/attendance/stop",
-    );
+    const attendance = await post<
+      AttendanceDTO & {
+        autoSync?: {
+          attempted: boolean;
+          success?: boolean;
+          idempotent?: boolean;
+          changedCount?: number;
+          message?: string;
+        };
+      }
+    >("clock-out", "/api/attendance/stop");
     if (attendance) {
-      toast.success("Work day ended");
+      if (attendance.autoSync?.attempted) {
+        if (attendance.autoSync.success) {
+          if (attendance.autoSync.idempotent) {
+            toast.success("Work day ended · Google Sheet already up to date");
+          } else {
+            toast.success(
+              `Work day ended · Auto-synced to Google Sheet (${attendance.autoSync.changedCount} ${
+                attendance.autoSync.changedCount === 1 ? "cell" : "cells"
+              } updated)`,
+            );
+          }
+        } else {
+          toast.success("Work day ended");
+          toast.error(
+            `Auto-sync notice: ${attendance.autoSync.message ?? "Could not sync to Google Sheet"}`,
+          );
+        }
+      } else {
+        toast.success("Work day ended");
+      }
       await settle();
       return true;
     }
