@@ -267,6 +267,40 @@ const SEPTEMBER_DATA: DayPlan[] = [
       },
     ],
   },
+  {
+    date: "2026-09-07",
+    clockIn: "08:20",
+    clockOut: "15:20",
+    breaks: [{ start: "12:00", end: "13:00" }],
+    entries: [
+      // Meeting (1h 45m = 105m)
+      {
+        categoryKey: "meeting",
+        taskName: "IT Department Functions",
+        notes: "IT Department Functions (1:45)",
+        start: "08:20",
+        end: "10:05",
+      },
+      // Training (4h 15m = 255m)
+      {
+        categoryKey: "training",
+        taskName: "Independent Learning and Task",
+        notes:
+          "Independent Learning and Task (Morning)\nIdentify and map each IT function, its responsibilities, main systems/tools, and dependencies.",
+        start: "10:05",
+        end: "12:00",
+      },
+      // 12:00 - 13:00 Break
+      {
+        categoryKey: "training",
+        taskName: "Independent Learning and Task",
+        notes:
+          "Independent Learning and Task (Afternoon)\nIdentify and map each IT function, its responsibilities, main systems/tools, and dependencies.",
+        start: "13:00",
+        end: "15:20",
+      },
+    ],
+  },
 ];
 
 /** Parse Asia/Jakarta local date and time string into a UTC Date */
@@ -282,7 +316,7 @@ async function main() {
   const emailArg = args.find((a) => a.startsWith("--email="))?.split("=")[1];
   const nameArg = args.find((a) => a.startsWith("--name="))?.split("=")[1];
 
-  const targetEmail = emailArg || "wahid@leadgeeks.com";
+  const targetEmail = emailArg || "wahid.m@leadgeeksinc.com";
   const targetName = nameArg || "Wahid";
   const timezone = "Asia/Jakarta";
 
