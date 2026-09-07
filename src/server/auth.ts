@@ -11,6 +11,7 @@ import { env } from "@/server/env";
 async function upsertUser(input: {
   name: string;
   email: string;
+  image?: string | null;
   googleId?: string;
 }): Promise<{ id: string; timezone: string }> {
   const existing = await db
@@ -20,11 +21,23 @@ async function upsertUser(input: {
     .limit(1);
   if (existing.length > 0) {
     const u = existing[0];
+    const updates: Partial<{ googleId: string; image: string; name: string }> =
+      {};
     if (input.googleId && u.googleId !== input.googleId) {
-      await db
-        .update(users)
-        .set({ googleId: input.googleId })
-        .where(eq(users.id, u.id));
+      updates.googleId = input.googleId;
+    }
+    if (input.image && u.image !== input.image) {
+      updates.image = input.image;
+    }
+    if (
+      input.name &&
+      u.name !== input.name &&
+      u.name === input.email.split("@")[0]
+    ) {
+      updates.name = input.name;
+    }
+    if (Object.keys(updates).length > 0) {
+      await db.update(users).set(updates).where(eq(users.id, u.id));
     }
     return { id: u.id, timezone: u.timezone };
   }
@@ -33,6 +46,7 @@ async function upsertUser(input: {
     .values({
       name: input.name,
       email: input.email,
+      image: input.image ?? null,
       googleId: input.googleId,
       timezone: env.DEFAULT_TIMEZONE,
     })
@@ -48,7 +62,13 @@ if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
       authorization: {
-        params: { scope: "openid email profile https://www.googleapis.com/auth/spreadsheets" },
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+          scope:
+            "openid email profile https://www.googleapis.com/auth/spreadsheets",
+        },
       },
     }),
   );
@@ -79,7 +99,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
   secret: env.AUTH_SECRET,
-  pages: { signIn: "/login" },
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
   providers,
   callbacks: {
     async jwt({ token, user, account }) {
@@ -93,11 +116,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const u = await upsertUser({
             name: user.name ?? email.split("@")[0] ?? email,
             email,
+            image: user.image ?? undefined,
             googleId,
           });
           token.userId = u.id;
           token.timezone = u.timezone;
         }
+      }
+      if (account?.provider === "google") {
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.expiresAt = account.expires_at;
       }
       return token;
     },
