@@ -26,8 +26,8 @@ export interface GetSheetsClientOptions {
 /**
  * Returns an authenticated Google Sheets client.
  * Priority:
- * 1. Explicit accessToken
- * 2. User OAuth tokens in database (refreshed automatically if expired)
+ * 1. User OAuth tokens in database (refreshed automatically if expired)
+ * 2. Explicit accessToken (fallback or stateless usage)
  * 3. Service Account credentials in environment variables
  */
 export async function getSheetsClient(
@@ -35,17 +35,7 @@ export async function getSheetsClient(
 ): Promise<sheets_v4.Sheets | null> {
   const { google } = await import("googleapis");
 
-  // 1. Explicit access token
-  if (options?.accessToken) {
-    const oauth2 = new google.auth.OAuth2(
-      env.GOOGLE_CLIENT_ID || undefined,
-      env.GOOGLE_CLIENT_SECRET || undefined,
-    );
-    oauth2.setCredentials({ access_token: options.accessToken });
-    return google.sheets({ version: "v4", auth: oauth2 });
-  }
-
-  // 2. User OAuth credentials from DB
+  // 1. User OAuth credentials from DB (preferred because it has refresh token & auto-refresh persistence)
   if (options?.userId) {
     const userRows = await db
       .select()
@@ -54,48 +44,97 @@ export async function getSheetsClient(
       .limit(1);
 
     const user = userRows[0];
-    if (user?.googleAccessToken) {
-      const oauth2 = new google.auth.OAuth2(
-        env.GOOGLE_CLIENT_ID || undefined,
-        env.GOOGLE_CLIENT_SECRET || undefined,
-      );
+    if (
+      user &&
+      (user.googleAccessToken || user.googleRefreshToken || options.accessToken)
+    ) {
+      const clientId =
+        env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || undefined;
+      const clientSecret =
+        env.GOOGLE_CLIENT_SECRET ||
+        process.env.GOOGLE_CLIENT_SECRET ||
+        undefined;
+
+      const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
 
       oauth2.setCredentials({
-        access_token: user.googleAccessToken,
+        access_token: user.googleAccessToken || options.accessToken,
         refresh_token: user.googleRefreshToken ?? undefined,
       });
 
+      // Listen for token updates during requests
+      if (typeof oauth2.on === "function") {
+        oauth2.on("tokens", (tokens) => {
+          if (tokens.access_token) {
+            db.update(users)
+              .set({
+                googleAccessToken: tokens.access_token,
+                ...(tokens.refresh_token
+                  ? { googleRefreshToken: tokens.refresh_token }
+                  : {}),
+                googleTokenExpiresAt: tokens.expiry_date
+                  ? new Date(tokens.expiry_date)
+                  : null,
+              })
+              .where(eq(users.id, user.id))
+              .catch((err) => {
+                console.error("Failed to update user tokens on token event:", err);
+              });
+          }
+        });
+      }
+
       // Refresh if expired or expiring within 60 seconds
       const isExpired =
-        user.googleTokenExpiresAt &&
-        user.googleTokenExpiresAt.getTime() < Date.now() + 60_000;
+        !user.googleAccessToken ||
+        (user.googleTokenExpiresAt &&
+          user.googleTokenExpiresAt.getTime() < Date.now() + 60_000);
 
       if (
         isExpired &&
         user.googleRefreshToken &&
-        env.GOOGLE_CLIENT_ID &&
-        env.GOOGLE_CLIENT_SECRET
+        (clientId || process.env.NODE_ENV === "test")
       ) {
         try {
           const { credentials } = await oauth2.refreshAccessToken();
           if (credentials.access_token) {
+            oauth2.setCredentials(credentials);
             await db
               .update(users)
               .set({
                 googleAccessToken: credentials.access_token,
+                ...(credentials.refresh_token
+                  ? { googleRefreshToken: credentials.refresh_token }
+                  : {}),
                 googleTokenExpiresAt: credentials.expiry_date
                   ? new Date(credentials.expiry_date)
                   : null,
               })
               .where(eq(users.id, user.id));
           }
-        } catch {
-          // If refresh fails, continue with existing credentials
+        } catch (refreshErr) {
+          console.error(
+            "Failed to proactively refresh Google OAuth token:",
+            refreshErr,
+          );
+          if (options.accessToken) {
+            oauth2.setCredentials({ access_token: options.accessToken });
+          }
         }
       }
 
       return google.sheets({ version: "v4", auth: oauth2 });
     }
+  }
+
+  // 2. Explicit access token (stateless or test usage)
+  if (options?.accessToken) {
+    const oauth2 = new google.auth.OAuth2(
+      env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || undefined,
+      env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || undefined,
+    );
+    oauth2.setCredentials({ access_token: options.accessToken });
+    return google.sheets({ version: "v4", auth: oauth2 });
   }
 
   // 3. Service Account JWT fallback
@@ -158,19 +197,28 @@ export async function testReadSpreadsheet(options: {
   let authMethod: TestReadSpreadsheetResult["authMethod"] = "none";
   let client: sheets_v4.Sheets | null = null;
 
-  if (options.accessToken) {
-    authMethod = "oauth_user";
-    client = await getSheetsClient({ accessToken: options.accessToken });
-  } else if (options.userId) {
+  if (options.userId) {
     const user = await db
       .select()
       .from(users)
       .where(eq(users.id, options.userId))
       .limit(1);
-    if (user[0]?.googleAccessToken) {
+    if (
+      user[0]?.googleAccessToken ||
+      user[0]?.googleRefreshToken ||
+      options.accessToken
+    ) {
       authMethod = "oauth_user";
-      client = await getSheetsClient({ userId: options.userId });
+      client = await getSheetsClient({
+        userId: options.userId,
+        accessToken: options.accessToken,
+      });
     }
+  }
+
+  if (!client && options.accessToken) {
+    authMethod = "oauth_user";
+    client = await getSheetsClient({ accessToken: options.accessToken });
   }
 
   if (!client) {
@@ -259,7 +307,14 @@ export async function testReadSpreadsheet(options: {
       authMethod,
     };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    let message = err instanceof Error ? err.message : String(err);
+    if (
+      message.includes("invalid authentication credentials") ||
+      message.includes("invalid_grant")
+    ) {
+      message =
+        "Google OAuth access expired or invalid. Please sign out and sign in again with Google to refresh permissions.";
+    }
     return {
       ok: false,
       spreadsheetId,

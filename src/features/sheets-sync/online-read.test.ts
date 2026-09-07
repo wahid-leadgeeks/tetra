@@ -2,15 +2,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { testReadSpreadsheet } from "./google";
 
 // Mock database
+const mockLimit = vi.fn().mockReturnValue([]);
+const mockWhere = vi.fn().mockReturnValue({ limit: mockLimit });
+const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+
 vi.mock("@/server/db", () => ({
   db: {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => []),
-        })),
-      })),
-    })),
+    select: () => mockSelect(),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
         where: vi.fn(() => Promise.resolve()),
@@ -22,6 +21,12 @@ vi.mock("@/server/db", () => ({
 // Mock googleapis
 const mockSpreadsheetsGet = vi.fn();
 const mockValuesGet = vi.fn();
+const mockRefreshAccessToken = vi.fn().mockResolvedValue({
+  credentials: {
+    access_token: "refreshed_token",
+    expiry_date: Date.now() + 3600_000,
+  },
+});
 
 vi.mock("googleapis", () => {
   return {
@@ -29,12 +34,8 @@ vi.mock("googleapis", () => {
       auth: {
         OAuth2: vi.fn().mockImplementation(() => ({
           setCredentials: vi.fn(),
-          refreshAccessToken: vi.fn().mockResolvedValue({
-            credentials: {
-              access_token: "refreshed_token",
-              expiry_date: Date.now() + 3600_000,
-            },
-          }),
+          on: vi.fn(),
+          refreshAccessToken: mockRefreshAccessToken,
         })),
         JWT: vi.fn().mockImplementation(() => ({})),
       },
@@ -53,6 +54,7 @@ vi.mock("googleapis", () => {
 describe("Google Sheets Online Reading & Inspection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLimit.mockReturnValue([]);
     delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     delete process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
   });
@@ -178,5 +180,58 @@ describe("Google Sheets Online Reading & Inspection", () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain("The caller does not have permission");
+  });
+
+  it("proactively refreshes expired OAuth token when userId is provided and has a refresh token", async () => {
+    // User in DB has expired access token but valid refresh token
+    mockLimit.mockReturnValue([
+      {
+        id: "user-123",
+        googleAccessToken: "expired_token",
+        googleRefreshToken: "valid_refresh_token",
+        googleTokenExpiresAt: new Date(Date.now() - 3600_000), // 1 hour ago
+      },
+    ]);
+
+    mockSpreadsheetsGet.mockResolvedValueOnce({
+      data: {
+        properties: { title: "LeadGeeks Employee Tracking 2026" },
+        sheets: [{ properties: { sheetId: 1976323691, title: "Wahid" } }],
+      },
+    });
+
+    mockValuesGet.mockResolvedValueOnce({
+      data: {
+        values: [["Date", "Clock In"], ["2026-09-01", "08:00"]],
+      },
+    });
+
+    const result = await testReadSpreadsheet({
+      userId: "user-123",
+      spreadsheetId: "1Rup5jNnSu-oTcOlZC3zIN7MNfzHqcP_rNrhnLIsX89Y",
+      worksheetName: "Wahid",
+      sheetGid: "1976323691",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.authMethod).toBe("oauth_user");
+    expect(mockRefreshAccessToken).toHaveBeenCalled();
+  });
+
+  it("formats invalid or expired OAuth credential errors into a user-friendly message", async () => {
+    mockSpreadsheetsGet.mockRejectedValueOnce(
+      new Error(
+        "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential.",
+      ),
+    );
+
+    const result = await testReadSpreadsheet({
+      accessToken: "expired_token_without_refresh",
+      spreadsheetId: "1Rup5jNnSu-oTcOlZC3zIN7MNfzHqcP_rNrhnLIsX89Y",
+      worksheetName: "Wahid",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Google OAuth access expired or invalid. Please sign out and sign in again");
   });
 });
