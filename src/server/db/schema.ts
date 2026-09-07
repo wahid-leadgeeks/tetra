@@ -157,6 +157,7 @@ export const spreadsheetConfigs = pgTable("spreadsheet_configs", {
     .references(() => users.id, { onDelete: "cascade" }),
   spreadsheetId: text("spreadsheet_id").notNull(),
   worksheetName: text("worksheet_name").notNull(),
+  sheetGid: text("sheet_gid"),
   mapping: jsonb("mapping").notNull(),
   timezone: text("timezone").notNull(),
   active: boolean("active").notNull().default(true),

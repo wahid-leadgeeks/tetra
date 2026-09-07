@@ -83,6 +83,7 @@ interface SheetMappingForm {
 interface SyncConfigForm {
   spreadsheetId: string;
   worksheetName: string;
+  sheetGid: string;
   mapping: SheetMappingForm;
   timezone: string;
 }
@@ -90,6 +91,7 @@ interface SyncConfigForm {
 interface SyncConfigResponse {
   spreadsheetId: string | null;
   worksheetName: string | null;
+  sheetGid?: string | null;
   mapping: Partial<SheetMappingForm> | null;
   timezone: string | null;
   headerRow?: number;
@@ -147,6 +149,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
   const [form, setForm] = useState<SyncConfigForm>({
     spreadsheetId: "",
     worksheetName: "",
+    sheetGid: "",
     mapping: DEFAULT_MAPPING,
     timezone: userTimezone || "Asia/Jakarta",
   });
@@ -181,6 +184,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
           setForm({
             spreadsheetId: config.spreadsheetId ?? "",
             worksheetName: config.worksheetName ?? "",
+            sheetGid: config.sheetGid ?? "",
             mapping: {
               ...DEFAULT_MAPPING,
               ...config.mapping,
@@ -276,6 +280,9 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
             ? form.spreadsheetId.trim()
             : undefined,
           worksheetName: form.worksheetName.trim(),
+          sheetGid: form.sheetGid.trim().length > 0
+            ? form.sheetGid.trim()
+            : undefined,
           timezone: form.timezone.trim(),
           mapping: {
             dateColumn: form.mapping.dateColumn,
@@ -350,17 +357,17 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                     {loadError} — defaults shown below.
                   </p>
                 )}
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="grid gap-2">
                     <Label htmlFor="spreadsheet-id">
                       Spreadsheet ID{" "}
                       <span className="font-normal text-muted-foreground">
-                        (optional for file sync)
+                        (Google sync)
                       </span>
                     </Label>
                     <Input
                       id="spreadsheet-id"
-                      className="h-11 font-mono"
+                      className="h-11 font-mono text-xs"
                       value={form.spreadsheetId}
                       onChange={(e) =>
                         setForm((prev) => ({
@@ -368,14 +375,14 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                           spreadsheetId: e.target.value,
                         }))
                       }
-                      placeholder="Only needed for Google sync"
+                      placeholder="e.g. 1Rup5jNnSu..."
                       autoComplete="off"
                       spellCheck={false}
                       data-testid="settings-spreadsheet-id"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="worksheet-name">Worksheet name</Label>
+                    <Label htmlFor="worksheet-name">Worksheet (tab name)</Label>
                     <Input
                       id="worksheet-name"
                       className="h-11"
@@ -386,15 +393,51 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                           worksheetName: e.target.value,
                         }))
                       }
-                      placeholder="Sheet1"
+                      placeholder="e.g. Wahid"
                       autoComplete="off"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      For file sync this must match the tab name inside your
-                      .xlsx (or just the first CSV column layout).
+                    <p className="text-[11px] text-muted-foreground">
+                      Used for API ranges (e.g. &apos;Wahid&apos;!A1:FS100)
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="sheet-gid">
+                      Sheet GID{" "}
+                      <span className="font-normal text-muted-foreground">
+                        (tab ID)
+                      </span>
+                    </Label>
+                    <Input
+                      id="sheet-gid"
+                      className="h-11 font-mono text-xs"
+                      value={form.sheetGid}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          sheetGid: e.target.value,
+                        }))
+                      }
+                      placeholder="e.g. 1976323691"
+                      autoComplete="off"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      From URL #gid=... for direct links
                     </p>
                   </div>
                 </div>
+
+                {form.spreadsheetId ? (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <a
+                      href={`https://docs.google.com/spreadsheets/d/${form.spreadsheetId}/edit${form.sheetGid ? `#gid=${form.sheetGid}` : ""}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                    >
+                      Open configured Google Sheet ↗
+                    </a>
+                  </div>
+                ) : null}
 
                 <fieldset className="grid gap-3">
                   <legend className="text-sm font-medium">

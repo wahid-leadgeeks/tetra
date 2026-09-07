@@ -1,0 +1,1 @@
+ALTER TABLE "spreadsheet_configs" ADD COLUMN "sheet_gid" text;
