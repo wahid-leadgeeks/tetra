@@ -34,14 +34,18 @@ function syncErrorResponse(err: unknown): NextResponse {
   return jsonError(400, "Sync failed");
 }
 
-async function requireUserId(): Promise<
-  { ok: true; userId: string } | { ok: false; response: NextResponse }
+async function requireAuth(): Promise<
+  { ok: true; userId: string; accessToken?: string } | { ok: false; response: NextResponse }
 > {
   const session = await auth();
   if (!session?.user?.id) {
     return { ok: false, response: jsonError(401, "Unauthorized") };
   }
-  return { ok: true, userId: session.user.id };
+  return {
+    ok: true,
+    userId: session.user.id,
+    accessToken: session.accessToken,
+  };
 }
 
 /** Preview the exact cells a sync would write — no sheet mutation. */
@@ -49,7 +53,7 @@ export async function GET(
   _req: NextRequest,
   ctx: SyncRouteContext,
 ): Promise<NextResponse> {
-  const authResult = await requireUserId();
+  const authResult = await requireAuth();
   if (!authResult.ok) return authResult.response;
 
   const { date } = await ctx.params;
@@ -58,7 +62,9 @@ export async function GET(
   }
 
   try {
-    const preview = await previewSync(authResult.userId, date);
+    const preview = await previewSync(authResult.userId, date, {
+      accessToken: authResult.accessToken,
+    });
     return NextResponse.json(preview);
   } catch (err) {
     return syncErrorResponse(err);
@@ -70,7 +76,7 @@ export async function POST(
   request: NextRequest,
   ctx: SyncRouteContext,
 ): Promise<NextResponse> {
-  const authResult = await requireUserId();
+  const authResult = await requireAuth();
   if (!authResult.ok) return authResult.response;
 
   const { date } = await ctx.params;
@@ -88,6 +94,7 @@ export async function POST(
     const result = await executeSync(authResult.userId, date, {
       includeNotes: parsedOptions.data.includeNotes,
       notes: parsedOptions.data.notes,
+      accessToken: authResult.accessToken,
     });
     return NextResponse.json(result);
   } catch (err) {

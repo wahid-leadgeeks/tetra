@@ -41,6 +41,12 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   image: text("image"),
   timezone: text("timezone").notNull(),
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiresAt: timestamp("google_token_expires_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
