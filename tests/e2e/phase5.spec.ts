@@ -35,6 +35,7 @@ test("phase 5: favorite task → quick start → weekly summary", async ({
     timeout: 10_000,
   });
   await page.getByTestId("stop-task").click();
+  await page.getByTestId("stop-task-confirm").click();
   await expect(page.getByTestId("active-timer")).toBeHidden({
     timeout: 10_000,
   });
@@ -72,6 +73,7 @@ test("phase 5: favorite task → quick start → weekly summary", async ({
 
   // Weekly summary is reachable from the daily review.
   await page.getByTestId("stop-task").click();
+  await page.getByTestId("stop-task-confirm").click();
   await expect(page.getByTestId("active-timer")).toBeHidden({
     timeout: 10_000,
   });

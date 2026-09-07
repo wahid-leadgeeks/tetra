@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { MobileNav, SidebarNav } from "@/components/app-nav/app-nav";
 import { SignOutButton } from "@/components/app-nav/sign-out-button";
 import { Wordmark } from "@/components/app-nav/wordmark";
+import { TourProvider } from "@/components/guide-tour/tour-provider";
 import { KeyboardNav } from "@/components/keyboard/keyboard-nav";
+import { NetworkStatusBanner } from "@/components/network-status";
 import { auth } from "@/server/auth";
 
 /**
@@ -19,7 +21,8 @@ export default async function AppLayout({
   const email = session.user.email ?? "";
 
   return (
-    <div className="min-h-svh">
+    <TourProvider>
+      <div className="min-h-svh">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         <div className="px-6 pt-7 pb-7">
           <Wordmark />
@@ -37,7 +40,8 @@ export default async function AppLayout({
       </aside>
 
       <div className="md:pl-64">
-        <main className="mx-auto w-full max-w-2xl px-6 pt-10 pb-32 md:px-10 md:pt-14 md:pb-20">
+        <NetworkStatusBanner />
+        <main className="mx-auto w-full max-w-5xl px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl">
           {children}
         </main>
       </div>
@@ -45,5 +49,6 @@ export default async function AppLayout({
       <MobileNav />
       <KeyboardNav />
     </div>
+    </TourProvider>
   );
 }
