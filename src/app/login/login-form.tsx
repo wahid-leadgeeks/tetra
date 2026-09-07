@@ -78,7 +78,7 @@ export function LoginForm({ googleEnabled, devLoginEnabled }: LoginFormProps) {
     <main className="grid min-h-svh place-items-center px-6 py-12">
       <div className="flex w-full max-w-sm flex-col items-center">
         <div className="flex flex-col items-center gap-3 pb-8 text-center">
-          <Wordmark className="text-xl" />
+          <Wordmark className="text-xl" iconSize={26} />
           <p className="text-sm text-muted-foreground">
             Task, Employee, Time &amp; Resource Analytics
           </p>
