@@ -10,7 +10,9 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { apiFetch } from "@/components/timeline/api";
-import type { TaskDTO } from "@/lib/types";
+import { getCategoryTheme } from "@/lib/categories";
+import { cn } from "@/lib/utils";
+import type { CategoryDTO, TaskDTO } from "@/lib/types";
 
 interface QuickStartProps {
   timeZone: string;
@@ -19,13 +21,22 @@ interface QuickStartProps {
 
 export function QuickStart({ refresh }: QuickStartProps) {
   const [favorites, setFavorites] = useState<TaskDTO[] | null>(null);
+  const [categoryKeys, setCategoryKeys] = useState<Record<string, string>>({});
   const [startingId, setStartingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<TaskDTO[]>("/api/tasks/recent")
-      .then((recent) => {
+    Promise.all([
+      apiFetch<TaskDTO[]>("/api/tasks/recent"),
+      apiFetch<CategoryDTO[]>("/api/categories").catch(() => [] as CategoryDTO[]),
+    ])
+      .then(([recent, categories]) => {
         if (!cancelled) {
+          const map: Record<string, string> = {};
+          for (const c of categories) {
+            map[c.id] = c.key;
+          }
+          setCategoryKeys(map);
           setFavorites(recent.filter((task) => task.isFavorite));
         }
       })
@@ -62,6 +73,7 @@ export function QuickStart({ refresh }: QuickStartProps) {
     <section
       aria-labelledby="quick-start-heading"
       data-testid="quick-start"
+      data-tour="quick-start"
       className="flex flex-col gap-3"
     >
       <h2
@@ -71,22 +83,34 @@ export function QuickStart({ refresh }: QuickStartProps) {
         Quick start
       </h2>
       <div className="flex flex-wrap gap-2">
-        {favorites.map((task, index) => (
-          <button
-            key={task.id}
-            type="button"
-            data-testid={`quick-start-task-${index}`}
-            aria-label={`Start ${task.name}`}
-            className="inline-flex h-11 items-center rounded-full border border-input px-4 text-sm text-muted-foreground outline-none transition-colors select-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-            disabled={startingId !== null}
-            onClick={() => void handleStart(task)}
-          >
-            {startingId === task.id ? (
-              <Loader2 aria-hidden className="mr-1.5 size-4 animate-spin" />
-            ) : null}
-            {task.name}
-          </button>
-        ))}
+        {favorites.map((task, index) => {
+          const categoryKey = categoryKeys[task.categoryId];
+          const theme = getCategoryTheme(categoryKey);
+          return (
+            <button
+              key={task.id}
+              type="button"
+              data-testid={`quick-start-task-${index}`}
+              aria-label={`Start ${task.name}`}
+              className={cn(
+                "inline-flex h-11 items-center rounded-full border border-input px-4 text-sm text-foreground outline-none transition-all select-none hover:bg-muted/80 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+                theme.hoverClass,
+              )}
+              disabled={startingId !== null}
+              onClick={() => void handleStart(task)}
+            >
+              {startingId === task.id ? (
+                <Loader2 aria-hidden className="mr-2 size-3.5 animate-spin" />
+              ) : (
+                <span
+                  aria-hidden
+                  className={cn("mr-2 size-2 rounded-full shrink-0", theme.dotClass)}
+                />
+              )}
+              <span className="font-medium">{task.name}</span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

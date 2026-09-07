@@ -8,11 +8,13 @@ import {
   Clock,
   ListTodo,
   Settings,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/keyboard/kbd";
+import { useTour } from "@/components/guide-tour/tour-provider";
 
 interface NavItem {
   href: string;
@@ -68,9 +70,10 @@ function isActive(pathname: string, href: string): boolean {
 /** Desktop sidebar navigation (DESIGN.md: sidebar on desktop). */
 export function SidebarNav() {
   const pathname = usePathname();
+  const { openTour } = useTour();
 
   return (
-    <nav aria-label="Primary" className="flex flex-col gap-1 px-3">
+    <nav aria-label="Primary" data-tour="sidebar-nav" className="flex flex-col gap-1 px-3">
       {NAV_ITEMS.map((item) => {
         const active = isActive(pathname, item.href);
         return (
@@ -80,13 +83,19 @@ export function SidebarNav() {
             data-testid={item.testId}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-all select-none focus-visible:ring-3 focus-visible:ring-ring/50",
               active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs"
                 : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
             )}
           >
-            <item.icon aria-hidden className="size-4.5 shrink-0" />
+            <item.icon
+              aria-hidden
+              className={cn(
+                "size-4.5 shrink-0 transition-colors",
+                active ? "text-primary" : "text-muted-foreground",
+              )}
+            />
             {item.label}
             <Kbd aria-hidden="true" className="ml-auto">
               {item.shortcut}
@@ -94,6 +103,18 @@ export function SidebarNav() {
           </Link>
         );
       })}
+
+      <div className="mt-3 pt-3 border-t border-sidebar-border/60">
+        <button
+          type="button"
+          onClick={openTour}
+          data-testid="sidebar-guide-tour"
+          className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer select-none"
+        >
+          <Sparkles aria-hidden className="size-4 text-primary shrink-0" />
+          <span>Guide Tour</span>
+        </button>
+      </div>
     </nav>
   );
 }
