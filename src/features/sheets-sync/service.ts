@@ -67,6 +67,7 @@ export type {
   GetSheetsClientOptions,
   TestReadSpreadsheetResult,
 } from "./google";
+export { pullDayFromSheet } from "./pull";
 
 // ---------------------------------------------------------------------------
 // Preview & sync

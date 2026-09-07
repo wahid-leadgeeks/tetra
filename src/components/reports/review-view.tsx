@@ -7,7 +7,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TriangleAlert, Wrench, CalendarRange } from "lucide-react";
+import {
+  CalendarRange,
+  Download,
+  TriangleAlert,
+  Upload,
+  Wrench,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +111,7 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
   const [fileSyncOpen, setFileSyncOpen] = useState(false);
   const [marking, setMarking] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +196,21 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
       toast.error(err instanceof Error ? err.message : "Sync failed.");
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handlePull() {
+    setPulling(true);
+    try {
+      await apiFetch<DaySummaryDTO>(`/api/days/${dayKey}/pull`, {
+        method: "POST",
+      });
+      toast.success("Tracking data pulled from Google Sheet!");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Pull failed.");
+    } finally {
+      setPulling(false);
     }
   }
 
@@ -445,15 +467,29 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
                       Sync to file
                     </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    className="h-11 w-full font-medium shadow-xs"
-                    onClick={() => void handleSync()}
-                    disabled={syncing}
-                    data-testid="sync-button"
-                  >
-                    {syncing ? "Syncing…" : "Sync to Google Sheet"}
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-11 font-medium shadow-xs"
+                      onClick={() => void handlePull()}
+                      disabled={pulling}
+                      data-testid="pull-button"
+                      title="Read IN, OUT, breaks, categories & notes from Google Sheet for this day"
+                    >
+                      <Download className="mr-1.5 size-4" />
+                      {pulling ? "Pulling…" : "Pull from Sheet"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-11 font-medium shadow-xs"
+                      onClick={() => void handleSync()}
+                      disabled={syncing}
+                      data-testid="sync-button"
+                    >
+                      <Upload className="mr-1.5 size-4" />
+                      {syncing ? "Syncing…" : "Sync to Sheet"}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

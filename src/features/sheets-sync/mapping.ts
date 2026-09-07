@@ -69,6 +69,7 @@ export const mappingSchema = z.strictObject({
   headerRow: z.number().int().min(1).optional(),
   notesColumn: columnLetter.optional(),
   categoryNotes: categoryNotesSchema.optional(),
+  autoSyncOnClockOut: z.boolean().optional(),
 });
 
 export type SheetMapping = z.infer<typeof mappingSchema>;
@@ -106,3 +107,40 @@ export const DEFAULT_SHEET_MAPPING = {
     other_tasks: "W",
   },
 } satisfies SheetMapping;
+
+/**
+ * Actual column coordinates in the LeadGeeks Employee Task & Time Tracking spreadsheet.
+ * Matches ARCHITECTURE.md § Spreadsheet mapping and verified against live sheet headers.
+ */
+export const LEADGEEKS_SHEET_MAPPING = {
+  dateColumn: "A",
+  clockInColumn: "B",
+  breakStartColumn: "C",
+  breakEndColumn: "D",
+  clockOutColumn: "E",
+  dailyTotalColumn: "F",
+  workTotalColumn: "G",
+  headerRow: 3,
+  categories: {
+    website_management: "EL",
+    cyber_security: "EN",
+    technology_innovation: "EP",
+    infrastructure_management: "ER",
+    research: "FL",
+    meeting: "FN",
+    training: "FP",
+    other_tasks: "FR",
+  },
+  categoryNotes: {
+    website_management: "EM",
+    cyber_security: "EO",
+    technology_innovation: "EQ",
+    infrastructure_management: "ES",
+    research: "FM",
+    meeting: "FO",
+    training: "FQ",
+    other_tasks: "FS",
+  },
+  autoSyncOnClockOut: true,
+} satisfies SheetMapping;
+
