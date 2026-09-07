@@ -40,13 +40,14 @@ export function findDateRow(
 ): number | null {
   const colIndex = columnToIndex(mapping.dateColumn);
   const startRow = mapping.headerRow ?? 0;
+  const targetYear = Number(targetDate.slice(0, 4)) || undefined;
   for (let i = startRow; i < rows.length; i++) {
     const row = rows[i];
     const cell = row?.[colIndex];
     if (cell === undefined || cell === null || String(cell).trim() === "") {
       continue;
     }
-    if (candidateDayKeys(String(cell)).includes(targetDate)) {
+    if (candidateDayKeys(String(cell), targetYear).includes(targetDate)) {
       return i + 1;
     }
   }
@@ -56,9 +57,11 @@ export function findDateRow(
 /**
  * Every plausible "YYYY-MM-DD" interpretation of a sheet cell.
  */
-function candidateDayKeys(cell: string): string[] {
+function candidateDayKeys(cell: string, targetYear?: number): string[] {
   const trimmed = cell.trim();
   if (ISO_DATE.test(trimmed)) return [trimmed];
+
+  const results: string[] = [];
 
   const numeric = NUMERIC_DATE.exec(trimmed);
   if (numeric) {
@@ -66,20 +69,33 @@ function candidateDayKeys(cell: string): string[] {
     const b = Number(numeric[2]);
     const y = twoDigitYear(Number(numeric[3]));
     // Try month-first AND day-first — compare against the target date.
-    return [
-      dayKeyFromParts(y, a, b),
-      dayKeyFromParts(y, b, a),
-    ].filter((key): key is string => key !== null);
+    const k1 = dayKeyFromParts(y, a, b);
+    const k2 = dayKeyFromParts(y, b, a);
+    if (k1) results.push(k1);
+    if (k2) results.push(k2);
+    return results;
+  }
+
+  // If no 4-digit year is present in cell and targetYear is provided (e.g. "Tue, Sep 1"),
+  // parse with targetYear so year-less sheets match correctly.
+  if (targetYear && !/\b\d{4}\b/.test(trimmed)) {
+    const withYear = Date.parse(`${trimmed}, ${targetYear}`);
+    if (!Number.isNaN(withYear)) {
+      const d = new Date(withYear);
+      results.push(
+        `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+      );
+    }
   }
 
   const parsed = Date.parse(trimmed);
   if (!Number.isNaN(parsed)) {
     const d = new Date(parsed);
-    return [
+    results.push(
       `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
-    ];
+    );
   }
-  return [];
+  return results;
 }
 
 function twoDigitYear(year: number): number {
