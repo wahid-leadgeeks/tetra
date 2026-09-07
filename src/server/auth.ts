@@ -13,6 +13,9 @@ async function upsertUser(input: {
   email: string;
   image?: string | null;
   googleId?: string;
+  googleAccessToken?: string | null;
+  googleRefreshToken?: string | null;
+  googleTokenExpiresAt?: Date | null;
 }): Promise<{ id: string; timezone: string }> {
   const existing = await db
     .select()
@@ -21,8 +24,14 @@ async function upsertUser(input: {
     .limit(1);
   if (existing.length > 0) {
     const u = existing[0];
-    const updates: Partial<{ googleId: string; image: string; name: string }> =
-      {};
+    const updates: Partial<{
+      googleId: string;
+      image: string;
+      name: string;
+      googleAccessToken: string | null;
+      googleRefreshToken: string | null;
+      googleTokenExpiresAt: Date | null;
+    }> = {};
     if (input.googleId && u.googleId !== input.googleId) {
       updates.googleId = input.googleId;
     }
@@ -36,6 +45,15 @@ async function upsertUser(input: {
     ) {
       updates.name = input.name;
     }
+    if (input.googleAccessToken !== undefined) {
+      updates.googleAccessToken = input.googleAccessToken;
+    }
+    if (input.googleRefreshToken !== undefined) {
+      updates.googleRefreshToken = input.googleRefreshToken;
+    }
+    if (input.googleTokenExpiresAt !== undefined) {
+      updates.googleTokenExpiresAt = input.googleTokenExpiresAt;
+    }
     if (Object.keys(updates).length > 0) {
       await db.update(users).set(updates).where(eq(users.id, u.id));
     }
@@ -48,6 +66,9 @@ async function upsertUser(input: {
       email: input.email,
       image: input.image ?? null,
       googleId: input.googleId,
+      googleAccessToken: input.googleAccessToken ?? null,
+      googleRefreshToken: input.googleRefreshToken ?? null,
+      googleTokenExpiresAt: input.googleTokenExpiresAt ?? null,
       timezone: env.DEFAULT_TIMEZONE,
     })
     .returning();
@@ -106,27 +127,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   callbacks: {
     async jwt({ token, user, account }) {
+      if (account?.provider === "google") {
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.expiresAt = account.expires_at;
+      }
       if (user) {
         const email = user.email ?? (token.email as string | undefined);
         if (email) {
-          const googleId =
-            account?.provider === "google"
-              ? (account.providerAccountId as string | undefined)
-              : undefined;
+          const isGoogle = account?.provider === "google";
+          const googleId = isGoogle
+            ? (account.providerAccountId as string | undefined)
+            : undefined;
           const u = await upsertUser({
             name: user.name ?? email.split("@")[0] ?? email,
             email,
             image: user.image ?? undefined,
             googleId,
+            googleAccessToken: isGoogle ? (account.access_token ?? null) : undefined,
+            googleRefreshToken: isGoogle
+              ? (account.refresh_token ?? null)
+              : undefined,
+            googleTokenExpiresAt:
+              isGoogle && account.expires_at
+                ? new Date(account.expires_at * 1000)
+                : undefined,
           });
           token.userId = u.id;
           token.timezone = u.timezone;
         }
-      }
-      if (account?.provider === "google") {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
       }
       return token;
     },
@@ -134,6 +163,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = (token.userId as string | undefined) ?? "";
       session.user.timezone =
         (token.timezone as string | undefined) ?? env.DEFAULT_TIMEZONE;
+      session.accessToken = token.accessToken as string | undefined;
+      session.hasGoogleAuth = !!token.accessToken;
       return session;
     },
   },

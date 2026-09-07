@@ -8,6 +8,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
+import type { TestReadSpreadsheetResult } from "@/features/sheets-sync/google";
 import type { CategoryDTO } from "@/lib/types";
 
 const COLUMN_PATTERN = /^[A-Z]{1,2}$/;
@@ -161,6 +169,59 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] =
+    useState<TestReadSpreadsheetResult | null>(null);
+
+  async function handleTestConnection() {
+    const spreadsheetId = form.spreadsheetId.trim();
+    if (!spreadsheetId || spreadsheetId === "file") {
+      toast.error("Enter a Google Spreadsheet ID first");
+      return;
+    }
+
+    setTestingConnection(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch<TestReadSpreadsheetResult>(
+        "/api/sheets/inspect",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            spreadsheetId: form.spreadsheetId,
+            worksheetName: form.worksheetName,
+            sheetGid: form.sheetGid,
+          }),
+        },
+      );
+      setTestResult(res);
+      if (res.ok) {
+        toast.success("Spreadsheet read successfully!", {
+          description: `Connected to "${res.spreadsheetTitle}" (tab: "${res.targetSheetName}").`,
+        });
+      } else {
+        toast.error("Could not read spreadsheet", {
+          description: res.error,
+        });
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Connection failed";
+      setTestResult({
+        ok: false,
+        spreadsheetId: form.spreadsheetId,
+        targetSheetName: form.worksheetName,
+        targetSheetFound: false,
+        sheets: [],
+        authMethod: "none",
+        error: message,
+      });
+      toast.error("Connection failed", { description: message });
+    } finally {
+      setTestingConnection(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -510,7 +571,97 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                   </ul>
                 )}
 
-                <div>
+                {testResult && (
+                  <div
+                    className={`rounded-lg border p-4 text-xs ${
+                      testResult.ok
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
+                        : "border-destructive/30 bg-destructive/10 text-destructive dark:text-red-300"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {testResult.ok ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="size-4 shrink-0 text-destructive mt-0.5" />
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <p className="font-semibold text-sm">
+                          {testResult.ok
+                            ? `Connected: ${testResult.spreadsheetTitle}`
+                            : "Could not read online spreadsheet"}
+                        </p>
+                        {testResult.ok ? (
+                          <div className="space-y-1.5 pt-1">
+                            <p>
+                              Worksheet tab:{" "}
+                              <span className="font-semibold font-mono">
+                                {testResult.targetSheetName}
+                              </span>
+                              {testResult.targetSheetGid ? (
+                                <span className="text-muted-foreground ml-1">
+                                  (GID: {testResult.targetSheetGid})
+                                </span>
+                              ) : null}
+                            </p>
+                            <p className="text-muted-foreground">
+                              Available tabs:{" "}
+                              {testResult.sheets.map((s) => s.title).join(", ")}
+                            </p>
+                            {testResult.sampleValues &&
+                            testResult.sampleValues.length > 0 ? (
+                              <div className="mt-2 pt-2 border-t border-emerald-500/20">
+                                <p className="font-medium mb-1">
+                                  Sample online data ({testResult.sampleRange}):
+                                </p>
+                                <div className="max-h-36 overflow-auto rounded bg-background/80 p-2 font-mono text-[11px] border border-border/50 text-foreground">
+                                  <table className="w-full text-left border-collapse">
+                                    <tbody>
+                                      {testResult.sampleValues
+                                        .slice(0, 4)
+                                        .map((row, rIdx) => (
+                                          <tr
+                                            key={rIdx}
+                                            className="border-b border-border/40 last:border-b-0"
+                                          >
+                                            <td className="pr-2 py-0.5 text-muted-foreground select-none">
+                                              R{rIdx + 1}
+                                            </td>
+                                            {row.slice(0, 8).map((val, cIdx) => (
+                                              <td
+                                                key={cIdx}
+                                                className="px-2 py-0.5 truncate max-w-[120px]"
+                                              >
+                                                {String(val || "—")}
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="space-y-1 pt-1">
+                            <p className="font-mono text-[11px] break-all">
+                              {testResult.error}
+                            </p>
+                            {testResult.authMethod === "none" && (
+                              <p className="text-muted-foreground pt-1">
+                                Tip: Sign in with Google (or provide Google Service
+                                Account credentials in .env.local) to authorize access.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-3">
                   <Button
                     type="submit"
                     className="h-11 px-5"
@@ -518,6 +669,21 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                     data-testid="settings-save"
                   >
                     {saving ? "Saving…" : "Save"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 gap-2"
+                    onClick={handleTestConnection}
+                    disabled={testingConnection || saving}
+                    data-testid="settings-test-connection"
+                  >
+                    {testingConnection ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-4" />
+                    )}
+                    Test Connection &amp; Read Online
                   </Button>
                 </div>
               </form>

@@ -62,7 +62,11 @@ export {
 } from "./sync-log-store";
 export type { ListSyncLogsOptions, ChangedCell } from "./sync-log-store";
 export { SyncNotConfiguredError, SheetsApiError } from "./errors";
-export { getSheetsClient } from "./google";
+export { getSheetsClient, testReadSpreadsheet } from "./google";
+export type {
+  GetSheetsClientOptions,
+  TestReadSpreadsheetResult,
+} from "./google";
 
 // ---------------------------------------------------------------------------
 // Preview & sync
@@ -75,10 +79,14 @@ export { getSheetsClient } from "./google";
 export async function previewSync(
   userId: string,
   dayKey: string,
+  options?: { accessToken?: string },
 ): Promise<SyncPreviewDTO> {
   const config = await getSyncConfig(userId);
   if (!config) throw new SyncNotConfiguredError("No spreadsheet configured");
-  const sheets = await getSheetsClient();
+  const sheets = await getSheetsClient({
+    userId,
+    accessToken: options?.accessToken,
+  });
   if (!sheets) {
     throw new SyncNotConfiguredError(
       "Google Sheets credentials not configured",
@@ -111,7 +119,7 @@ export async function previewSync(
 export async function executeSync(
   userId: string,
   dayKey: string,
-  options: SyncOptions = {},
+  options: SyncOptions & { accessToken?: string } = {},
 ): Promise<SyncResult> {
   const timezone = await getUserTimezone(userId);
   const summary = await getDaySummary(userId, dayKey, timezone);
@@ -121,7 +129,10 @@ export async function executeSync(
 
   const config = await getSyncConfig(userId);
   if (!config) throw new SyncNotConfiguredError("No spreadsheet configured");
-  const sheets = await getSheetsClient();
+  const sheets = await getSheetsClient({
+    userId,
+    accessToken: options.accessToken,
+  });
   if (!sheets) {
     throw new SyncNotConfiguredError(
       "Google Sheets credentials not configured",
