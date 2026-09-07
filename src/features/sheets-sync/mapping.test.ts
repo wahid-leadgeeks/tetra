@@ -203,3 +203,17 @@ describe("mappingSchema", () => {
     expect(CATEGORY_KEYS.length).toBe(8);
   });
 });
+
+describe("worksheetRange A1 notation", () => {
+  it("formats sheet-name-based A1 range strings for Google Sheets API", async () => {
+    const { worksheetRange } = await import("./google");
+    expect(worksheetRange("Sheet1", "A1:FS100")).toBe("'Sheet1'!A1:FS100");
+    expect(worksheetRange("Sheet1", "B5")).toBe("'Sheet1'!B5");
+    expect(worksheetRange("Sheet1", "A100:FS100")).toBe("'Sheet1'!A100:FS100");
+  });
+
+  it("safely escapes single quotes in worksheet names", async () => {
+    const { worksheetRange } = await import("./google");
+    expect(worksheetRange("User's Sheet", "B5")).toBe("'Sheet1''s Sheet'!B5");
+  });
+});

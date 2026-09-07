@@ -8,12 +8,13 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { spreadsheetConfigs, users } from "@/server/db/schema";
 import { env } from "@/server/env";
-import { mappingSchema, type SheetMapping } from "./mapping";
+import { DEFAULT_SHEET_MAPPING, mappingSchema, type SheetMapping } from "./mapping";
 
 export interface SpreadsheetConfigDTO {
   id: string;
   spreadsheetId: string;
   worksheetName: string;
+  sheetGid?: string | null;
   mapping: SheetMapping;
   timezone: string;
   active: boolean;
@@ -25,6 +26,7 @@ export const upsertSyncConfigSchema = z.object({
   /** Optional for file-based sync — Google sync requires it. */
   spreadsheetId: z.string().min(5).optional().default("file"),
   worksheetName: z.string().min(1),
+  sheetGid: z.string().optional().nullable(),
   mapping: mappingSchema,
   timezone: z.string().min(1).optional(),
 });
@@ -38,6 +40,7 @@ function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
     id: row.id,
     spreadsheetId: row.spreadsheetId,
     worksheetName: row.worksheetName,
+    sheetGid: row.sheetGid ?? null,
     mapping,
     timezone: row.timezone,
     active: row.active,
@@ -46,7 +49,7 @@ function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
   };
 }
 
-/** The user's single active spreadsheet config, or null. */
+/** The user's single active spreadsheet config, or env fallback, or null. */
 export async function getSyncConfig(
   userId: string,
 ): Promise<SpreadsheetConfigDTO | null> {
@@ -61,7 +64,27 @@ export async function getSyncConfig(
     )
     .orderBy(desc(spreadsheetConfigs.updatedAt))
     .limit(1);
-  return rows.length > 0 ? toConfigDTO(rows[0]) : null;
+  if (rows.length > 0) {
+    return toConfigDTO(rows[0]);
+  }
+
+  // Fallback to environment variables if configured
+  if (env.GOOGLE_SPREADSHEET_ID) {
+    const timezone = await getUserTimezone(userId);
+    return {
+      id: "env-default",
+      spreadsheetId: env.GOOGLE_SPREADSHEET_ID,
+      worksheetName: env.GOOGLE_SHEET_NAME || "Sheet1",
+      sheetGid: env.GOOGLE_SHEET_GID || null,
+      mapping: DEFAULT_SHEET_MAPPING,
+      timezone,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  return null;
 }
 
 /** User's stored IANA timezone (fallback: the app default). */
@@ -87,7 +110,8 @@ export async function upsertSyncConfig(
   if (!parsed.success) {
     throw new Error(`Invalid sync config: ${firstIssueMessage(parsed.error)}`);
   }
-  const { spreadsheetId, worksheetName, mapping, timezone } = parsed.data;
+  const { spreadsheetId, worksheetName, sheetGid, mapping, timezone } =
+    parsed.data;
   const resolvedTimezone = timezone ?? (await getUserTimezone(userId));
 
   const existing = await db
@@ -108,6 +132,7 @@ export async function upsertSyncConfig(
       .set({
         spreadsheetId,
         worksheetName,
+        sheetGid: sheetGid ?? null,
         mapping,
         timezone: resolvedTimezone,
         active: true,
@@ -124,6 +149,7 @@ export async function upsertSyncConfig(
       userId,
       spreadsheetId,
       worksheetName,
+      sheetGid: sheetGid ?? null,
       mapping,
       timezone: resolvedTimezone,
       active: true,

@@ -15,6 +15,13 @@
       "when": 1788483978902,
       "tag": "0001_lucky_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788788773137,
+      "tag": "0002_flippant_shocker",
+      "breakpoints": true
     }
   ]
 }
