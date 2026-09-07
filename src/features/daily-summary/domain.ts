@@ -15,6 +15,7 @@ import { minutesBetween, zonedClock, zonedDayEnd, zonedDayStart } from "@/lib/ti
 import type {
   BuildDaySummaryInput,
   DaySummaryAttendanceInput,
+  DaySummaryBreakInput,
   DaySummaryEntryInput,
 } from "./types";
 
@@ -88,10 +89,14 @@ function overlapWarnings(
  * Gap warnings between consecutive entries, clamped to the attendance window.
  * Spans at the window edges (clock-in → first task, last task → clock-out)
  * are not "between" entries and never count.
+ *
+ * Breaks that occur between consecutive entries are subtracted from the gap;
+ * only unallocated/uncovered gap minutes exceeding the threshold are flagged.
  */
 function gapWarnings(
   dayEntries: DaySummaryEntryInput[],
   attendance: DaySummaryAttendanceInput,
+  breaks: DaySummaryBreakInput[],
   now: Date,
 ): DayWarning[] {
   const windowStart = attendance.clockInAt;
@@ -103,7 +108,35 @@ function gapWarnings(
     if (prev === undefined || next === undefined) continue;
     const from = Math.max(intervalEnd(prev, now).getTime(), windowStart.getTime());
     const to = Math.min(next.startedAt.getTime(), windowEnd.getTime());
-    const minutes = minutesBetween(new Date(from), new Date(to));
+    if (to <= from) continue;
+
+    // Calculate break time falling within the [from, to] interval
+    const relevantBreaks = breaks
+      .map((b) => ({
+        start: Math.max(from, b.startedAt.getTime()),
+        end: Math.min(to, (b.endedAt ?? now).getTime()),
+      }))
+      .filter((b) => b.start < b.end)
+      .sort((a, b) => a.start - b.start);
+
+    const mergedBreaks: { start: number; end: number }[] = [];
+    for (const b of relevantBreaks) {
+      const last = mergedBreaks[mergedBreaks.length - 1];
+      if (last && b.start <= last.end) {
+        last.end = Math.max(last.end, b.end);
+      } else {
+        mergedBreaks.push({ start: b.start, end: b.end });
+      }
+    }
+
+    const breakMsInGap = mergedBreaks.reduce(
+      (sum, b) => sum + (b.end - b.start),
+      0,
+    );
+    const totalGapMs = to - from;
+    const unallocatedMs = Math.max(0, totalGapMs - breakMsInGap);
+    const minutes = Math.floor(unallocatedMs / 60_000);
+
     if (minutes > GAP_THRESHOLD_MINUTES) {
       warnings.push({
         type: "gap",
@@ -177,7 +210,7 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
 
   const warnings: DayWarning[] = [
     ...overlapWarnings(dayEntries, now, tz),
-    ...(attendance ? gapWarnings(dayEntries, attendance, now) : []),
+    ...(attendance ? gapWarnings(dayEntries, attendance, breaks, now) : []),
   ];
   if (dayEntries.some((e) => e.status === "active" || e.status === "paused")) {
     warnings.push({ type: "open_task", message: "A task is still open" });

@@ -276,6 +276,88 @@ describe("buildDaySummary warnings", () => {
     expect(fiveMinGap.reviewState).toBe("ready");
   });
 
+  it("does not warn about a gap between entries when it is covered by a scheduled break", () => {
+    // 11:30 to 13:00 (90 min gap) covered by 11:30 to 13:00 break
+    const summary = buildDaySummary(
+      input({
+        attendance: {
+          id: "att-1",
+          clockInAt: local(8, 30),
+          clockOutAt: local(16, 20),
+          status: "closed",
+        },
+        breaks: [
+          {
+            id: "b1",
+            startedAt: local(11, 30),
+            endedAt: local(13, 0),
+          },
+        ],
+        entries: [
+          entry({
+            id: "e1",
+            taskName: "Independent learning and exploration",
+            startedAt: local(10, 35),
+            endedAt: local(11, 30),
+          }),
+          entry({
+            id: "e2",
+            taskName: "Final Practice for Time & Task Tracking",
+            startedAt: local(13, 0),
+            endedAt: local(14, 30),
+          }),
+        ],
+      }),
+    );
+
+    const gapWarnings = summary.warnings.filter((w) => w.type === "gap");
+    expect(gapWarnings).toHaveLength(0);
+    expect(summary.reviewState).toBe("ready");
+  });
+
+  it("warns about remaining unallocated gap when a break only partially covers the span", () => {
+    // 11:30 to 13:00 (90 min span), but break is only 11:30 to 12:00 (30 min) -> 60 min uncovered
+    const summary = buildDaySummary(
+      input({
+        attendance: {
+          id: "att-1",
+          clockInAt: local(8, 30),
+          clockOutAt: local(16, 20),
+          status: "closed",
+        },
+        breaks: [
+          {
+            id: "b1",
+            startedAt: local(11, 30),
+            endedAt: local(12, 0),
+          },
+        ],
+        entries: [
+          entry({
+            id: "e1",
+            taskName: "Task 1",
+            startedAt: local(10, 35),
+            endedAt: local(11, 30),
+          }),
+          entry({
+            id: "e2",
+            taskName: "Task 2",
+            startedAt: local(13, 0),
+            endedAt: local(14, 30),
+          }),
+        ],
+      }),
+    );
+
+    const gapWarnings = summary.warnings.filter((w) => w.type === "gap");
+    expect(gapWarnings).toHaveLength(1);
+    expect(gapWarnings[0]).toEqual({
+      type: "gap",
+      minutes: 60,
+      message: "60m gap between Task 1 and Task 2",
+    });
+  });
+
   it("warns when attendance is still open (missing clock out)", () => {
     const summary = buildDaySummary(
       input({
