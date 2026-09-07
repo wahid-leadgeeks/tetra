@@ -8,11 +8,17 @@ export const metadata: Metadata = {
   title: "Sign in — TETRA",
 };
 
-export default function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<{ error?: string }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { error } = await searchParams;
   return (
     <LoginForm
       googleEnabled={!!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET}
       devLoginEnabled={env.ALLOW_DEV_LOGIN}
+      authError={error}
     />
   );
 }

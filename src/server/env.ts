@@ -7,6 +7,8 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
   APP_URL: z.string().optional().default("http://localhost:3000"),
   DEFAULT_TIMEZONE: z.string().optional().default("Asia/Jakarta"),
+  AUTH_URL: z.string().optional(),
+  NEXTAUTH_URL: z.string().optional(),
   ALLOW_DEV_LOGIN: z
     .string()
     .optional()
