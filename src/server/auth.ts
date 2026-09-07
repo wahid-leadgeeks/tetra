@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import NextAuth, { type NextAuthConfig } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { z } from "zod";
@@ -48,7 +49,7 @@ async function upsertUser(input: {
     if (input.googleAccessToken !== undefined) {
       updates.googleAccessToken = input.googleAccessToken;
     }
-    if (input.googleRefreshToken !== undefined) {
+    if (input.googleRefreshToken) {
       updates.googleRefreshToken = input.googleRefreshToken;
     }
     if (input.googleTokenExpiresAt !== undefined) {
@@ -116,6 +117,78 @@ if (env.ALLOW_DEV_LOGIN) {
   );
 }
 
+/**
+ * Refresh expired Google access token using the stored refresh token.
+ */
+async function refreshGoogleAccessToken(token: JWT): Promise<JWT> {
+  try {
+    let refreshToken = token.refreshToken;
+
+    // Fall back to database if refresh token is not on the JWT
+    if (!refreshToken && token.userId) {
+      const userRows = await db
+        .select({ googleRefreshToken: users.googleRefreshToken })
+        .from(users)
+        .where(eq(users.id, token.userId))
+        .limit(1);
+      refreshToken = userRows[0]?.googleRefreshToken ?? undefined;
+    }
+
+    if (!refreshToken || !env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+      return token;
+    }
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      }),
+    });
+
+    const refreshedTokens = await response.json();
+
+    if (!response.ok) {
+      console.error(
+        "Failed to refresh Google token in NextAuth JWT:",
+        refreshedTokens,
+      );
+      return { ...token, error: "RefreshAccessTokenError" };
+    }
+
+    const newAccessToken = refreshedTokens.access_token as string;
+    const expiresIn = (refreshedTokens.expires_in as number) ?? 3600;
+    const newExpiresAt = Math.floor(Date.now() / 1000 + expiresIn);
+    const newRefreshToken =
+      (refreshedTokens.refresh_token as string) ?? refreshToken;
+
+    if (token.userId && newAccessToken) {
+      await db
+        .update(users)
+        .set({
+          googleAccessToken: newAccessToken,
+          googleTokenExpiresAt: new Date(newExpiresAt * 1000),
+          googleRefreshToken: newRefreshToken,
+        })
+        .where(eq(users.id, token.userId));
+    }
+
+    return {
+      ...token,
+      accessToken: newAccessToken,
+      expiresAt: newExpiresAt,
+      refreshToken: newRefreshToken,
+      error: undefined,
+    };
+  } catch (error) {
+    console.error("Error in refreshGoogleAccessToken:", error);
+    return { ...token, error: "RefreshAccessTokenError" };
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
@@ -129,7 +202,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, account }) {
       if (account?.provider === "google") {
         token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
+        if (account.refresh_token) {
+          token.refreshToken = account.refresh_token;
+        }
         token.expiresAt = account.expires_at;
       }
       if (user) {
@@ -146,7 +221,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             googleId,
             googleAccessToken: isGoogle ? (account.access_token ?? null) : undefined,
             googleRefreshToken: isGoogle
-              ? (account.refresh_token ?? null)
+              ? (account.refresh_token ?? undefined)
               : undefined,
             googleTokenExpiresAt:
               isGoogle && account.expires_at
@@ -156,7 +231,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.userId = u.id;
           token.timezone = u.timezone;
         }
+        return token;
       }
+
+      // If Google access token is expired or expiring within 60 seconds, refresh it
+      if (
+        token.expiresAt &&
+        typeof token.expiresAt === "number" &&
+        Date.now() >= token.expiresAt * 1000 - 60_000
+      ) {
+        return refreshGoogleAccessToken(token);
+      }
+
       return token;
     },
     async session({ session, token }) {
