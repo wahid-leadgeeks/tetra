@@ -84,6 +84,7 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
     timeout: 10_000,
   });
   await page.getByTestId("sticky-stop").click();
+  await page.getByTestId("stop-task-confirm").click();
   await expect(page.getByTestId("sticky-timer")).toBeHidden({
     timeout: 10_000,
   });

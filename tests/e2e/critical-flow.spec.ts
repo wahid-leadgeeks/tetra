@@ -28,6 +28,7 @@ test("critical flow: login → work → task → break → stop → review → s
 
   // 4. Stop task
   await page.getByTestId("stop-task").click();
+  await page.getByTestId("stop-task-confirm").click();
   await expect(activeCard).toBeHidden({ timeout: 10_000 });
 
   // 5. Break + end break (button toggles break-end while a break is active)

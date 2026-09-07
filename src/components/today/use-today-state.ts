@@ -85,12 +85,30 @@ export function useTodayState(timezone: string) {
     router.refresh();
   }, [refresh, router]);
 
+  // Automatically refresh server state when network connectivity returns
+  useEffect(() => {
+    const handleNetworkOnline = () => {
+      void settle();
+    };
+    window.addEventListener("tetra:network-online", handleNetworkOnline);
+    return () => {
+      window.removeEventListener("tetra:network-online", handleNetworkOnline);
+    };
+  }, [settle]);
+
   const post = useCallback(
     async <T>(
       action: PendingAction,
       path: string,
       body?: unknown,
     ): Promise<T | null> => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        toast.error("You are currently offline", {
+          description: "Please reconnect to the internet to save changes.",
+        });
+        return null;
+      }
+
       setPending(action);
       try {
         const res = await fetch(path, {
