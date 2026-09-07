@@ -5,6 +5,7 @@ declare module "next-auth" {
     user: { id: string; timezone: string } & DefaultSession["user"];
     accessToken?: string;
     hasGoogleAuth?: boolean;
+    error?: string;
   }
 }
 

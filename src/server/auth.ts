@@ -156,7 +156,22 @@ async function refreshGoogleAccessToken(token: JWT): Promise<JWT> {
         "Failed to refresh Google token in NextAuth JWT:",
         refreshedTokens,
       );
-      return { ...token, error: "RefreshAccessTokenError" };
+      if (token.userId) {
+        await db
+          .update(users)
+          .set({
+            googleAccessToken: null,
+            googleRefreshToken: null,
+            googleTokenExpiresAt: null,
+          })
+          .where(eq(users.id, token.userId as string))
+          .catch(() => {});
+      }
+      return {
+        ...token,
+        accessToken: undefined,
+        error: "RefreshAccessTokenError",
+      };
     }
 
     const newAccessToken = refreshedTokens.access_token as string;
@@ -251,6 +266,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         (token.timezone as string | undefined) ?? env.DEFAULT_TIMEZONE;
       session.accessToken = token.accessToken as string | undefined;
       session.hasGoogleAuth = !!token.accessToken;
+      session.error = token.error as string | undefined;
       return session;
     },
   },

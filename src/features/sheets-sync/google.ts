@@ -176,6 +176,7 @@ export interface TestReadSpreadsheetResult {
   rowCount?: number;
   columnCount?: number;
   authMethod: "oauth_user" | "service_account" | "none";
+  authExpired?: boolean;
   error?: string;
 }
 
@@ -308,12 +309,14 @@ export async function testReadSpreadsheet(options: {
     };
   } catch (err: unknown) {
     let message = err instanceof Error ? err.message : String(err);
+    let authExpired = false;
     if (
       message.includes("invalid authentication credentials") ||
-      message.includes("invalid_grant")
+      message.includes("invalid_grant") ||
+      message.includes("Google OAuth access expired")
     ) {
-      message =
-        "Google OAuth access expired or invalid. Please sign out and sign in again with Google to refresh permissions.";
+      authExpired = true;
+      message = "Google OAuth access expired or invalid.";
     }
     return {
       ok: false,
@@ -323,6 +326,7 @@ export async function testReadSpreadsheet(options: {
       targetSheetFound: false,
       sheets: [],
       authMethod,
+      authExpired,
       error: message,
     };
   }
