@@ -232,6 +232,7 @@ describe("Google Sheets Online Reading & Inspection", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Google OAuth access expired or invalid. Please sign out and sign in again");
+    expect(result.authExpired).toBe(true);
+    expect(result.error).toContain("Google OAuth access expired or invalid");
   });
 });

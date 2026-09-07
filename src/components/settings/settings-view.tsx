@@ -26,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { apiFetch } from "@/components/timeline/api";
+import { apiFetch, ApiError } from "@/components/timeline/api";
 import type { TestReadSpreadsheetResult } from "@/features/sheets-sync/google";
 import type { CategoryDTO } from "@/lib/types";
 
@@ -201,11 +201,23 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
           description: `Connected to "${res.spreadsheetTitle}" (tab: "${res.targetSheetName}").`,
         });
       } else {
+        if (res.authExpired) {
+          toast.error("Google session expired. Logging out...");
+          const { signOut } = await import("next-auth/react");
+          void signOut({ redirectTo: "/login?error=SessionExpired" });
+          return;
+        }
         toast.error("Could not read spreadsheet", {
           description: res.error,
         });
       }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast.error("Google session expired. Logging out...");
+        const { signOut } = await import("next-auth/react");
+        void signOut({ redirectTo: "/login?error=SessionExpired" });
+        return;
+      }
       const message =
         err instanceof Error ? err.message : "Connection failed";
       setTestResult({

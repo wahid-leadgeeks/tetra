@@ -48,6 +48,20 @@ export async function apiFetch<T>(
   });
   const body = await parseBody(res);
   if (!res.ok) {
+    if (
+      res.status === 401 &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      try {
+        const { signOut } = await import("next-auth/react");
+        void signOut({ redirectTo: "/login?error=SessionExpired" });
+      } catch {
+        window.location.replace(
+          `${window.location.origin}/login?error=SessionExpired`,
+        );
+      }
+    }
     throw new ApiError(errorMessage(body, res.status), res.status);
   }
   return body as T;

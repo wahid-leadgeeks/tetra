@@ -46,6 +46,8 @@ function GoogleIcon() {
 
 function getAuthErrorMessage(error: string): string {
   switch (error) {
+    case "SessionExpired":
+      return "Your session has expired. Please sign in again to continue.";
     case "Configuration":
       return "Google OAuth credentials not configured. Please verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.local.";
     case "AccessDenied":

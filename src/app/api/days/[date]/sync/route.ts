@@ -29,7 +29,17 @@ function jsonError(status: number, message: string): NextResponse {
  * found, invalid input) → 400. Google API failures → 502.
  */
 function syncErrorResponse(err: unknown): NextResponse {
-  if (err instanceof SheetsApiError) return jsonError(502, err.message);
+  if (err instanceof SheetsApiError) {
+    const msg = err.message.toLowerCase();
+    if (
+      msg.includes("invalid authentication credentials") ||
+      msg.includes("invalid_grant") ||
+      msg.includes("google oauth access expired")
+    ) {
+      return jsonError(401, "Google OAuth session expired. Please sign in again.");
+    }
+    return jsonError(502, err.message);
+  }
   if (err instanceof Error) return jsonError(400, err.message);
   return jsonError(400, "Sync failed");
 }

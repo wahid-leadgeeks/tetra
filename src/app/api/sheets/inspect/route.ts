@@ -78,6 +78,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     sheetGid,
   });
 
+  if (result.authExpired) {
+    return NextResponse.json(result, { status: 401 });
+  }
+
   return NextResponse.json(result);
 }
 
@@ -122,6 +126,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     worksheetName,
     sheetGid,
   });
+
+  if (result.authExpired) {
+    return NextResponse.json(result, { status: 401 });
+  }
 
   return NextResponse.json(result);
 }
