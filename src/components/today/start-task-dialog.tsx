@@ -25,6 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import type {
   StartTaskInput,
 } from "@/components/today/use-today-state";
+import { getCategoryTheme } from "@/lib/categories";
+import { cn } from "@/lib/utils";
 import type { CategoryDTO, TaskDTO } from "@/lib/types";
 
 interface StartTaskDialogProps {
@@ -145,11 +147,20 @@ export function StartTaskDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {pickList.phase === "ready"
-                    ? pickList.categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))
+                    ? pickList.categories.map((category) => {
+                        const theme = getCategoryTheme(category.key);
+                        return (
+                          <SelectItem key={category.id} value={category.id}>
+                            <span className="flex items-center gap-2">
+                              <span
+                                aria-hidden
+                                className={cn("size-2 rounded-full shrink-0", theme.dotClass)}
+                              />
+                              <span>{category.name}</span>
+                            </span>
+                          </SelectItem>
+                        );
+                      })
                     : null}
                 </SelectContent>
               </Select>
@@ -185,20 +196,34 @@ export function StartTaskDialog({
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">Recent</p>
               <div className="flex flex-wrap gap-2">
-                {recentChips.map((task) => (
-                  <button
-                    key={task.id}
-                    type="button"
-                    className="inline-flex h-11 items-center rounded-full border border-input px-4 text-sm text-muted-foreground outline-none transition-colors select-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-                    onClick={() => {
-                      setTaskName(task.name);
-                      if (task.categoryId) setCategoryId(task.categoryId);
-                    }}
-                    disabled={submitting}
-                  >
-                    {task.name}
-                  </button>
-                ))}
+                {recentChips.map((task) => {
+                  const matchingCat =
+                    pickList.phase === "ready"
+                      ? pickList.categories.find((c) => c.id === task.categoryId)
+                      : null;
+                  const theme = getCategoryTheme(matchingCat?.key);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      className={cn(
+                        "inline-flex h-10 items-center rounded-full border border-input px-3.5 text-xs text-foreground outline-none transition-all select-none hover:bg-muted/80 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+                        theme.hoverClass,
+                      )}
+                      onClick={() => {
+                        setTaskName(task.name);
+                        if (task.categoryId) setCategoryId(task.categoryId);
+                      }}
+                      disabled={submitting}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn("mr-1.5 size-1.5 rounded-full shrink-0", theme.dotClass)}
+                      />
+                      {task.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}

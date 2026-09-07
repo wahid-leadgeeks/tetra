@@ -28,7 +28,9 @@ import {
 } from "@/components/timeline/time";
 import { SyncPreviewDialog } from "@/components/reports/sync-preview-dialog";
 import { FileSyncDialog } from "@/components/reports/file-sync-dialog";
+import { getCategoryTheme } from "@/lib/categories";
 import { formatHuman } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import type {
   DaySummaryDTO,
   ReviewState,
@@ -193,7 +195,7 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
   const attendance = summary?.attendance ?? null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+    <div className="w-full">
       <header className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
@@ -243,202 +245,297 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
           </Button>
         </Card>
       ) : summary ? (
-        <div className="grid gap-6">
-          {/* Totals */}
-          <Card data-testid="review-totals">
-            <CardHeader>
-              <CardTitle>{formatDayShort(dayKey)}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="flex items-baseline justify-between gap-4">
-                <p className="text-muted-foreground">Attendance</p>
-                <p
-                  className="font-heading font-semibold tabular-nums"
-                  data-testid="review-attendance"
-                >
-                  {attendance
-                    ? `${formatClock(attendance.clockInAt, timeZone)} → ${
-                        attendance.clockOutAt
-                          ? formatClock(attendance.clockOutAt, timeZone)
-                          : "Open"
-                      }`
-                    : "No attendance recorded"}
-                </p>
-              </div>
-              <div className="flex items-baseline justify-between gap-4">
-                <p className="text-muted-foreground">Break</p>
-                <p
-                  className="font-heading font-semibold tabular-nums"
-                  data-testid="review-break-total"
-                >
-                  {formatHuman(summary.totals.breakMinutes)}
-                </p>
-              </div>
-              <div className="flex items-baseline justify-between gap-4">
-                <p className="text-muted-foreground">Work</p>
-                <p
-                  className="font-heading font-semibold tabular-nums"
-                  data-testid="review-work-total"
-                >
-                  {formatHuman(summary.totals.workMinutes)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Totals + Category breakdown */}
+          <div className="lg:col-span-7 flex flex-col gap-6">
+            {/* Totals */}
+            <Card data-testid="review-totals" data-tour="review-totals" className="shadow-xs border-border/80">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl font-bold">{formatDayShort(dayKey)}</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                {/* 2-column KPI grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/30 p-4 shadow-xs">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Total Work
+                    </p>
+                    <p
+                      className="font-heading text-3xl font-bold tracking-tight text-foreground tabular-nums"
+                      data-testid="review-work-total"
+                    >
+                      {formatHuman(summary.totals.workMinutes)}
+                    </p>
+                    <span className="text-[11px] text-muted-foreground">Logged tasks</span>
+                  </div>
 
-          {/* Category breakdown — all 8, zeros dimmed */}
-          <Card>
-            <CardHeader>
-              <CardTitle>By category</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2.5">
-              {summary.byCategory.map((category) => (
-                <div
-                  key={category.key}
-                  className="flex items-baseline justify-between gap-4"
-                >
-                  <p
-                    className={
-                      category.minutes === 0
-                        ? "text-muted-foreground/60"
-                        : "text-foreground"
-                    }
-                  >
-                    {category.name}
+                  <div className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/30 p-4 shadow-xs">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Total Break
+                    </p>
+                    <p
+                      className="font-heading text-3xl font-bold tracking-tight text-foreground tabular-nums"
+                      data-testid="review-break-total"
+                    >
+                      {formatHuman(summary.totals.breakMinutes)}
+                    </p>
+                    <span className="text-[11px] text-muted-foreground">Rest & pauses</span>
+                  </div>
+                </div>
+
+                {/* Attendance row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Attendance
                   </p>
                   <p
-                    className={`font-heading font-medium tabular-nums ${
-                      category.minutes === 0
-                        ? "text-muted-foreground/60"
-                        : "font-semibold"
-                    }`}
+                    className="font-heading text-sm sm:text-base font-semibold tabular-nums text-foreground"
+                    data-testid="review-attendance"
                   >
-                    {formatHuman(category.minutes)}
+                    {attendance
+                      ? `${formatClock(attendance.clockInAt, timeZone)} → ${
+                          attendance.clockOutAt
+                            ? formatClock(attendance.clockOutAt, timeZone)
+                            : "Open"
+                        }`
+                      : "No attendance recorded"}
                   </p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Warnings — human messages, fix path to the Timeline */}
-          {summary.warnings.length > 0 && (
-            <Card
-              className="ring-amber-500/30"
-              data-testid="review-warnings"
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TriangleAlert
-                    aria-hidden
-                    className="size-4 text-amber-600 dark:text-amber-400"
-                  />
-                  Needs attention
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <ul className="grid gap-2">
-                  {summary.warnings.map((warning, index) => (
-                    <li
-                      key={`${warning.type}-${index}`}
-                      className="text-sm text-muted-foreground"
-                    >
-                      {warning.message}
-                    </li>
-                  ))}
-                </ul>
-                <Button asChild variant="outline" className="h-11 w-fit px-4">
-                  <Link href={`/timeline?date=${dayKey}`}>
-                    <Wrench aria-hidden />
-                    Fix issues
-                  </Link>
-                </Button>
               </CardContent>
             </Card>
-          )}
 
-          {/* Review + sync actions */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              className="h-11 px-5"
-              onClick={() => void handleMarkReviewed()}
-              disabled={!canMarkReviewed || marking}
-              title={
-                canMarkReviewed
-                  ? undefined
-                  : "This day is already reviewed."
-              }
-              data-testid="review-submit"
-            >
-              {marking ? "Reviewing…" : "Mark reviewed"}
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 px-4"
-              onClick={() => setPreviewOpen(true)}
-            >
-              Preview sync
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 px-4"
-              onClick={() => setFileSyncOpen(true)}
-              data-testid="sync-file-button"
-              title="No Google account needed — upload the report file, get it back updated"
-            >
-              Sync to file
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 px-4"
-              onClick={() => void handleSync()}
-              disabled={syncing}
-              data-testid="sync-button"
-            >
-              {syncing ? "Syncing…" : "Sync to Google Sheet"}
-            </Button>
+            {/* Category breakdown — with visual distribution bar and category dots */}
+            <Card className="shadow-xs border-border/80">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle>By category</CardTitle>
+                  <span className="text-xs text-muted-foreground">
+                    {summary.byCategory.filter((c) => c.minutes > 0).length} active of 8 categories
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                {summary.totals.workMinutes > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div
+                      aria-label="Category time distribution"
+                      className="h-3 w-full flex overflow-hidden rounded-full bg-muted/70 shadow-inner"
+                    >
+                      {summary.byCategory
+                        .filter((c) => c.minutes > 0)
+                        .map((category) => {
+                          const theme = getCategoryTheme(category.key);
+                          const pct = Math.max(
+                            2,
+                            (category.minutes / summary.totals.workMinutes) * 100,
+                          );
+                          return (
+                            <div
+                              key={category.key}
+                              title={`${category.name}: ${formatHuman(category.minutes)} (${Math.round((category.minutes / summary.totals.workMinutes) * 100)}%)`}
+                              style={{ width: `${pct}%` }}
+                              className={cn("h-full transition-all duration-300", theme.barColor)}
+                            />
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-2.5">
+                  {summary.byCategory.map((category) => {
+                    const theme = getCategoryTheme(category.key);
+                    const isZero = category.minutes === 0;
+                    const pct =
+                      summary.totals.workMinutes > 0
+                        ? Math.round((category.minutes / summary.totals.workMinutes) * 100)
+                        : 0;
+
+                    return (
+                      <div
+                        key={category.key}
+                        className={cn(
+                          "flex items-center justify-between gap-4 py-1.5 rounded-md px-2 transition-colors",
+                          !isZero && "hover:bg-muted/40",
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "size-2.5 rounded-full shrink-0 transition-opacity",
+                              theme.dotClass,
+                              isZero && "opacity-30",
+                            )}
+                          />
+                          <p
+                            className={cn(
+                              "truncate text-sm font-medium",
+                              isZero ? "text-muted-foreground/50" : "text-foreground",
+                            )}
+                          >
+                            {category.name}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {!isZero && (
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              {pct}%
+                            </span>
+                          )}
+                          <p
+                            className={cn(
+                              "font-heading tabular-nums text-sm",
+                              isZero
+                                ? "text-muted-foreground/50"
+                                : "font-semibold text-foreground",
+                            )}
+                          >
+                            {formatHuman(category.minutes)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Sync history */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Sync history</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3" data-testid="sync-logs">
-              {logs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No sync attempts for this day yet.
+          {/* Right Column: Actions & Sync + Warnings + Sync history */}
+          <div className="lg:col-span-5 flex flex-col gap-6">
+            {/* Review & Sync Actions Card */}
+            <Card className="shadow-xs border-border/80" data-tour="review-sync">
+              <CardHeader className="pb-3">
+                <CardTitle>Review &amp; Sync</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Mark the day reviewed once numbers look good, then sync to your Google Sheet or export an updated spreadsheet.
                 </p>
-              ) : (
-                <ul className="grid gap-3">
-                  {logs.map((log) => (
-                    <li
-                      key={log.id}
-                      className="grid gap-1 border-b pb-3 last:border-b-0 last:pb-0"
+                <div className="grid gap-2.5 pt-1">
+                  <Button
+                    className="h-11 w-full font-medium shadow-xs"
+                    onClick={() => void handleMarkReviewed()}
+                    disabled={!canMarkReviewed || marking}
+                    title={
+                      canMarkReviewed
+                        ? undefined
+                        : "This day is already reviewed."
+                    }
+                    data-testid="review-submit"
+                  >
+                    {marking ? "Reviewing…" : "Mark reviewed"}
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-11 font-medium shadow-xs"
+                      onClick={() => setPreviewOpen(true)}
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <SyncLogStatus status={log.status} />
-                        <p className="text-sm text-muted-foreground tabular-nums">
-                          {formatDateTime(log.createdAt, timeZone)}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          ·{" "}
-                          {log.changedCells.length === 1
-                            ? "1 cell"
-                            : `${log.changedCells.length} cells`}{" "}
-                          written
-                        </p>
-                      </div>
-                      {log.errorMessage && (
-                        <p className="text-sm text-destructive">
-                          {log.errorMessage}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+                      Preview sync
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-11 font-medium shadow-xs"
+                      onClick={() => setFileSyncOpen(true)}
+                      data-testid="sync-file-button"
+                      title="No Google account needed — upload the report file, get it back updated"
+                    >
+                      Sync to file
+                    </Button>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full font-medium shadow-xs"
+                    onClick={() => void handleSync()}
+                    disabled={syncing}
+                    data-testid="sync-button"
+                  >
+                    {syncing ? "Syncing…" : "Sync to Google Sheet"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Warnings — human messages, fix path to the Timeline */}
+            {summary.warnings.length > 0 && (
+              <Card
+                className="ring-amber-500/30 border-amber-500/40 bg-amber-500/[0.02] shadow-xs"
+                data-testid="review-warnings"
+              >
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <TriangleAlert
+                      aria-hidden
+                      className="size-4 text-amber-600 dark:text-amber-400"
+                    />
+                    Needs attention
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <ul className="grid gap-2">
+                    {summary.warnings.map((warning, index) => (
+                      <li
+                        key={`${warning.type}-${index}`}
+                        className="text-xs text-muted-foreground leading-relaxed"
+                      >
+                        {warning.message}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button asChild variant="outline" className="h-10 w-fit px-4 text-xs font-medium">
+                    <Link href={`/timeline?date=${dayKey}`}>
+                      <Wrench aria-hidden className="size-3.5" />
+                      Fix issues on Timeline
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sync history */}
+            <Card className="shadow-xs border-border/80">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Sync history</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3" data-testid="sync-logs">
+                {logs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No sync attempts for this day yet.
+                  </p>
+                ) : (
+                  <ul className="grid gap-3">
+                    {logs.map((log) => (
+                      <li
+                        key={log.id}
+                        className="grid gap-1 border-b pb-3 last:border-b-0 last:pb-0"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <SyncLogStatus status={log.status} />
+                          <p className="text-xs text-muted-foreground tabular-nums">
+                            {formatDateTime(log.createdAt, timeZone)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            ·{" "}
+                            {log.changedCells.length === 1
+                              ? "1 cell"
+                              : `${log.changedCells.length} cells`}{" "}
+                            written
+                          </p>
+                        </div>
+                        {log.errorMessage && (
+                          <p className="text-xs text-destructive">
+                            {log.errorMessage}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       ) : null}
 

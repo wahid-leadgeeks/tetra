@@ -11,9 +11,11 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CategoryBadge } from "@/components/ui/category-badge";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
 import { formatDateTime } from "@/components/timeline/time";
+import { getCategoryTheme } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import type { CategoryDTO, TaskDTO } from "@/lib/types";
 
@@ -116,24 +118,37 @@ export function TasksView({ timeZone }: TasksViewProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
-      <header>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Tasks
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pick up where you left off.
-        </p>
+    <div className="w-full">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            Tasks
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Pick up where you left off with one-tap restart.
+          </p>
+        </div>
+        {!loading && tasks.length > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/30 px-3 py-1 text-xs font-semibold text-foreground">
+              {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+              <Star className="size-3 fill-amber-500 text-amber-500" />
+              {tasks.filter((t) => t.isFavorite).length} favorites
+            </span>
+          </div>
+        )}
       </header>
 
       <Separator className="my-6" />
 
       {loading ? (
-        <div className="grid gap-3" aria-label="Loading tasks">
-          {[0, 1, 2].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" aria-label="Loading tasks">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="h-20 animate-pulse rounded-xl bg-muted"
+              className="h-28 animate-pulse rounded-xl bg-muted"
               aria-hidden
             />
           ))}
@@ -163,53 +178,70 @@ export function TasksView({ timeZone }: TasksViewProps) {
           </p>
         </Card>
       ) : (
-        <ul className="grid gap-3" data-testid="tasks-list">
-          {tasks.map((task, index) => (
-            <li key={task.id}>
-              <Card size="sm" className="gap-0 px-4 py-4 sm:px-5">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-muted-foreground">
-                      {categoryNames[task.categoryId] ?? "Uncategorized"}
-                    </p>
-                    <p className="truncate font-heading text-base font-medium">
-                      {task.name}
-                    </p>
-                    {task.lastUsedAt && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Last used {formatDateTime(task.lastUsedAt, timeZone)}
+        <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="tasks-list">
+          {tasks.map((task, index) => {
+            const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
+            const theme = getCategoryTheme(categoryName);
+            return (
+              <li key={task.id} className="h-full">
+                <Card
+                  size="sm"
+                  className={cn(
+                    "h-full flex flex-col justify-between gap-3 border-l-4 p-5 shadow-xs transition-colors",
+                    theme.borderClass,
+                    task.isFavorite && "border-amber-500/30 bg-amber-500/[0.02]",
+                  )}
+                >
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <CategoryBadge
+                          categoryName={categoryName}
+                          size="sm"
+                        />
+                      </div>
+                      <p className="truncate font-heading text-base font-semibold text-foreground">
+                        {task.name}
                       </p>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
-                    data-testid={`favorite-toggle-${index}`}
-                    aria-label={`Toggle favorite for ${task.name}`}
-                    aria-pressed={task.isFavorite}
-                    onClick={() => void handleToggleFavorite(task)}
-                  >
-                    <Star
-                      aria-hidden
-                      className={cn(
-                        task.isFavorite && "fill-amber-500 text-amber-500",
+                      {task.lastUsedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Last used {formatDateTime(task.lastUsedAt, timeZone)}
+                        </p>
                       )}
-                    />
-                  </Button>
-                  <Button
-                    className="h-11 px-5"
-                    onClick={() => void handleStart(task)}
-                    disabled={startingId !== null}
-                    aria-label={`Start ${task.name}`}
-                  >
-                    <Play aria-hidden />
-                    {startingId === task.id ? "Starting…" : "Start"}
-                  </Button>
-                </div>
-              </Card>
-            </li>
-          ))}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
+                      data-testid={`favorite-toggle-${index}`}
+                      aria-label={`Toggle favorite for ${task.name}`}
+                      aria-pressed={task.isFavorite}
+                      onClick={() => void handleToggleFavorite(task)}
+                    >
+                      <Star
+                        aria-hidden
+                        className={cn(
+                          "size-4.5 transition-colors",
+                          task.isFavorite
+                            ? "fill-amber-500 text-amber-500"
+                            : "hover:text-amber-500",
+                        )}
+                      />
+                    </Button>
+                    <Button
+                      className="h-11 px-5 font-medium shadow-xs"
+                      onClick={() => void handleStart(task)}
+                      disabled={startingId !== null}
+                      aria-label={`Start ${task.name}`}
+                    >
+                      <Play aria-hidden />
+                      {startingId === task.id ? "Starting…" : "Start"}
+                    </Button>
+                  </div>
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

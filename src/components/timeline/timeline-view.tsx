@@ -10,13 +10,17 @@
  * completed entry cards offer Split (DESIGN.md timeline actions).
  */
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Coffee, Pencil, Plus, Scissors, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CategoryBadge } from "@/components/ui/category-badge";
+import { getCategoryTheme } from "@/lib/categories";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -245,7 +249,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+    <div className="w-full">
       <header className="grid gap-4">
         <div className="flex items-center justify-between gap-3">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
@@ -283,7 +287,10 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
 
       <Separator className="my-6" />
 
-      {loading ? (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Main timeline column */}
+        <div className="lg:col-span-8 flex flex-col gap-6" data-tour="timeline-main">
+          {loading ? (
         <TimelineSkeleton />
       ) : error ? (
         <Card className="items-start gap-3 p-6" data-testid="timeline-error">
@@ -341,7 +348,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                     <button
                       type="button"
                       data-testid="fill-gap-button"
-                      className="inline-flex h-11 items-center gap-1.5 rounded-full border border-dashed border-input px-4 text-sm text-muted-foreground outline-none transition-colors select-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                      className="inline-flex h-10 items-center gap-1.5 rounded-full border border-dashed border-amber-500/40 bg-amber-500/[0.06] px-4 text-xs font-medium text-amber-700 dark:text-amber-300 outline-none transition-all select-none hover:bg-amber-500/15 focus-visible:ring-3 focus-visible:ring-ring/50 cursor-pointer"
                       title={`Fill the ${formatHuman(gapBefore.minutes)} gap from ${gapBefore.fromClock} to ${gapBefore.toClock}`}
                       aria-label={`Fill the ${formatHuman(gapBefore.minutes)} gap from ${gapBefore.fromClock} to ${gapBefore.toClock}`}
                       onClick={() =>
@@ -351,7 +358,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                         })
                       }
                     >
-                      <Plus aria-hidden className="size-4" />
+                      <Plus aria-hidden className="size-3.5" />
                       Fill {formatHuman(gapBefore.minutes)} gap
                     </button>
                     <div
@@ -362,90 +369,104 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                 ) : null}
               {item.kind === "entry" ? (
                 <li>
-                  <Card size="sm" className="gap-0 px-4 py-4 sm:px-5">
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <p className="w-12 shrink-0 pt-0.5 text-sm font-medium tabular-nums text-muted-foreground">
-                        {formatClock(item.entry.startedAt, timeZone)}
-                      </p>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-muted-foreground">
-                          {item.entry.categoryName}
-                        </p>
-                        <p className="truncate font-heading text-base font-medium">
-                          {item.entry.taskName}
-                        </p>
-                        {item.entry.notes && (
-                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                            {item.entry.notes}
-                          </p>
+                  {(() => {
+                    const theme = getCategoryTheme(
+                      item.entry.categoryKey || item.entry.categoryName,
+                    );
+                    return (
+                      <Card
+                        size="sm"
+                        className={cn(
+                          "gap-0 border-l-4 px-4 py-4 sm:px-5 shadow-xs transition-colors",
+                          theme.borderClass,
                         )}
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        {item.entry.status === "completed" ? (
-                          <p className="font-heading text-base font-semibold tabular-nums">
-                            {item.entry.durationMinutes !== null
-                              ? formatHuman(item.entry.durationMinutes)
-                              : "—"}
+                      >
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <p className="w-12 shrink-0 pt-0.5 text-sm font-medium tabular-nums text-muted-foreground">
+                            {formatClock(item.entry.startedAt, timeZone)}
                           </p>
-                        ) : (
-                          <StatusBadge status={item.entry.status} />
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t pt-3">
-                      {item.entry.status === "completed" ? (
-                        <Button
-                          variant="ghost"
-                          className="h-11 px-3"
-                          onClick={() => setSplitEntry(item.entry)}
-                          aria-label={`Split ${item.entry.taskName}`}
-                          data-testid="split-entry-button"
-                        >
-                          <Scissors aria-hidden />
-                          Split
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant="ghost"
-                        className="h-11 px-3"
-                        onClick={() => setEditEntry(item.entry)}
-                        aria-label={`Edit ${item.entry.taskName}`}
-                      >
-                        <Pencil aria-hidden />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="h-11 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeleteEntry(item.entry)}
-                        aria-label={`Delete ${item.entry.taskName}`}
-                      >
-                        <Trash2 aria-hidden />
-                        Delete
-                      </Button>
-                    </div>
-                  </Card>
+                          <div className="min-w-0 flex-1 flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <CategoryBadge
+                                categoryKey={item.entry.categoryKey}
+                                categoryName={item.entry.categoryName}
+                                size="sm"
+                              />
+                            </div>
+                            <p className="truncate font-heading text-base font-semibold text-foreground">
+                              {item.entry.taskName}
+                            </p>
+                            {item.entry.notes && (
+                              <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                                {item.entry.notes}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1.5">
+                            {item.entry.status === "completed" ? (
+                              <p className="font-heading text-base font-semibold tabular-nums text-foreground">
+                                {item.entry.durationMinutes !== null
+                                  ? formatHuman(item.entry.durationMinutes)
+                                  : "—"}
+                              </p>
+                            ) : (
+                              <StatusBadge status={item.entry.status} />
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-border/70 pt-2.5">
+                          {item.entry.status === "completed" ? (
+                            <Button
+                              variant="ghost"
+                              className="h-10 px-3 text-xs"
+                              onClick={() => setSplitEntry(item.entry)}
+                              aria-label={`Split ${item.entry.taskName}`}
+                              data-testid="split-entry-button"
+                            >
+                              <Scissors aria-hidden className="size-3.5" />
+                              Split
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            className="h-10 px-3 text-xs"
+                            onClick={() => setEditEntry(item.entry)}
+                            aria-label={`Edit ${item.entry.taskName}`}
+                          >
+                            <Pencil aria-hidden className="size-3.5" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="h-10 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setDeleteEntry(item.entry)}
+                            aria-label={`Delete ${item.entry.taskName}`}
+                          >
+                            <Trash2 aria-hidden className="size-3.5" />
+                            Delete
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })()}
                 </li>
               ) : (
                 <li>
                   <Card
                     size="sm"
-                    className="gap-0 bg-muted/40 px-4 py-3 sm:px-5"
+                    className="gap-0 border-l-4 border-l-sky-500 bg-sky-500/[0.04] border-sky-500/20 px-4 py-3 sm:px-5 shadow-xs"
                   >
                     <div className="flex items-center gap-3 sm:gap-4">
                       <p className="w-12 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
                         {formatClock(item.breakItem.startedAt, timeZone)}
                       </p>
                       <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <Coffee
-                          aria-hidden
-                          className="size-4 shrink-0 text-muted-foreground"
-                        />
-                        <p className="font-medium text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                          <Coffee aria-hidden className="size-3 shrink-0" />
                           Break
-                        </p>
+                        </span>
                       </div>
-                      <p className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                         {item.breakItem.endedAt === null
                           ? "On break"
                           : item.breakItem.durationMinutes !== null
@@ -461,6 +482,118 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           })}
         </ol>
       )}
+        </div>
+
+        {/* Right column: Day Overview Card */}
+        <div className="lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-8">
+          <Card className="shadow-xs border-border/80" data-testid="timeline-summary">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-bold">Day Overview</CardTitle>
+                {summary && (
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                    {summary.timeEntries.length} {summary.timeEntries.length === 1 ? "task" : "tasks"}
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Work Time
+                  </span>
+                  <p className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">
+                    {formatHuman(summary?.totals.workMinutes ?? 0)}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 p-3 shadow-xs">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Break Time
+                  </span>
+                  <p className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">
+                    {formatHuman(summary?.totals.breakMinutes ?? 0)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Attendance */}
+              <div className="flex items-center justify-between text-xs py-2 px-3 rounded-lg border border-border/60 bg-muted/20">
+                <span className="font-medium text-muted-foreground">Attendance</span>
+                <span className="font-semibold text-foreground tabular-nums">
+                  {summary?.attendance
+                    ? `${formatClock(summary.attendance.clockInAt, timeZone)} → ${
+                        summary.attendance.clockOutAt
+                          ? formatClock(summary.attendance.clockOutAt, timeZone)
+                          : "Open"
+                      }`
+                    : "No attendance"}
+                </span>
+              </div>
+
+              {/* Day's Categories */}
+              {summary && summary.byCategory.some((c) => c.minutes > 0) ? (
+                <div className="flex flex-col gap-2.5 pt-2 border-t border-border/50">
+                  <span className="text-xs font-semibold text-foreground">Categories</span>
+                  <div
+                    aria-label="Day category time distribution"
+                    className="h-2 w-full flex overflow-hidden rounded-full bg-muted/70 shadow-inner"
+                  >
+                    {summary.byCategory
+                      .filter((c) => c.minutes > 0)
+                      .map((category) => {
+                        const theme = getCategoryTheme(category.key);
+                        const totalWork = summary.totals.workMinutes || 1;
+                        const pct = Math.max(3, (category.minutes / totalWork) * 100);
+                        return (
+                          <div
+                            key={category.key}
+                            title={`${category.name}: ${formatHuman(category.minutes)}`}
+                            style={{ width: `${pct}%` }}
+                            className={cn("h-full transition-all duration-300", theme.barColor)}
+                          />
+                        );
+                      })}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {summary.byCategory
+                      .filter((c) => c.minutes > 0)
+                      .map((category) => {
+                        const theme = getCategoryTheme(category.key);
+                        return (
+                          <div
+                            key={category.key}
+                            className="flex items-center justify-between text-xs py-0.5"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                aria-hidden
+                                className={cn("size-2 rounded-full shrink-0", theme.dotClass)}
+                              />
+                              <span className="truncate text-muted-foreground font-medium">
+                                {category.name}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-foreground tabular-nums">
+                              {formatHuman(category.minutes)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              ) : null}
+
+              <Button asChild variant="outline" size="sm" className="w-full mt-1">
+                <Link href={`/reports?date=${dayKey}`} className="gap-1.5 text-xs">
+                  Review this day
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <EntryDialog
         open={addOpen}

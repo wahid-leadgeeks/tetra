@@ -34,6 +34,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/components/timeline/api";
 import { isoToTime, timeToISO } from "@/components/timeline/time";
+import { getCategoryTheme } from "@/lib/categories";
+import { cn } from "@/lib/utils";
 import type { CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
 /** Initial create-mode times, e.g. the exact gap boundaries to backfill. */
@@ -235,11 +237,20 @@ function EntryForm({
               <SelectValue placeholder="Choose a category" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
+              {categories.map((category) => {
+                const theme = getCategoryTheme(category.key);
+                return (
+                  <SelectItem key={category.id} value={category.id}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className={cn("size-2 rounded-full shrink-0", theme.dotClass)}
+                      />
+                      <span>{category.name}</span>
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           {categoriesError && (

@@ -310,7 +310,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+    <div className="w-full">
       <header>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
           Settings
@@ -319,8 +319,9 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
 
       <Separator className="my-6" />
 
-      <div className="grid gap-6">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          <Card className="shadow-xs border-border/80">
           <CardHeader>
             <CardTitle>Google Sheets &amp; file sync</CardTitle>
             <CardDescription>
@@ -480,8 +481,10 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
             )}
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
+      <div className="lg:col-span-4 flex flex-col gap-6">
+        <Card className="shadow-xs border-border/80">
           <CardHeader>
             <CardTitle>Account</CardTitle>
           </CardHeader>
@@ -498,5 +501,6 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
         </Card>
       </div>
     </div>
+  </div>
   );
 }
