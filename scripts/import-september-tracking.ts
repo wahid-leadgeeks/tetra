@@ -448,12 +448,19 @@ async function main() {
     .where(and(eq(spreadsheetConfigs.userId, user.id), eq(spreadsheetConfigs.active, true)))
     .limit(1);
 
+  const spreadsheetId =
+    process.env.GOOGLE_SPREADSHEET_ID ||
+    "1Rup5jNnSu-oTcOlZC3zIN7MNfzHqcP_rNrhnLIsX89Y";
+  const worksheetName = process.env.GOOGLE_SHEET_NAME || "Wahid";
+  const sheetGid = process.env.GOOGLE_SHEET_GID || "1976323691";
+
   if (existingConfig.length > 0) {
     await db
       .update(spreadsheetConfigs)
       .set({
-        spreadsheetId: "September 2026 - Employee Task & Time Tracking",
-        worksheetName: "September 2026",
+        spreadsheetId,
+        worksheetName,
+        sheetGid,
         mapping: DEFAULT_SHEET_MAPPING,
         timezone,
         updatedAt: new Date(),
@@ -463,8 +470,9 @@ async function main() {
   } else {
     await db.insert(spreadsheetConfigs).values({
       userId: user.id,
-      spreadsheetId: "September 2026 - Employee Task & Time Tracking",
-      worksheetName: "September 2026",
+      spreadsheetId,
+      worksheetName,
+      sheetGid,
       mapping: DEFAULT_SHEET_MAPPING,
       timezone,
       active: true,
