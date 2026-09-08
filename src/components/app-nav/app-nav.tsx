@@ -6,6 +6,7 @@ import {
   BarChart3,
   CalendarDays,
   Clock,
+  LayoutDashboard,
   ListTodo,
   Settings,
   Sparkles,
@@ -16,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/keyboard/kbd";
 import { useTour } from "@/components/guide-tour/tour-provider";
 
-interface NavItem {
+export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
@@ -24,7 +25,7 @@ interface NavItem {
   shortcut: string;
 }
 
-const NAV_ITEMS: readonly NavItem[] = [
+export const NAV_ITEMS: readonly NavItem[] = [
   {
     href: "/",
     label: "Today",
@@ -33,32 +34,39 @@ const NAV_ITEMS: readonly NavItem[] = [
     shortcut: "1",
   },
   {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    testId: "nav-dashboard",
+    shortcut: "2",
+  },
+  {
     href: "/timeline",
     label: "Timeline",
     icon: Clock,
     testId: "nav-timeline",
-    shortcut: "2",
+    shortcut: "3",
   },
   {
     href: "/tasks",
     label: "Tasks",
     icon: ListTodo,
     testId: "nav-tasks",
-    shortcut: "3",
+    shortcut: "4",
   },
   {
     href: "/reports",
     label: "Reports",
     icon: BarChart3,
     testId: "nav-reports",
-    shortcut: "4",
+    shortcut: "5",
   },
   {
     href: "/settings",
     label: "Settings",
     icon: Settings,
     testId: "nav-settings",
-    shortcut: "5",
+    shortcut: "6",
   },
 ];
 
@@ -128,7 +136,7 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+      <ul className="mx-auto grid max-w-lg grid-cols-6 pb-[env(safe-area-inset-bottom)]">
         {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item.href);
           return (
@@ -138,7 +146,7 @@ export function MobileNav() {
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
                 className={cn(
-                  "flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "flex min-h-14 flex-col items-center justify-center gap-1 px-0.5 sm:px-1 text-[10px] sm:text-[11px] font-medium outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50",
                   active
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -146,9 +154,9 @@ export function MobileNav() {
               >
                 <item.icon
                   aria-hidden
-                  className={cn("size-5", active && "text-foreground")}
+                  className={cn("size-4.5 sm:size-5", active && "text-foreground")}
                 />
-                {item.label}
+                <span className="truncate">{item.label}</span>
               </Link>
             </li>
           );

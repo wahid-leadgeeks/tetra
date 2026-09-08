@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { ShortcutsDialog } from "@/components/keyboard/shortcuts-dialog";
 import { hasOpenDialog, isTypingTarget } from "@/lib/keyboard";
 
-/** Number keys map straight to the five primary screens (DESIGN.md nav). */
-const SCREEN_SHORTCUTS: Readonly<Record<string, string>> = {
+/** Number keys map straight to the six primary screens (DESIGN.md nav). */
+export const SCREEN_SHORTCUTS: Readonly<Record<string, string>> = {
   "1": "/",
-  "2": "/timeline",
-  "3": "/tasks",
-  "4": "/reports",
-  "5": "/settings",
+  "2": "/dashboard",
+  "3": "/timeline",
+  "4": "/tasks",
+  "5": "/reports",
+  "6": "/settings",
 };
 
 /**
@@ -25,7 +26,7 @@ function shouldIgnore(event: KeyboardEvent): boolean {
 }
 
 /**
- * Global keyboard navigation: 1–5 jump between screens, ? opens the
+ * Global keyboard navigation: 1–6 jump between screens, ? opens the
  * shortcuts help. Mounted once in the authenticated app shell.
  */
 export function KeyboardNav() {
