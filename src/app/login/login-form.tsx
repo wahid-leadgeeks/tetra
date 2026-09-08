@@ -49,7 +49,7 @@ function getAuthErrorMessage(error: string): string {
     case "SessionExpired":
       return "Your session has expired. Please sign in again to continue.";
     case "Configuration":
-      return "Google OAuth credentials not configured. Please verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.local.";
+      return "Authentication configuration issue. Please check your configuration or try signing in again.";
     case "AccessDenied":
       return "Sign-in cancelled or access was denied in Google.";
     case "OAuthCallbackError":
