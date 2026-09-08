@@ -166,10 +166,14 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
 
   const [addOpen, setAddOpen] = useState(false);
   const [addPrefill, setAddPrefill] = useState<EntryPrefill | null>(null);
+  const [addInitialKind, setAddInitialKind] = useState<"entry" | "break">("entry");
   const [editEntry, setEditEntry] = useState<TimeEntryDTO | null>(null);
   const [splitEntry, setSplitEntry] = useState<TimeEntryDTO | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<TimeEntryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editBreak, setEditBreak] = useState<BreakDTO | null>(null);
+  const [deleteBreak, setDeleteBreak] = useState<BreakDTO | null>(null);
+  const [deletingBreak, setDeletingBreak] = useState(false);
   const [pulling, setPulling] = useState(false);
 
   useEffect(() => {
@@ -239,6 +243,23 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
     }
   }
 
+  async function handleDeleteBreak() {
+    if (!deleteBreak) return;
+    setDeletingBreak(true);
+    try {
+      await apiFetch(`/api/breaks/${deleteBreak.id}`, {
+        method: "DELETE",
+      });
+      toast.success("Break deleted.");
+      setDeleteBreak(null);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete break.");
+    } finally {
+      setDeletingBreak(false);
+    }
+  }
+
   async function handlePull() {
     setPulling(true);
     try {
@@ -259,8 +280,12 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const gapAfter = new Map(gaps.map((gap) => [gap.afterIndex, gap]));
   const hasActivity = items.length > 0;
 
-  function openAddDialog(prefill: EntryPrefill | null) {
+  function openAddDialog(
+    prefill: EntryPrefill | null,
+    kind: "entry" | "break" = "entry",
+  ) {
     setAddPrefill(prefill);
+    setAddInitialKind(kind);
     setAddOpen(true);
   }
 
@@ -284,12 +309,21 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
               {pulling ? "Pulling…" : "Pull from Sheet"}
             </Button>
             <Button
+              variant="outline"
               className="h-11 px-4"
-              onClick={() => openAddDialog(null)}
+              onClick={() => openAddDialog(null, "break")}
+              data-testid="add-break-button"
+            >
+              <Coffee className="mr-2 size-4 text-sky-600 dark:text-sky-400" />
+              Add break
+            </Button>
+            <Button
+              className="h-11 px-4"
+              onClick={() => openAddDialog(null, "entry")}
               data-testid="add-missing-entry"
             >
               <Plus aria-hidden />
-              Add missing entry
+              Add activity
             </Button>
           </div>
         </div>
@@ -483,7 +517,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                 <li>
                   <Card
                     size="sm"
-                    className="gap-0 border-l-4 border-l-sky-500 bg-sky-500/[0.04] border-sky-500/20 px-4 py-3 sm:px-5 shadow-xs"
+                    className="gap-0 border-l-4 border-l-sky-500 bg-sky-500/[0.04] border-sky-500/20 px-4 py-3 sm:px-5 shadow-xs transition-colors"
                   >
                     <div className="flex items-center gap-3 sm:gap-4">
                       <p className="w-12 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
@@ -494,6 +528,11 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                           <Coffee aria-hidden className="size-3 shrink-0" />
                           Break
                         </span>
+                        {item.breakItem.endedAt && (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {formatClock(item.breakItem.startedAt, timeZone)} – {formatClock(item.breakItem.endedAt, timeZone)}
+                          </span>
+                        )}
                       </div>
                       <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                         {item.breakItem.endedAt === null
@@ -502,6 +541,28 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                             ? formatHuman(item.breakItem.durationMinutes)
                             : "—"}
                       </p>
+                      <div className="flex shrink-0 items-center gap-1 border-l border-border/50 pl-2 ml-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => setEditBreak(item.breakItem)}
+                          title="Edit break"
+                          aria-label="Edit break"
+                        >
+                          <Pencil aria-hidden className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteBreak(item.breakItem)}
+                          title="Delete break"
+                          aria-label="Delete break"
+                        >
+                          <Trash2 aria-hidden className="size-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 </li>
@@ -627,7 +688,10 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       <EntryDialog
         open={addOpen}
         onOpenChange={(open) => {
-          if (!open) setAddPrefill(null);
+          if (!open) {
+            setAddPrefill(null);
+            setAddInitialKind("entry");
+          }
           setAddOpen(open);
         }}
         mode="create"
@@ -636,6 +700,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         categories={categories}
         categoriesError={categoriesError}
         prefill={addPrefill}
+        initialKind={addInitialKind}
         onSaved={refresh}
       />
 
@@ -650,6 +715,22 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         categories={categories}
         categoriesError={categoriesError}
         entry={editEntry}
+        initialKind="entry"
+        onSaved={refresh}
+      />
+
+      <EntryDialog
+        open={editBreak !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditBreak(null);
+        }}
+        mode="edit"
+        dayKey={dayKey}
+        timeZone={timeZone}
+        categories={categories}
+        categoriesError={categoriesError}
+        breakItem={editBreak}
+        initialKind="break"
         onSaved={refresh}
       />
 
@@ -699,6 +780,45 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
               disabled={deleting}
             >
               {deleting ? "Deleting…" : "Delete entry"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteBreak !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteBreak(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete this break?</DialogTitle>
+            <DialogDescription>
+              {deleteBreak
+                ? `Break · ${formatClock(deleteBreak.startedAt, timeZone)}${
+                    deleteBreak.endedAt
+                      ? ` – ${formatClock(deleteBreak.endedAt, timeZone)}`
+                      : ""
+                  } will be removed. This cannot be undone.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="h-11 px-4"
+              onClick={() => setDeleteBreak(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="h-11 px-5"
+              onClick={() => void handleDeleteBreak()}
+              disabled={deletingBreak}
+            >
+              {deletingBreak ? "Deleting…" : "Delete break"}
             </Button>
           </DialogFooter>
         </DialogContent>

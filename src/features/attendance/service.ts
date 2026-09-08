@@ -6,12 +6,12 @@
  * - at most one open break at a time
  * Durations are always computed server-side from stored timestamps.
  */
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { todayKey } from "@/lib/time";
-import type { AttendanceDTO } from "@/lib/types";
+import type { AttendanceDTO, BreakDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { breakEntries, dailyAttendance } from "@/server/db/schema";
-import { isOpenBreak, toAttendanceDTO } from "./domain";
+import { hasBreakOverlap, isOpenBreak, toAttendanceDTO, toBreakDTO } from "./domain";
 
 type AttendanceRow = typeof dailyAttendance.$inferSelect;
 
@@ -184,4 +184,207 @@ export async function endBreak(
       and(eq(breakEntries.id, openBreak.id), isNull(breakEntries.endedAt)),
     );
   return refreshDTO(open, now);
+}
+
+/**
+ * Creates a manual break for a specific workDate (timeline backfill / gap fill).
+ * Automatically associates with the day's attendance (creating it if absent).
+ */
+export async function createManualBreak(
+  userId: string,
+  _timeZone: string,
+  input: {
+    workDate: string;
+    startedAt: Date;
+    endedAt: Date;
+  },
+): Promise<BreakDTO> {
+  if (input.endedAt.getTime() <= input.startedAt.getTime()) {
+    throw new Error("End time must be after start time");
+  }
+
+  // Find or create daily attendance for this workDate
+  let attendance = (
+    await db
+      .select()
+      .from(dailyAttendance)
+      .where(
+        and(
+          eq(dailyAttendance.userId, userId),
+          eq(dailyAttendance.workDate, input.workDate),
+        ),
+      )
+      .limit(1)
+  )[0];
+
+  if (!attendance) {
+    const [created] = await db
+      .insert(dailyAttendance)
+      .values({
+        userId,
+        workDate: input.workDate,
+        clockInAt: input.startedAt,
+        clockOutAt: input.endedAt,
+        status: "closed",
+        reviewState: "ready",
+      })
+      .returning();
+    attendance = created;
+  } else {
+    // If break starts before clock-in or ends after clock-out, adjust clock times
+    const updates: Partial<typeof dailyAttendance.$inferInsert> = {};
+    if (input.startedAt.getTime() < attendance.clockInAt.getTime()) {
+      updates.clockInAt = input.startedAt;
+    }
+    if (attendance.clockOutAt && input.endedAt.getTime() > attendance.clockOutAt.getTime()) {
+      updates.clockOutAt = input.endedAt;
+    }
+    if (attendance.reviewState === "synced") {
+      updates.reviewState = "changed_after_sync";
+    }
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = new Date();
+      await db
+        .update(dailyAttendance)
+        .set(updates)
+        .where(eq(dailyAttendance.id, attendance.id));
+    }
+  }
+
+  // Validate no overlap with existing breaks on this attendance
+  const existingBreaks = await db
+    .select()
+    .from(breakEntries)
+    .where(eq(breakEntries.attendanceId, attendance.id));
+
+  if (
+    hasBreakOverlap(
+      { startedAt: input.startedAt, endedAt: input.endedAt },
+      existingBreaks,
+    )
+  ) {
+    throw new Error("Break overlaps with an existing break");
+  }
+
+  const [inserted] = await db
+    .insert(breakEntries)
+    .values({
+      userId,
+      attendanceId: attendance.id,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt,
+    })
+    .returning();
+
+  return toBreakDTO({
+    id: inserted.id,
+    startedAt: inserted.startedAt,
+    endedAt: inserted.endedAt,
+  });
+}
+
+/**
+ * Updates a break entry's time span.
+ */
+export async function updateBreak(
+  userId: string,
+  breakId: string,
+  _timeZone: string,
+  patch: {
+    startedAt?: Date;
+    endedAt?: Date;
+  },
+): Promise<BreakDTO> {
+  const [existing] = await db
+    .select()
+    .from(breakEntries)
+    .where(and(eq(breakEntries.id, breakId), eq(breakEntries.userId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Break not found");
+  }
+
+  const newStart = patch.startedAt ?? existing.startedAt;
+  const newEnd = patch.endedAt !== undefined ? patch.endedAt : existing.endedAt;
+
+  if (newEnd && newEnd.getTime() <= newStart.getTime()) {
+    throw new Error("End time must be after start time");
+  }
+
+  // Check overlap with other breaks on same attendance
+  const otherBreaks = await db
+    .select()
+    .from(breakEntries)
+    .where(
+      and(
+        eq(breakEntries.attendanceId, existing.attendanceId),
+        ne(breakEntries.id, breakId),
+      ),
+    );
+
+  if (
+    newEnd &&
+    hasBreakOverlap({ startedAt: newStart, endedAt: newEnd }, otherBreaks)
+  ) {
+    throw new Error("Break overlaps with an existing break");
+  }
+
+  const [updated] = await db
+    .update(breakEntries)
+    .set({
+      startedAt: newStart,
+      endedAt: newEnd,
+    })
+    .where(eq(breakEntries.id, breakId))
+    .returning();
+
+  // Mark attendance changed_after_sync if needed
+  await db
+    .update(dailyAttendance)
+    .set({ reviewState: "changed_after_sync", updatedAt: new Date() })
+    .where(
+      and(
+        eq(dailyAttendance.id, existing.attendanceId),
+        eq(dailyAttendance.reviewState, "synced"),
+      ),
+    );
+
+  return toBreakDTO({
+    id: updated.id,
+    startedAt: updated.startedAt,
+    endedAt: updated.endedAt,
+  });
+}
+
+/**
+ * Deletes a break entry.
+ */
+export async function deleteBreak(
+  userId: string,
+  breakId: string,
+  _timeZone: string,
+): Promise<void> {
+  const [existing] = await db
+    .select()
+    .from(breakEntries)
+    .where(and(eq(breakEntries.id, breakId), eq(breakEntries.userId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Break not found");
+  }
+
+  await db.delete(breakEntries).where(eq(breakEntries.id, breakId));
+
+  // Mark attendance changed_after_sync if needed
+  await db
+    .update(dailyAttendance)
+    .set({ reviewState: "changed_after_sync", updatedAt: new Date() })
+    .where(
+      and(
+        eq(dailyAttendance.id, existing.attendanceId),
+        eq(dailyAttendance.reviewState, "synced"),
+      ),
+    );
 }
