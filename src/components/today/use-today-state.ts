@@ -136,12 +136,39 @@ export function useTodayState(timezone: string) {
   );
 
   const clockIn = useCallback(async (): Promise<boolean> => {
-    const attendance = await post<AttendanceDTO>(
-      "clock-in",
-      "/api/attendance/start",
-    );
+    const attendance = await post<
+      AttendanceDTO & {
+        autoSync?: {
+          attempted: boolean;
+          success?: boolean;
+          cell?: string;
+          value?: string;
+          idempotent?: boolean;
+          message?: string;
+        };
+      }
+    >("clock-in", "/api/attendance/start");
     if (attendance) {
-      toast.success("Work day started");
+      if (attendance.autoSync?.attempted) {
+        if (attendance.autoSync.success) {
+          if (attendance.autoSync.idempotent) {
+            toast.success(
+              "Work day started · Clock-in already set in Google Sheet",
+            );
+          } else {
+            toast.success(
+              `Work day started · Clock-in synced to Google Sheet (${attendance.autoSync.cell}: ${attendance.autoSync.value})`,
+            );
+          }
+        } else {
+          toast.success("Work day started");
+          toast.error(
+            `Google Sheet notice: ${attendance.autoSync.message ?? "Could not sync clock-in to sheet"}`,
+          );
+        }
+      } else {
+        toast.success("Work day started");
+      }
       await settle();
       return true;
     }
