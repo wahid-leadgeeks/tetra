@@ -89,7 +89,7 @@ if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
           access_type: "offline",
           response_type: "code",
           scope:
-            "openid email profile https://www.googleapis.com/auth/spreadsheets",
+            "openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.readonly",
         },
       },
     }),

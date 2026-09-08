@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { CalendarSettingsCard } from "@/components/settings/calendar-settings-card";
 import { apiFetch, ApiError } from "@/components/timeline/api";
 import type { TestReadSpreadsheetResult } from "@/features/sheets-sync/google";
 import type { CategoryDTO } from "@/lib/types";
@@ -702,6 +703,8 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
             )}
           </CardContent>
         </Card>
+
+        <CalendarSettingsCard />
       </div>
 
       <div className="lg:col-span-4 flex flex-col gap-6">
