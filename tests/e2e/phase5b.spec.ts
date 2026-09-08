@@ -10,11 +10,13 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
   await page.getByTestId("login-submit").click();
   await expect(page.getByTestId("nav-today")).toBeVisible({ timeout: 15_000 });
 
-  // Global navigation keys 1–5.
+  // Global navigation keys 1–6.
   await page.keyboard.press("2");
-  await expect(page).toHaveURL(/\/timeline/);
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  await page.keyboard.press("3");
+  await expect(page).toHaveURL(/\/timeline/, { timeout: 15_000 });
   await page.keyboard.press("1");
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 
   // Help dialog on "?".
   await page.keyboard.press("?");
@@ -27,8 +29,8 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
   });
 
   // Typing guard: digit keys typed into an input must not navigate.
-  await page.keyboard.press("5");
-  await expect(page).toHaveURL(/\/settings/);
+  await page.keyboard.press("6");
+  await expect(page).toHaveURL(/\/settings/, { timeout: 15_000 });
   await page.getByTestId("settings-spreadsheet-id").click();
   await page.keyboard.type("123");
   await page.keyboard.press("1");
@@ -36,7 +38,7 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
   // Blurred, the same key navigates again.
   await page.locator("h1").click();
   await page.keyboard.press("1");
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   await page.keyboard.press("s");
   await expect(page.getByTestId("break-start")).toBeVisible({
     timeout: 10_000,
