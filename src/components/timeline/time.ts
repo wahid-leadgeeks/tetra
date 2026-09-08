@@ -67,3 +67,12 @@ export function nextDay(dayKey: string): string {
 export function isToday(dayKey: string, timeZone: string): boolean {
   return dayKey === todayKey(timeZone);
 }
+
+export {
+  getDayOfWeek,
+  isWeekend,
+  previousWorkday,
+  nextWorkday,
+  ensureWorkday,
+} from "@/lib/time";
+
