@@ -18,7 +18,7 @@ export function SignOutButton() {
       disabled={pending}
       onClick={() => {
         setPending(true);
-        void signOut({ redirectTo: "login" });
+        void signOut({ redirectTo: "/login" });
       }}
     >
       {pending ? (
