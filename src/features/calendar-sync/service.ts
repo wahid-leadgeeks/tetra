@@ -38,20 +38,25 @@ export async function getCalendarConfig(userId: string): Promise<CalendarConfigD
     userRows[0]?.googleAccessToken || userRows[0]?.googleRefreshToken
   );
 
-  const configRows = await db
-    .select()
-    .from(calendarConfigs)
-    .where(eq(calendarConfigs.userId, userId))
-    .limit(1);
+  let config = undefined;
+  try {
+    const configRows = await db
+      .select()
+      .from(calendarConfigs)
+      .where(eq(calendarConfigs.userId, userId))
+      .limit(1);
+    config = configRows[0];
+  } catch (err) {
+    console.warn("Could not query calendarConfigs (migration may be pending):", err);
+  }
 
-  const config = configRows[0];
   if (!config) {
     return {
       id: "",
       userId,
       calendarId: "primary",
       calendarName: "Primary",
-      syncEnabled: true,
+      syncEnabled: false,
       categoryRules: null,
       lastSyncAt: null,
       hasGoogleAuth,
@@ -145,30 +150,39 @@ export async function getCalendarSchedule(
   const timeMin = zonedDayStart(dayKey, timeZone);
   const timeMax = zonedDayEnd(dayKey, timeZone);
 
-  // Fetch raw calendar events
-  const rawEvents = await fetchCalendarEvents({
-    userId,
-    calendarId: config.calendarId,
-    timeMin,
-    timeMax,
-    timeZone,
-  });
+  try {
+    // Fetch raw calendar events
+    const rawEvents = await fetchCalendarEvents({
+      userId,
+      calendarId: config.calendarId,
+      timeMin,
+      timeMax,
+      timeZone,
+    });
 
-  // Fetch existing entries for the day to detect overlaps
-  const daySummary = await getDaySummary(userId, dayKey, timeZone);
-  const existingEntries = daySummary.timeEntries;
+    // Fetch existing entries for the day to detect overlaps
+    const daySummary = await getDaySummary(userId, dayKey, timeZone);
+    const existingEntries = daySummary.timeEntries;
 
-  const suggestions = rawEvents
-    .map((event) =>
-      processCalendarEvent(event, existingEntries, timeZone, config.categoryRules),
-    )
-    .filter((item): item is CalendarEventSuggestionDTO => item !== null);
+    const suggestions = rawEvents
+      .map((event) =>
+        processCalendarEvent(event, existingEntries, timeZone, config.categoryRules),
+      )
+      .filter((item): item is CalendarEventSuggestionDTO => item !== null);
 
-  return {
-    events: suggestions,
-    config,
-    hasGoogleAuth: config.hasGoogleAuth,
-  };
+    return {
+      events: suggestions,
+      config,
+      hasGoogleAuth: config.hasGoogleAuth,
+    };
+  } catch (err) {
+    console.error("Error fetching or processing calendar schedule:", err);
+    return {
+      events: [],
+      config,
+      hasGoogleAuth: config.hasGoogleAuth,
+    };
+  }
 }
 
 /**
