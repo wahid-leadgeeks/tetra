@@ -159,7 +159,7 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
     busy,
     clockIn,
     openLogActivity: () => setLogActivityOpen(true),
-    toggleBreak: () => void (onBreak ? endBreak() : startBreak()),
+    toggleBreak: () => void (onBreak ? handleEndBreak() : startBreak()),
     togglePauseResume: () =>
       void (activeEntry?.status === "paused" ? resumeTask() : pauseTask()),
   });

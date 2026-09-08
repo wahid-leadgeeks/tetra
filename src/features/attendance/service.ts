@@ -10,7 +10,7 @@ import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { todayKey } from "@/lib/time";
 import type { AttendanceDTO, BreakDTO } from "@/lib/types";
 import { db } from "@/server/db";
-import { breakEntries, dailyAttendance } from "@/server/db/schema";
+import { breakEntries, dailyAttendance, timeEntries } from "@/server/db/schema";
 import { hasBreakOverlap, isOpenBreak, toAttendanceDTO, toBreakDTO } from "./domain";
 
 type AttendanceRow = typeof dailyAttendance.$inferSelect;
@@ -152,9 +152,22 @@ export async function startBreak(
   if (isOpenBreak(breaks)) {
     throw new Error("Already on break");
   }
-  await db
-    .insert(breakEntries)
-    .values({ userId, attendanceId: open.id, startedAt: now });
+  await db.transaction(async (tx) => {
+    // Auto-pause any active task while on break so the task timer stops counting
+    await tx
+      .update(timeEntries)
+      .set({ status: "paused", pausedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          eq(timeEntries.status, "active"),
+        ),
+      );
+
+    await tx
+      .insert(breakEntries)
+      .values({ userId, attendanceId: open.id, startedAt: now });
+  });
   return refreshDTO(open, now);
 }
 
