@@ -16,8 +16,11 @@ export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
-  if (!session?.user?.id || session.error === "RefreshAccessTokenError") {
+  if (session?.error === "RefreshAccessTokenError") {
     redirect("/login?error=SessionExpired");
+  }
+  if (!session?.user?.id) {
+    redirect("/login");
   }
 
   const email = session.user.email ?? "";

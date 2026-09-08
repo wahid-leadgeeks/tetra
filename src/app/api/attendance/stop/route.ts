@@ -1,9 +1,13 @@
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { clockOut } from "@/features/attendance/service";
 import { setReviewed } from "@/features/daily-summary/service";
+import { getSheetsClient } from "@/features/sheets-sync/google";
 import { executeSync, getSyncConfig } from "@/features/sheets-sync/service";
 import { auth } from "@/server/auth";
+import { db } from "@/server/db";
+import { dailyAttendance } from "@/server/db/schema";
 
 const EmptyBody = z.object({});
 
@@ -31,29 +35,51 @@ export async function POST(req: Request): Promise<Response> {
       message?: string;
     } = { attempted: false };
 
-    if (config && config.mapping.autoSyncOnClockOut !== false) {
-      try {
-        // 1. Mark day reviewed so executeSync can run
-        await setReviewed(userId, attendance.workDate, timezone);
+    if (config && config.mapping.autoSyncOnClockOut === true) {
+      const sheets = await getSheetsClient({
+        userId,
+        accessToken: session.accessToken,
+      });
 
-        // 2. Execute sync to Google Sheets
-        const syncRes = await executeSync(userId, attendance.workDate, {
-          accessToken: session.accessToken,
-        });
-
-        autoSyncResult = {
-          attempted: true,
-          success: true,
-          idempotent: syncRes.idempotent,
-          changedCount: syncRes.changedCells.length,
-        };
-      } catch (syncErr) {
-        console.error("Auto-sync on clock-out failed:", syncErr);
+      if (!sheets) {
         autoSyncResult = {
           attempted: true,
           success: false,
-          message: syncErr instanceof Error ? syncErr.message : "Auto-sync failed",
+          message: "Google Sheets credentials not configured",
         };
+      } else {
+        try {
+          // 1. Mark day reviewed so executeSync can run
+          await setReviewed(userId, attendance.workDate, timezone);
+
+          // 2. Execute sync to Google Sheets
+          const syncRes = await executeSync(userId, attendance.workDate, {
+            accessToken: session.accessToken,
+          });
+
+          autoSyncResult = {
+            attempted: true,
+            success: true,
+            idempotent: syncRes.idempotent,
+            changedCount: syncRes.changedCells.length,
+          };
+        } catch (syncErr) {
+          console.error("Auto-sync on clock-out failed:", syncErr);
+          await db
+            .update(dailyAttendance)
+            .set({ reviewState: "draft", reviewedAt: null, updatedAt: new Date() })
+            .where(
+              and(
+                eq(dailyAttendance.userId, userId),
+                eq(dailyAttendance.workDate, attendance.workDate),
+              ),
+            );
+          autoSyncResult = {
+            attempted: true,
+            success: false,
+            message: syncErr instanceof Error ? syncErr.message : "Auto-sync failed",
+          };
+        }
       }
     }
 
