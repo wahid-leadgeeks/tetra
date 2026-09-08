@@ -12,6 +12,7 @@ import { and, eq } from "drizzle-orm";
 import type { sheets_v4 } from "googleapis";
 import { getDaySummary } from "@/features/daily-summary/service";
 import type { SyncPreviewDTO, SyncCellDTO } from "@/lib/types";
+import { zonedClock } from "@/lib/time";
 import { db } from "@/server/db";
 import { dailyAttendance } from "@/server/db/schema";
 import type { CategoryKey } from "./mapping";
@@ -199,6 +200,134 @@ export async function executeSync(
   });
   await markSynced(userId, dayKey);
   return { status: "success", changedCells, idempotent: false };
+}
+
+export interface ClockInSyncResult {
+  attempted: boolean;
+  success?: boolean;
+  cell?: string;
+  value?: string;
+  idempotent?: boolean;
+  message?: string;
+}
+
+/**
+ * Syncs clock-in time to Google Sheets immediately when work starts.
+ * Finds the date row and updates ONLY the mapped clockInColumn cell.
+ * Idempotent, logged in sync_logs, and non-blocking for attendance.
+ */
+export async function syncClockIn(
+  userId: string,
+  workDate: string,
+  clockInAt: Date | string,
+  options: { accessToken?: string } = {},
+): Promise<ClockInSyncResult> {
+  const config = await getSyncConfig(userId);
+  if (!config) return { attempted: false };
+  if (config.mapping.autoSyncOnClockIn === false) return { attempted: false };
+
+  const sheets = await getSheetsClient({
+    userId,
+    accessToken: options.accessToken,
+  });
+  if (!sheets) {
+    return {
+      attempted: true,
+      success: false,
+      message: "Google Sheets credentials not configured",
+    };
+  }
+
+  const timezone = await getUserTimezone(userId);
+  const clockDate =
+    typeof clockInAt === "string" ? new Date(clockInAt) : clockInAt;
+  const clockInTime = zonedClock(clockDate, timezone);
+
+  const ctx: SyncAttemptContext = {
+    userId,
+    workDate,
+    configId: config.id,
+    payloadHash: null,
+  };
+
+  try {
+    const dateRows = await readDateColumn(sheets, config);
+    const rowNumber = findDateRow(dateRows, config.mapping, workDate);
+    if (rowNumber === null) {
+      const msg = `Date ${workDate} was not found in worksheet "${config.worksheetName}"`;
+      await recordSyncLog(ctx, {
+        status: "failed",
+        payloadHash: null,
+        changedCells: [],
+        errorMessage: msg,
+      });
+      return { attempted: true, success: false, message: msg };
+    }
+
+    const a1 = `${config.mapping.clockInColumn}${rowNumber}`;
+    const range = worksheetRange(config.worksheetName, a1);
+
+    // Check existing cell value for idempotency
+    const currentRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.spreadsheetId,
+      range,
+    });
+    const currentVal = currentRes.data.values?.[0]?.[0];
+    const currentStr =
+      currentVal !== undefined && currentVal !== null
+        ? String(currentVal).trim()
+        : "";
+
+    if (currentStr === clockInTime) {
+      await recordSyncLog(ctx, {
+        status: "success",
+        payloadHash: null,
+        changedCells: [],
+        errorMessage: null,
+      });
+      return {
+        attempted: true,
+        success: true,
+        cell: a1,
+        value: clockInTime,
+        idempotent: true,
+      };
+    }
+
+    // Write ONLY the clockIn cell
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.spreadsheetId,
+      range,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[clockInTime]],
+      },
+    });
+
+    await recordSyncLog(ctx, {
+      status: "success",
+      payloadHash: null,
+      changedCells: [{ a1, value: clockInTime }],
+      errorMessage: null,
+    });
+
+    return {
+      attempted: true,
+      success: true,
+      cell: a1,
+      value: clockInTime,
+      idempotent: false,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordSyncLog(ctx, {
+      status: "failed",
+      payloadHash: null,
+      changedCells: [],
+      errorMessage: message,
+    });
+    return { attempted: true, success: false, message };
+  }
 }
 
 // ---------------------------------------------------------------------------

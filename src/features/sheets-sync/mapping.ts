@@ -69,6 +69,7 @@ export const mappingSchema = z.strictObject({
   headerRow: z.number().int().min(1).optional(),
   notesColumn: columnLetter.optional(),
   categoryNotes: categoryNotesSchema.optional(),
+  autoSyncOnClockIn: z.boolean().optional(),
   autoSyncOnClockOut: z.boolean().optional(),
 });
 
@@ -141,6 +142,7 @@ export const LEADGEEKS_SHEET_MAPPING = {
     training: "FQ",
     other_tasks: "FS",
   },
+  autoSyncOnClockIn: true,
   autoSyncOnClockOut: true,
 } satisfies SheetMapping;
 
