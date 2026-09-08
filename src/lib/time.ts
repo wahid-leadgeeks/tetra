@@ -94,3 +94,45 @@ export function addDaysISO(dayKey: string, days: number): string {
 export function todayKey(timeZone: string): string {
   return zonedDayKey(new Date(), timeZone);
 }
+
+/** Day of the week for an ISO day key "YYYY-MM-DD" in UTC (0 = Sunday, 6 = Saturday). */
+export function getDayOfWeek(dayKey: string): number {
+  return new Date(`${dayKey}T12:00:00Z`).getUTCDay();
+}
+
+/** Returns true if the given day key is Saturday (6) or Sunday (0). */
+export function isWeekend(dayKey: string): boolean {
+  const day = getDayOfWeek(dayKey);
+  return day === 0 || day === 6;
+}
+
+/** Jump backward to the previous working day (skips Saturday and Sunday). */
+export function previousWorkday(dayKey: string): string {
+  let prev = addDaysISO(dayKey, -1);
+  while (isWeekend(prev)) {
+    prev = addDaysISO(prev, -1);
+  }
+  return prev;
+}
+
+/** Jump forward to the next working day (skips Saturday and Sunday). */
+export function nextWorkday(dayKey: string): string {
+  let next = addDaysISO(dayKey, 1);
+  while (isWeekend(next)) {
+    next = addDaysISO(next, 1);
+  }
+  return next;
+}
+
+/**
+ * If the day falls on a weekend (Saturday or Sunday), snaps back to the preceding Friday.
+ * Weekdays are returned unchanged.
+ */
+export function ensureWorkday(dayKey: string): string {
+  let current = dayKey;
+  while (isWeekend(current)) {
+    current = addDaysISO(current, -1);
+  }
+  return current;
+}
+

@@ -7,28 +7,43 @@ import {
   formatDayLong,
   isToday,
   nextDay,
+  nextWorkday,
   previousDay,
+  previousWorkday,
 } from "@/components/timeline/time";
+import { todayKey } from "@/lib/time";
 
 interface DayNavigatorProps {
   dayKey: string;
   timeZone: string;
   onChange: (dayKey: string) => void;
+  /** When true (default), skips Saturday and Sunday (days off). */
+  excludeWeekends?: boolean;
 }
 
 /**
- * ‹ prev / date / next › navigator. Future days are blocked — TETRA records
- * work as it happens; backfilling is per-entry from the Timeline.
+ * ‹ prev / date / next › navigator. Future days and weekends are blocked/skipped —
+ * TETRA records work as it happens on working days.
  */
-export function DayNavigator({ dayKey, timeZone, onChange }: DayNavigatorProps) {
-  const atToday = isToday(dayKey, timeZone);
+export function DayNavigator({
+  dayKey,
+  timeZone,
+  onChange,
+  excludeWeekends = true,
+}: DayNavigatorProps) {
+  const today = todayKey(timeZone);
+  const prevTarget = excludeWeekends ? previousWorkday(dayKey) : previousDay(dayKey);
+  const nextTarget = excludeWeekends ? nextWorkday(dayKey) : nextDay(dayKey);
+  const cannotNavigateNext = excludeWeekends
+    ? nextWorkday(dayKey) > today
+    : isToday(dayKey, timeZone) || dayKey >= today;
 
   return (
     <nav aria-label="Choose day" className="flex items-center gap-2">
       <Button
         variant="outline"
         className="size-11 p-0"
-        onClick={() => onChange(previousDay(dayKey))}
+        onClick={() => onChange(prevTarget)}
         aria-label="Previous day"
       >
         <ChevronLeft aria-hidden />
@@ -42,8 +57,8 @@ export function DayNavigator({ dayKey, timeZone, onChange }: DayNavigatorProps) 
       <Button
         variant="outline"
         className="size-11 p-0 disabled:opacity-40"
-        onClick={() => onChange(nextDay(dayKey))}
-        disabled={atToday}
+        onClick={() => onChange(nextTarget)}
+        disabled={cannotNavigateNext}
         aria-label="Next day"
       >
         <ChevronRight aria-hidden />

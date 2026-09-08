@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   addDaysISO,
+  ensureWorkday,
   formatHMM,
   formatHuman,
+  getDayOfWeek,
+  isWeekend,
   minutesBetween,
+  nextWorkday,
+  previousWorkday,
   zonedClock,
   zonedDayEnd,
   zonedDayKey,
@@ -55,4 +60,44 @@ describe("time helpers", () => {
     expect(addDaysISO("2026-09-02", 1)).toBe("2026-09-03");
     expect(addDaysISO("2026-08-31", 1)).toBe("2026-09-01");
   });
+
+  it("identifies day of week and weekends correctly", () => {
+    expect(getDayOfWeek("2026-09-04")).toBe(5); // Friday
+    expect(isWeekend("2026-09-04")).toBe(false);
+
+    expect(getDayOfWeek("2026-09-05")).toBe(6); // Saturday
+    expect(isWeekend("2026-09-05")).toBe(true);
+
+    expect(getDayOfWeek("2026-09-06")).toBe(0); // Sunday
+    expect(isWeekend("2026-09-06")).toBe(true);
+
+    expect(getDayOfWeek("2026-09-07")).toBe(1); // Monday
+    expect(isWeekend("2026-09-07")).toBe(false);
+  });
+
+  it("navigates previous workday skipping Saturday and Sunday", () => {
+    // From Monday (Sep 7), previous workday is Friday (Sep 4)
+    expect(previousWorkday("2026-09-07")).toBe("2026-09-04");
+    // From Friday (Sep 4), previous workday is Thursday (Sep 3)
+    expect(previousWorkday("2026-09-04")).toBe("2026-09-03");
+  });
+
+  it("navigates next workday skipping Saturday and Sunday", () => {
+    // From Friday (Sep 4), next workday is Monday (Sep 7)
+    expect(nextWorkday("2026-09-04")).toBe("2026-09-07");
+    // From Thursday (Sep 3), next workday is Friday (Sep 4)
+    expect(nextWorkday("2026-09-03")).toBe("2026-09-04");
+  });
+
+  it("snaps weekend days to preceding Friday with ensureWorkday", () => {
+    // Weekdays pass through untouched
+    expect(ensureWorkday("2026-09-04")).toBe("2026-09-04"); // Friday
+    expect(ensureWorkday("2026-09-07")).toBe("2026-09-07"); // Monday
+
+    // Saturday snaps back to Friday
+    expect(ensureWorkday("2026-09-05")).toBe("2026-09-04");
+    // Sunday snaps back to Friday
+    expect(ensureWorkday("2026-09-06")).toBe("2026-09-04");
+  });
 });
+
