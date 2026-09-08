@@ -90,3 +90,27 @@ export function toAttendanceDTO(
     breakMinutes,
   };
 }
+
+/**
+ * Checks whether a candidate break overlaps with any existing breaks.
+ * Half-open interval [startedAt, endedAt). Adjacent intervals do not overlap.
+ */
+export function hasBreakOverlap(
+  candidate: { startedAt: Date; endedAt: Date },
+  breaks: readonly BreakInput[],
+  options?: { excludeId?: string; now?: Date },
+): boolean {
+  const now = options?.now ?? new Date();
+  for (const b of breaks) {
+    if (options?.excludeId && b.id === options.excludeId) continue;
+    const bEnd = b.endedAt ?? now;
+    if (
+      candidate.startedAt.getTime() < bEnd.getTime() &&
+      candidate.endedAt.getTime() > b.startedAt.getTime()
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
