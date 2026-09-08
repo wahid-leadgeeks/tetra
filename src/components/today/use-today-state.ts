@@ -282,7 +282,7 @@ export function useTodayState(timezone: string) {
       "/api/time-entries/pause",
     );
     if (entry) {
-      toast.success("Task paused");
+      toast.success("Task paused · On break");
       await settle();
       return true;
     }

@@ -3,11 +3,11 @@
  * Enforces the single-current-entry invariant (start auto-stops whatever
  * is running) and keeps all writes server-timestamped.
  */
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { zonedDayKey } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
 import { db } from "@/server/db";
-import { timeEntries } from "@/server/db/schema";
+import { breakEntries, dailyAttendance, timeEntries } from "@/server/db/schema";
 import {
   accumulatePause,
   assertCategoryExists,
@@ -59,6 +59,16 @@ export async function startTimer(
         .where(eq(timeEntries.id, entry.id));
       changedDays.add(zonedDayKey(entry.startedAt, timeZone));
     }
+    // Starting a task indicates active work; end any open break
+    await tx
+      .update(breakEntries)
+      .set({ endedAt: now })
+      .where(
+        and(
+          eq(breakEntries.userId, userId),
+          isNull(breakEntries.endedAt),
+        ),
+      );
     const task = await upsertTask(
       tx,
       userId,
@@ -127,25 +137,62 @@ export async function stopTimer(
   return requireEntryDto(userId, entryId);
 }
 
-/** Pause the running entry. Throws when nothing is active. */
+/** Pause the running entry and auto-start an attendance break. Throws when nothing is active. */
 export async function pauseTimer(userId: string): Promise<TimeEntryDTO> {
   const now = new Date();
-  const updated = await db
-    .update(timeEntries)
-    .set({ status: "paused", pausedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(timeEntries.userId, userId),
-        eq(timeEntries.status, "active"),
-      ),
-    )
-    .returning({ id: timeEntries.id });
-  const entry = updated[0];
-  if (entry === undefined) throw new Error("No active task");
-  return requireEntryDto(userId, entry.id);
+  const entryId = await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(timeEntries)
+      .set({ status: "paused", pausedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          eq(timeEntries.status, "active"),
+        ),
+      )
+      .returning({ id: timeEntries.id });
+    const entry = updated[0];
+    if (entry === undefined) throw new Error("No active task");
+
+    // Automatically count task pause as an attendance break if clocked in and not already on break
+    const openAttendance = await tx
+      .select({ id: dailyAttendance.id })
+      .from(dailyAttendance)
+      .where(
+        and(
+          eq(dailyAttendance.userId, userId),
+          eq(dailyAttendance.status, "open"),
+        ),
+      )
+      .limit(1);
+
+    if (openAttendance.length > 0) {
+      const activeBreaks = await tx
+        .select({ id: breakEntries.id })
+        .from(breakEntries)
+        .where(
+          and(
+            eq(breakEntries.attendanceId, openAttendance[0].id),
+            isNull(breakEntries.endedAt),
+          ),
+        )
+        .limit(1);
+
+      if (activeBreaks.length === 0) {
+        await tx.insert(breakEntries).values({
+          userId,
+          attendanceId: openAttendance[0].id,
+          startedAt: now,
+        });
+      }
+    }
+
+    return entry.id;
+  });
+  return requireEntryDto(userId, entryId);
 }
 
-/** Resume the paused entry, banking the pause into `pausedSeconds`. */
+/** Resume the paused entry, banking the pause into `pausedSeconds`, and auto-end any open break. */
 export async function resumeTimer(userId: string): Promise<TimeEntryDTO> {
   const now = new Date();
   const entryId = await db.transaction(async (tx) => {
@@ -168,6 +215,18 @@ export async function resumeTimer(userId: string): Promise<TimeEntryDTO> {
         updatedAt: now,
       })
       .where(eq(timeEntries.id, entry.id));
+
+    // Automatically end any open attendance break when resuming work
+    await tx
+      .update(breakEntries)
+      .set({ endedAt: now })
+      .where(
+        and(
+          eq(breakEntries.userId, userId),
+          isNull(breakEntries.endedAt),
+        ),
+      );
+
     return entry.id;
   });
   return requireEntryDto(userId, entryId);

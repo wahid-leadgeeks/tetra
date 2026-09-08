@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
+import type { BreakDTO, DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
 import type { SheetMapping } from "./mapping";
 import { MAPPING } from "./test-fixtures";
-import { buildSyncPayload, compileCategoryNotes, computePayloadHash } from "./payload";
+import {
+  buildSyncPayload,
+  compileCategoryNotes,
+  computePayloadHash,
+  computeSheetBreakTimes,
+} from "./payload";
 
 const TZ = "Asia/Jakarta";
 const ROW = 5;
@@ -116,8 +121,8 @@ describe("buildSyncPayload", () => {
     expect(rowDateValue).toBe("2026-09-03");
     expect(cells).toEqual([
       { a1: "B5", value: "08:00", columnLabel: "Clock In" },
-      { a1: "C5", value: "10:00", columnLabel: "Break Start" },
-      { a1: "D5", value: "12:15", columnLabel: "Break End" },
+      { a1: "C5", value: "12:00", columnLabel: "Break Start" },
+      { a1: "D5", value: "12:30", columnLabel: "Break End" },
       { a1: "E5", value: "16:00", columnLabel: "Clock Out" },
       { a1: "F5", value: "8:07", columnLabel: "Daily Total (Attendance)" },
       { a1: "G5", value: "7:37", columnLabel: "Work Total" },
@@ -451,3 +456,107 @@ describe("buildSyncPayload notes cells", () => {
     expect(cells.find((c) => c.a1 === "S5")).toBeUndefined();
   });
 });
+
+describe("computeSheetBreakTimes", () => {
+  it("returns empty strings when there are no breaks", () => {
+    const result = computeSheetBreakTimes([], 0, TZ);
+    expect(result).toEqual({ breakStart: "", breakEnd: "" });
+  });
+
+  it("returns empty strings when totalBreakMinutes is 0", () => {
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-03T03:00:00Z", // 10:00 Jakarta
+        endedAt: "2026-09-03T03:00:00Z",
+        durationMinutes: 0,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 0, TZ);
+    expect(result).toEqual({ breakStart: "", breakEnd: "" });
+  });
+
+  it("unites micro-pause breaks under 12:00 starting from 12:00", () => {
+    // 15-minute micro break at 09:30 Jakarta
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-03T02:30:00Z", // 09:30 Jakarta
+        endedAt: "2026-09-03T02:45:00Z", // 09:45 Jakarta
+        durationMinutes: 15,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 15, TZ);
+    expect(result).toEqual({ breakStart: "12:00", breakEnd: "12:15" });
+  });
+
+  it("unites multiple breaks totaling 2:30 (150m) to end at 14:30", () => {
+    // User requested rule: if break total is 2:30 then finished break is 14:30
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-03T03:00:00Z", // 10:00 Jakarta
+        endedAt: "2026-09-03T03:30:00Z", // 10:30 Jakarta (30m)
+        durationMinutes: 30,
+      },
+      {
+        id: "b2",
+        startedAt: "2026-09-03T05:00:00Z", // 12:00 Jakarta
+        endedAt: "2026-09-03T07:00:00Z", // 14:00 Jakarta (120m)
+        durationMinutes: 120,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 150, TZ);
+    expect(result).toEqual({ breakStart: "12:00", breakEnd: "14:30" });
+  });
+
+  it("unites multiple breaks even if all occurred in the afternoon", () => {
+    // Two 15-minute breaks in afternoon: 13:00-13:15 and 15:00-15:15
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-03T06:00:00Z", // 13:00 Jakarta
+        endedAt: "2026-09-03T06:15:00Z", // 13:15 Jakarta
+        durationMinutes: 15,
+      },
+      {
+        id: "b2",
+        startedAt: "2026-09-03T08:00:00Z", // 15:00 Jakarta
+        endedAt: "2026-09-03T08:15:00Z", // 15:15 Jakarta
+        durationMinutes: 15,
+      },
+    ];
+    // Multiple breaks united at 12:00 prevents false span deduction
+    const result = computeSheetBreakTimes(breaks, 30, TZ);
+    expect(result).toEqual({ breakStart: "12:00", breakEnd: "12:30" });
+  });
+
+  it("keeps actual timestamps for a single break at or after 12:00", () => {
+    // Single 45m break at 13:00 Jakarta
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-03T06:00:00Z", // 13:00 Jakarta
+        endedAt: "2026-09-03T06:45:00Z", // 13:45 Jakarta
+        durationMinutes: 45,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 45, TZ);
+    expect(result).toEqual({ breakStart: "13:00", breakEnd: "13:45" });
+  });
+
+  it("handles a single break starting at 12:00 noon", () => {
+    // Single 60m break at 12:00 Jakarta
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-03T05:00:00Z", // 12:00 Jakarta
+        endedAt: "2026-09-03T06:00:00Z", // 13:00 Jakarta
+        durationMinutes: 60,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 60, TZ);
+    expect(result).toEqual({ breakStart: "12:00", breakEnd: "13:00" });
+  });
+});
+

@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { formatHMM, zonedClock } from "@/lib/time";
 import type {
+  BreakDTO,
   CategoryTotalDTO,
   DaySummaryDTO,
   SyncCellDTO,
@@ -52,10 +53,11 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
  * - Clock in/out: "HH:mm" in the summary timezone; "" when attendance is
  *   missing or clock-out is not set — an empty string clears a stale sheet
  *   value on resync. The 'reviewed' gate normally guarantees both exist.
- * - Break start: first break's start. Break end: last break's end. "" when
- *   there are no breaks (clears stale values), and "" for break end while the
- *   last break is still open — cannot happen on a reviewed day, but empty is
- *   the honest value.
+ * - Break start / end: Computed via computeSheetBreakTimes. If there are multiple
+ *   breaks or any break before 12:00, all breaks are united starting from "12:00"
+ *   to "12:00" + totalBreakMinutes, matching the company spreadsheet formula
+ *   `=(E - B) - (D - C)` without over-deducting the span between separate breaks.
+ *   "" when there are no breaks (clears stale values).
  * - Totals and every category cell: H:MM via formatHMM; unmapped categories
  *   write "0:00".
  * - Category notes cells (mapping.categoryNotes): one cell per category with
@@ -70,7 +72,13 @@ export function buildSyncPayload(
   const { dateValueFormat, rowNumber, timezone } = options;
   const attendance = summary.attendance;
   const breaks = attendance?.breaks ?? [];
-  const lastBreak = breaks.length > 0 ? breaks[breaks.length - 1] : undefined;
+  const totalBreakMinutes =
+    summary.totals.breakMinutes ?? attendance?.breakMinutes ?? 0;
+  const { breakStart, breakEnd } = computeSheetBreakTimes(
+    breaks,
+    totalBreakMinutes,
+    timezone,
+  );
 
   const cells: SyncCellDTO[] = [
     {
@@ -80,12 +88,12 @@ export function buildSyncPayload(
     },
     {
       a1: `${mapping.breakStartColumn}${rowNumber}`,
-      value: clockValue(breaks[0]?.startedAt, timezone),
+      value: breakStart,
       columnLabel: "Break Start",
     },
     {
       a1: `${mapping.breakEndColumn}${rowNumber}`,
-      value: clockValue(lastBreak?.endedAt, timezone),
+      value: breakEnd,
       columnLabel: "Break End",
     },
     {
@@ -208,3 +216,56 @@ function displayDateValue(workDate: string): string {
   const [, y, m, d] = match;
   return `${Number(m)}/${Number(d)}/${y}`;
 }
+
+/**
+ * Calculates break start and break end for Google Sheets sync.
+ *
+ * Company sheet constraint:
+ * The sheet has only one pair of break columns: Column C (Break Start) and
+ * Column D (Break End), and computes daily attendance via `=(E - B) - (D - C)`.
+ * If multiple breaks (or micro-pauses before 12:00) were mapped using their
+ * raw first-start and last-end timestamps, the sheet would deduct the entire
+ * wall-clock span between them instead of the actual break time taken.
+ *
+ * To solve this:
+ * - If total break minutes is 0 (or no breaks): both cells are empty ("").
+ * - If there are multiple breaks OR any break started before 12:00:
+ *   All breaks are united starting from "12:00" and ending at "12:00" + totalBreakMinutes
+ *   (e.g., total 2h 30m break -> 12:00 to 14:30, deducting exactly 2h 30m).
+ * - If there is a single break starting at or after 12:00:
+ *   Use the actual break start and end times.
+ */
+export function computeSheetBreakTimes(
+  breaks: readonly BreakDTO[],
+  totalBreakMinutes: number,
+  timezone: string,
+): { breakStart: string; breakEnd: string } {
+  if (totalBreakMinutes <= 0 || breaks.length === 0) {
+    return { breakStart: "", breakEnd: "" };
+  }
+
+  const hasBreakBeforeNoon = breaks.some((b) => {
+    const clock = clockValue(b.startedAt, timezone);
+    if (!clock) return false;
+    const [h] = clock.split(":").map(Number);
+    return h !== undefined && !Number.isNaN(h) && h < 12;
+  });
+
+  if (hasBreakBeforeNoon || breaks.length > 1) {
+    const startMinutes = 12 * 60; // 12:00 in minutes
+    const endMinutes = startMinutes + totalBreakMinutes;
+    const endHour = Math.floor(endMinutes / 60) % 24;
+    const endMinute = endMinutes % 60;
+    const breakEnd = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+    return {
+      breakStart: "12:00",
+      breakEnd,
+    };
+  }
+
+  return {
+    breakStart: clockValue(breaks[0]?.startedAt, timezone),
+    breakEnd: clockValue(breaks[0]?.endedAt, timezone),
+  };
+}
+

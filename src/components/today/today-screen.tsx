@@ -765,7 +765,7 @@ function ActiveTaskCard({
                   paused ? "bg-amber-500" : "bg-emerald-500 animate-pulse",
                 )}
               />
-              {paused ? "Paused" : "Live Tracking"}
+              {paused ? "Paused · On Break" : "Live Tracking"}
             </span>
           </div>
           <p className="text-xl leading-snug font-semibold md:text-2xl text-foreground">
