@@ -193,3 +193,21 @@ export const syncLogs = pgTable("sync_logs", {
     .notNull()
     .defaultNow(),
 });
+
+export const calendarConfigs = pgTable("calendar_configs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  calendarId: text("calendar_id").notNull().default("primary"),
+  calendarName: text("calendar_name").notNull().default("Primary"),
+  syncEnabled: boolean("sync_enabled").notNull().default(true),
+  categoryRules: jsonb("category_rules"),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+});

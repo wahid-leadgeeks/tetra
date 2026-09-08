@@ -131,6 +131,11 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
   },
 };
 
+export const CATEGORIES = Object.values(CATEGORY_THEMES).map((theme) => ({
+  key: theme.key,
+  name: theme.name,
+}));
+
 const DEFAULT_THEME: CategoryTheme = {
   key: "unknown",
   name: "General Task",
