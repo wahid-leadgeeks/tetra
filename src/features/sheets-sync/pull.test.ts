@@ -194,4 +194,39 @@ describe("allocateTimelineEntries", () => {
     expect(result[0].notes).toBe("Research");
     expect(result[0].endMinutes - result[0].startMinutes).toBe(45);
   });
+
+  it("allocates tasks using explicit durations in parentheses when present", () => {
+    const items: RawCategoryItem[] = [
+      {
+        categoryKey: "meeting",
+        durationMinutes: 180, // 3h = 120m + 60m
+        notes:
+          "Infrastructure Management Training (2:00)\nTraining (1:00)",
+      },
+    ];
+
+    const result = allocateTimelineEntries({
+      categoryItems: items,
+      clockInMinutes: 480, // 08:00
+      breakStartMinutes: null,
+      breakEndMinutes: null,
+      defaultCategoryNames,
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      categoryKey: "meeting",
+      taskName: "Infrastructure Management Training",
+      notes: "Infrastructure Management Training",
+      startMinutes: 480,
+      endMinutes: 600, // 120 min
+    });
+    expect(result[1]).toEqual({
+      categoryKey: "meeting",
+      taskName: "Training",
+      notes: "Training",
+      startMinutes: 600,
+      endMinutes: 660, // 60 min
+    });
+  });
 });

@@ -131,27 +131,45 @@ export function buildSyncPayload(
 
 /**
  * Compiled per-category notes for the notes columns (I, K, M, O, Q, S, U, W):
- * the day's completed entries, notes first with the task name as fallback,
- * deduplicated in first-occurrence order, joined by newlines to match the
- * sheet's manual format.
+ * the day's completed entries formatted as `<task/notes> (<duration>)` (e.g. "Task (1:45)"),
+ * with durations accumulated for identical task descriptions, joined by newlines to
+ * match the company spreadsheet format.
  */
 export function compileCategoryNotes(
   entries: readonly TimeEntryDTO[],
 ): Map<CategoryKey, string> {
-  const notesByCategory = new Map<CategoryKey, string[]>();
+  const categoryItems = new Map<CategoryKey, Map<string, number>>();
   for (const entry of entries) {
     if (entry.status !== "completed") continue;
     const key = CATEGORY_KEYS.find((k) => k === entry.categoryKey);
     if (key === undefined) continue;
-    const text = entry.notes?.trim() || entry.taskName.trim();
-    if (!text) continue;
-    const list = notesByCategory.get(key) ?? [];
-    if (!list.includes(text)) list.push(text);
-    notesByCategory.set(key, list);
+    const rawText = entry.notes?.trim() || entry.taskName.trim();
+    if (!rawText) continue;
+
+    // Strip trailing duration in parentheses if already present to avoid duplicates
+    const cleanText = rawText.replace(/\s*\(\d+:\d{2}\)$/, "").trim();
+    if (!cleanText) continue;
+
+    let itemMap = categoryItems.get(key);
+    if (!itemMap) {
+      itemMap = new Map<string, number>();
+      categoryItems.set(key, itemMap);
+    }
+
+    const currentMinutes = itemMap.get(cleanText) ?? 0;
+    itemMap.set(cleanText, currentMinutes + (entry.durationMinutes || 0));
   }
-  return new Map(
-    [...notesByCategory.entries()].map(([k, v]) => [k, v.join("\n")]),
-  );
+
+  const result = new Map<CategoryKey, string>();
+  for (const [key, itemMap] of categoryItems.entries()) {
+    const lines = Array.from(itemMap.entries()).map(([text, minutes]) => {
+      const durationStr = formatHMM(minutes);
+      return `${text} (${durationStr})`;
+    });
+    result.set(key, lines.join("\n"));
+  }
+
+  return result;
 }
 
 /**
