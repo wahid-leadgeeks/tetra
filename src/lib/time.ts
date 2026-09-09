@@ -34,6 +34,11 @@ export function zonedClock(date: Date, timeZone: string): string {
   }).format(date);
 }
 
+/** Local clock time "8:45" / "18:00" in the given IANA timezone (unpadded single-digit hour). */
+export function zonedClockHMM(date: Date, timeZone: string): string {
+  return zonedClock(date, timeZone).replace(/^0(?=\d:)/, "");
+}
+
 /** Local calendar key "2026-09-02" in the given IANA timezone. */
 export function zonedDayKey(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", {

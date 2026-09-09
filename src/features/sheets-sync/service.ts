@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import type { sheets_v4 } from "googleapis";
 import { getDaySummary } from "@/features/daily-summary/service";
 import type { SyncPreviewDTO, SyncCellDTO } from "@/lib/types";
-import { zonedClock } from "@/lib/time";
+import { zonedClockHMM } from "@/lib/time";
 import { db } from "@/server/db";
 import { dailyAttendance } from "@/server/db/schema";
 import type { CategoryKey } from "./mapping";
@@ -241,7 +241,7 @@ export async function syncClockIn(
   const timezone = await getUserTimezone(userId);
   const clockDate =
     typeof clockInAt === "string" ? new Date(clockInAt) : clockInAt;
-  const clockInTime = zonedClock(clockDate, timezone);
+  const clockInTime = zonedClockHMM(clockDate, timezone);
 
   const ctx: SyncAttemptContext = {
     userId,
@@ -298,7 +298,7 @@ export async function syncClockIn(
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.spreadsheetId,
       range,
-      valueInputOption: "RAW",
+      valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[clockInTime]],
       },
@@ -395,9 +395,9 @@ async function readCurrentCellValues(
 
 /**
  * One batchUpdate of exactly the given mapped cells (already filtered to the
- * differing ones). valueInputOption RAW: the exact computed strings ("7:22",
- * "08:00") are stored verbatim — no locale-dependent reinterpretation, so an
- * idempotent read-back compares equal.
+ * differing ones). valueInputOption USER_ENTERED: values ("7:22", "8:00") are
+ * parsed according to the spreadsheet's cell formats so times and durations
+ * are stored as native time values matching the actual spreadsheet source.
  */
 async function writeCells(
   sheets: sheets_v4.Sheets,
@@ -411,7 +411,7 @@ async function writeCells(
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: config.spreadsheetId,
     requestBody: {
-      valueInputOption: "RAW",
+      valueInputOption: "USER_ENTERED",
       data,
     },
   });

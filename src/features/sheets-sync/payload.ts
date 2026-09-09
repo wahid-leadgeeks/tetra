@@ -3,7 +3,7 @@
  * No db, no google — unit-testable with fixture DaySummaryDTO objects.
  */
 import { createHash } from "node:crypto";
-import { formatHMM, zonedClock } from "@/lib/time";
+import { formatHMM, zonedClockHMM } from "@/lib/time";
 import type {
   BreakDTO,
   CategoryTotalDTO,
@@ -50,7 +50,8 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
 
 /**
  * Value decisions (documented per spec):
- * - Clock in/out: "HH:mm" in the summary timezone; "" when attendance is
+ * - Clock in/out: "H:mm" (unpadded single-digit hours, e.g. "8:00") in the
+ *   summary timezone matching spreadsheet format; "" when attendance is
  *   missing or clock-out is not set — an empty string clears a stale sheet
  *   value on resync. The 'reviewed' gate normally guarantees both exist.
  * - Break start / end: Computed via computeSheetBreakTimes. If there are multiple
@@ -199,7 +200,7 @@ export function computePayloadHash(
 
 function clockValue(iso: string | null | undefined, timezone: string): string {
   if (!iso) return "";
-  return zonedClock(new Date(iso), timezone);
+  return zonedClockHMM(new Date(iso), timezone);
 }
 
 function categoryMinutes(
@@ -256,7 +257,7 @@ export function computeSheetBreakTimes(
     const endMinutes = startMinutes + totalBreakMinutes;
     const endHour = Math.floor(endMinutes / 60) % 24;
     const endMinute = endMinutes % 60;
-    const breakEnd = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+    const breakEnd = `${endHour}:${String(endMinute).padStart(2, "0")}`;
     return {
       breakStart: "12:00",
       breakEnd,
