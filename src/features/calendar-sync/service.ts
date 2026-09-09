@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 
+import { expandAttendanceBounds } from "@/features/attendance/service";
 import { getDaySummary } from "@/features/daily-summary/service";
-import { zonedDayEnd, zonedDayStart } from "@/lib/time";
+import { todayKey, zonedDayEnd, zonedDayKey, zonedDayStart } from "@/lib/time";
 import { db } from "@/server/db";
 import {
   calendarConfigs,
@@ -248,6 +249,41 @@ export async function importCalendarEvents(
       .returning({ id: timeEntries.id });
 
     createdEntryIds.push(createdEntry[0].id);
+  }
+
+  // Expand attendance boundaries for each local day touched by imported events
+  if (input.events.length > 0) {
+    const userRows = await db
+      .select({ timezone: users.timezone })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const tz = userRows[0]?.timezone || "UTC";
+
+    const dayRanges = new Map<string, { minStart: Date; maxEnd: Date }>();
+    for (const item of input.events) {
+      const start = new Date(item.startedAt);
+      const end = new Date(item.endedAt);
+      const day = zonedDayKey(start, tz);
+      const current = dayRanges.get(day);
+      if (!current) {
+        dayRanges.set(day, { minStart: start, maxEnd: end });
+      } else {
+        if (start.getTime() < current.minStart.getTime()) current.minStart = start;
+        if (end.getTime() > current.maxEnd.getTime()) current.maxEnd = end;
+      }
+    }
+
+    for (const [day, range] of dayRanges) {
+      await expandAttendanceBounds(
+        db,
+        userId,
+        day,
+        { startedAt: range.minStart, endedAt: range.maxEnd },
+        true,
+        day === todayKey(tz),
+      );
+    }
   }
 
   return {

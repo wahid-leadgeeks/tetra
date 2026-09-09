@@ -11,6 +11,7 @@ import type {
   ReviewState,
   TimeEntryDTO,
 } from "@/lib/types";
+import { envelopeAttendanceSpan } from "@/features/attendance/domain";
 import { minutesBetween, zonedClock, zonedDayEnd, zonedDayStart } from "@/lib/time";
 import type {
   BuildDaySummaryInput,
@@ -208,9 +209,25 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
     0,
   );
 
+  const intervals = [
+    ...dayEntries.map((e) => ({ startedAt: e.startedAt, endedAt: intervalEnd(e, now) })),
+    ...breaks.map((b) => ({ startedAt: b.startedAt, endedAt: b.endedAt ?? now })),
+  ];
+  const effectiveAttendance = attendance
+    ? envelopeAttendanceSpan(attendance, intervals, now)
+    : null;
+
+  const attendanceForGaps: DaySummaryAttendanceInput | null = attendance && effectiveAttendance
+    ? {
+        ...attendance,
+        clockInAt: effectiveAttendance.clockInAt,
+        clockOutAt: effectiveAttendance.clockOutAt,
+      }
+    : attendance;
+
   const warnings: DayWarning[] = [
     ...overlapWarnings(dayEntries, now, tz),
-    ...(attendance ? gapWarnings(dayEntries, attendance, breaks, now) : []),
+    ...(attendanceForGaps ? gapWarnings(dayEntries, attendanceForGaps, breaks, now) : []),
   ];
   if (dayEntries.some((e) => e.status === "active" || e.status === "paused")) {
     warnings.push({ type: "open_task", message: "A task is still open" });
@@ -241,12 +258,12 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
 
   return {
     workDate,
-    attendance: attendance
+    attendance: attendance && effectiveAttendance
       ? {
           id: attendance.id,
           workDate,
-          clockInAt: attendance.clockInAt.toISOString(),
-          clockOutAt: attendance.clockOutAt?.toISOString() ?? null,
+          clockInAt: effectiveAttendance.clockInAt.toISOString(),
+          clockOutAt: effectiveAttendance.clockOutAt?.toISOString() ?? null,
           status: attendance.status,
           activeBreak: breakDtos.findLast((b) => b.endedAt === null) ?? null,
           breaks: breakDtos,
@@ -255,14 +272,14 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
       : null,
     timeEntries: timeEntryDtos,
     totals: {
-      attendanceMinutes: attendance
-        ? minutesBetween(attendance.clockInAt, attendance.clockOutAt ?? now)
+      attendanceMinutes: attendance && effectiveAttendance
+        ? minutesBetween(effectiveAttendance.clockInAt, effectiveAttendance.clockOutAt ?? now)
         : 0,
       breakMinutes,
       workMinutes,
     },
     byCategory,
     warnings,
-    reviewState: deriveReviewState(reviewStateStored, attendance, warnings),
+    reviewState: deriveReviewState(reviewStateStored, attendanceForGaps, warnings),
   };
 }

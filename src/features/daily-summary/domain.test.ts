@@ -483,4 +483,49 @@ describe("buildDaySummary day window", () => {
     expect(summary.timeEntries.map((e) => e.id)).toEqual(["first"]);
     expect(summary.totals.workMinutes).toBe(60);
   });
+
+  it("automatically expands attendance boundaries when tasks or breaks extend past clock-in or clock-out", () => {
+    // Attendance originally 08:20 -> 17:00 (520m)
+    // Task 1: 08:00 -> 12:00 (starts before clock-in)
+    // Break 1: 12:00 -> 13:00
+    // Task 2: 17:00 -> 18:00 (ends after clock-out)
+    const summary = buildDaySummary(
+      input({
+        attendance: {
+          id: "att-1",
+          clockInAt: local(8, 20),
+          clockOutAt: local(17, 0),
+          status: "closed",
+        },
+        breaks: [
+          {
+            id: "b1",
+            startedAt: local(12, 0),
+            endedAt: local(13, 0),
+          },
+        ],
+        entries: [
+          entry({
+            id: "e1",
+            taskName: "Independent learning",
+            startedAt: local(8, 0),
+            endedAt: local(12, 0),
+          }),
+          entry({
+            id: "e2",
+            taskName: "Research",
+            startedAt: local(17, 0),
+            endedAt: local(18, 0),
+          }),
+        ],
+      }),
+    );
+
+    // Attendance should be expanded to 08:00 -> 18:00 (600 minutes / 10h)
+    expect(summary.attendance?.clockInAt).toBe(local(8, 0).toISOString());
+    expect(summary.attendance?.clockOutAt).toBe(local(18, 0).toISOString());
+    expect(summary.totals.attendanceMinutes).toBe(600);
+    expect(summary.totals.workMinutes).toBe(300); // 4h + 1h = 5h = 300m
+    expect(summary.totals.breakMinutes).toBe(60); // 1h = 60m
+  });
 });

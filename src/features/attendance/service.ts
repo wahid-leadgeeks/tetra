@@ -6,12 +6,15 @@
  * - at most one open break at a time
  * Durations are always computed server-side from stored timestamps.
  */
-import { and, eq, isNull, ne, or } from "drizzle-orm";
-import { todayKey } from "@/lib/time";
+import { and, eq, gte, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import { accumulatePause } from "@/features/activities/entry-helpers";
+import { todayKey, zonedDayEnd, zonedDayStart } from "@/lib/time";
 import type { AttendanceDTO, BreakDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { breakEntries, dailyAttendance, timeEntries } from "@/server/db/schema";
 import { hasBreakOverlap, isOpenBreak, toAttendanceDTO, toBreakDTO } from "./domain";
+
+export type TxOrDb = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
 
 type AttendanceRow = typeof dailyAttendance.$inferSelect;
 
@@ -105,19 +108,97 @@ export async function clockIn(
 }
 
 /**
+ * Expands dailyAttendance for the given day to envelope the specified interval.
+ * - Expands clockInAt earlier if startedAt < clockInAt.
+ * - Expands clockOutAt later if clockOutAt is non-null and endedAt > clockOutAt.
+ * - Flags reviewState as "changed_after_sync" if attendance was already synced.
+ * - Creates attendance row if no attendance exists and createIfMissing is true.
+ */
+export async function expandAttendanceBounds(
+  txOrDb: TxOrDb,
+  userId: string,
+  workDate: string,
+  interval: { startedAt?: Date; endedAt?: Date },
+  createIfMissing = false,
+  isToday = false,
+): Promise<void> {
+  const rows = await txOrDb
+    .select()
+    .from(dailyAttendance)
+    .where(
+      and(
+        eq(dailyAttendance.userId, userId),
+        eq(dailyAttendance.workDate, workDate),
+      ),
+    )
+    .limit(1);
+
+  const existing = rows[0];
+  const now = new Date();
+
+  if (!existing) {
+    if (!createIfMissing || !interval.startedAt) return;
+    const clockInAt = interval.startedAt;
+    const clockOutAt = isToday ? null : (interval.endedAt ?? interval.startedAt);
+    const status = isToday ? "open" : "closed";
+    await txOrDb.insert(dailyAttendance).values({
+      userId,
+      workDate,
+      clockInAt,
+      clockOutAt,
+      status,
+      reviewState: isToday ? "draft" : "ready",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return;
+  }
+
+  const updates: Partial<typeof dailyAttendance.$inferInsert> = {};
+
+  if (interval.startedAt && interval.startedAt.getTime() < existing.clockInAt.getTime()) {
+    updates.clockInAt = interval.startedAt;
+  }
+
+  if (
+    interval.endedAt &&
+    existing.clockOutAt !== null &&
+    interval.endedAt.getTime() > existing.clockOutAt.getTime()
+  ) {
+    updates.clockOutAt = interval.endedAt;
+  }
+
+  if (existing.reviewState === "synced" && Object.keys(updates).length > 0) {
+    updates.reviewState = "changed_after_sync";
+  }
+
+  if (Object.keys(updates).length > 0) {
+    updates.updatedAt = now;
+    await txOrDb
+      .update(dailyAttendance)
+      .set(updates)
+      .where(eq(dailyAttendance.id, existing.id));
+  }
+}
+
+/**
  * Clock out: closes the open attendance. A break cannot outlive the shift,
  * so any open break is closed at clock-out time.
+ * Running tasks are completed at clock-out time.
+ * Attendance boundaries are guaranteed to envelope all task and break entries.
  * Throws "Not clocked in" when there is no open attendance.
  */
 export async function clockOut(
   userId: string,
-  _timezone: string,
+  timezone: string,
 ): Promise<AttendanceDTO> {
   const open = await findOpenAttendance(userId);
   if (open === null) {
     throw new Error("Not clocked in");
   }
   const now = new Date();
+
+  // 1. Close any open breaks
   await db
     .update(breakEntries)
     .set({ endedAt: now })
@@ -127,11 +208,83 @@ export async function clockOut(
         isNull(breakEntries.endedAt),
       ),
     );
+
+  // 2. Complete any active or paused tasks so work doesn't run past clock-out
+  const running = await db
+    .select()
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        inArray(timeEntries.status, ["active", "paused"]),
+      ),
+    );
+
+  for (const entry of running) {
+    await db
+      .update(timeEntries)
+      .set({
+        endedAt: now,
+        status: "completed",
+        pausedAt: null,
+        pausedSeconds: accumulatePause(entry, now),
+        updatedAt: now,
+      })
+      .where(eq(timeEntries.id, entry.id));
+  }
+
+  // 3. Find latest completed entries / breaks for this day to guarantee clockOutAt envelopes them
+  const dayStart = zonedDayStart(open.workDate, timezone);
+  const dayEnd = zonedDayEnd(open.workDate, timezone);
+
+  const dayEntries = await db
+    .select({ startedAt: timeEntries.startedAt, endedAt: timeEntries.endedAt })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        gte(timeEntries.startedAt, dayStart),
+        lte(timeEntries.startedAt, dayEnd),
+      ),
+    );
+
+  const dayBreaks = await db
+    .select({ startedAt: breakEntries.startedAt, endedAt: breakEntries.endedAt })
+    .from(breakEntries)
+    .where(eq(breakEntries.attendanceId, open.id));
+
+  let effectiveClockIn = open.clockInAt;
+  let effectiveClockOut = now;
+
+  for (const e of dayEntries) {
+    if (e.startedAt.getTime() < effectiveClockIn.getTime()) {
+      effectiveClockIn = e.startedAt;
+    }
+    if (e.endedAt && e.endedAt.getTime() > effectiveClockOut.getTime()) {
+      effectiveClockOut = e.endedAt;
+    }
+  }
+
+  for (const b of dayBreaks) {
+    if (b.startedAt.getTime() < effectiveClockIn.getTime()) {
+      effectiveClockIn = b.startedAt;
+    }
+    if (b.endedAt && b.endedAt.getTime() > effectiveClockOut.getTime()) {
+      effectiveClockOut = b.endedAt;
+    }
+  }
+
   const updated = await db
     .update(dailyAttendance)
-    .set({ clockOutAt: now, status: "closed", updatedAt: now })
+    .set({
+      clockInAt: effectiveClockIn,
+      clockOutAt: effectiveClockOut,
+      status: "closed",
+      updatedAt: now,
+    })
     .where(eq(dailyAttendance.id, open.id))
     .returning();
+
   return refreshDTO(updated[0], now);
 }
 
@@ -351,6 +504,34 @@ export async function updateBreak(
     })
     .where(eq(breakEntries.id, breakId))
     .returning();
+
+  // Also ensure attendance envelopes the updated break
+  if (existing.attendanceId) {
+    const [att] = await db
+      .select()
+      .from(dailyAttendance)
+      .where(eq(dailyAttendance.id, existing.attendanceId))
+      .limit(1);
+    if (att) {
+      const updates: Partial<typeof dailyAttendance.$inferInsert> = {};
+      if (newStart.getTime() < att.clockInAt.getTime()) {
+        updates.clockInAt = newStart;
+      }
+      if (att.clockOutAt && newEnd && newEnd.getTime() > att.clockOutAt.getTime()) {
+        updates.clockOutAt = newEnd;
+      }
+      if (att.reviewState === "synced" && Object.keys(updates).length > 0) {
+        updates.reviewState = "changed_after_sync";
+      }
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = new Date();
+        await db
+          .update(dailyAttendance)
+          .set(updates)
+          .where(eq(dailyAttendance.id, att.id));
+      }
+    }
+  }
 
   // Mark attendance changed_after_sync if needed
   await db

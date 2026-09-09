@@ -4,7 +4,8 @@
  * as `changed_after_sync`.
  */
 import { and, eq } from "drizzle-orm";
-import { zonedDayKey } from "@/lib/time";
+import { expandAttendanceBounds } from "@/features/attendance/service";
+import { todayKey, zonedDayKey } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { tasks, timeEntries } from "@/server/db/schema";
@@ -86,7 +87,16 @@ export async function createManualEntry(
       .returning({ id: timeEntries.id });
     const newEntry = created[0];
     if (newEntry === undefined) throw new Error("Failed to create entry");
-    await markDayChanged(tx, userId, zonedDayKey(input.startedAt, timeZone));
+    const dayKey = zonedDayKey(input.startedAt, timeZone);
+    await expandAttendanceBounds(
+      tx,
+      userId,
+      dayKey,
+      { startedAt: input.startedAt, endedAt: input.endedAt },
+      true,
+      dayKey === todayKey(timeZone),
+    );
+    await markDayChanged(tx, userId, dayKey);
     return newEntry.id;
   });
   return requireEntryDto(userId, entryId);
@@ -191,6 +201,14 @@ export async function updateEntry(
     for (const day of changedDays) {
       await markDayChanged(tx, userId, day);
     }
+    await expandAttendanceBounds(
+      tx,
+      userId,
+      newDay,
+      { startedAt, endedAt: effectiveEnd },
+      false,
+      newDay === todayKey(timeZone),
+    );
     return entry.id;
   });
   return requireEntryDto(userId, entryId);
