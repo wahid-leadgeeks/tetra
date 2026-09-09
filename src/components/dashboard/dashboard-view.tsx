@@ -194,6 +194,7 @@ export function DashboardView({
         value={activeTab}
         onValueChange={handleTabChange}
         className="grid gap-6"
+        data-testid="dashboard-tabs"
       >
         <TabsList
           data-testid="dashboard-tabs"

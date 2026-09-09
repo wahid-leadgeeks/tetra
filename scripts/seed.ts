@@ -1,10 +1,9 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { categories } from "../src/server/db/schema";
+import { client, db } from "../src/server/db";
 
 /**
  * Seeds the global category list from the PRD. Idempotent.
- * Run: pnpm db:seed  (tsx --env-file=.env.local)
+ * Run: pnpm db:seed
  */
 const CATEGORIES: { key: string; name: string; sortOrder: number }[] = [
   { key: "website_management", name: "Website Management", sortOrder: 10 },
@@ -26,11 +25,6 @@ const CATEGORIES: { key: string; name: string; sortOrder: number }[] = [
 ];
 
 async function main() {
-  // Empty-string DATABASE_URL must fall through to the dev default —
-  // postgres("") would silently connect as the OS user.
-  const url = process.env.DATABASE_URL || "postgresql://tetra:tetra_dev@localhost:5432/tetra";
-  const sql = postgres(url, { max: 1 });
-  const db = drizzle(sql);
   for (const c of CATEGORIES) {
     await db
       .insert(categories)
@@ -41,7 +35,7 @@ async function main() {
       });
   }
   console.log(`Seeded ${CATEGORIES.length} categories`);
-  await sql.end();
+  await client.close();
 }
 
 main().catch((err) => {

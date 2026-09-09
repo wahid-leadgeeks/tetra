@@ -13,7 +13,7 @@ export default defineConfig({
     env: {
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgresql://tetra:tetra_dev@localhost:5432/tetra",
+        "file:.data/tetra-pglite",
       AUTH_SECRET: process.env.AUTH_SECRET ?? "test-secret-0123456789abcdef",
       DEFAULT_TIMEZONE: "Asia/Jakarta",
       ALLOW_DEV_LOGIN: "true",

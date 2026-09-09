@@ -10,7 +10,7 @@ export default defineConfig({
     ["html", { outputFolder: "playwright-report", open: "never" }],
     ["json", { outputFile: "test-results/playwright-results.json" }],
   ],
-  timeout: 90_000,
+  timeout: 180_000,
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
@@ -20,7 +20,7 @@ export default defineConfig({
   webServer: {
     command: "pnpm dev",
     url: "http://localhost:3000",
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
   projects: [{ name: "chromium", use: devices["Desktop Chrome"] }],

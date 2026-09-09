@@ -34,7 +34,7 @@ n8n
 - App Router
 - Tailwind CSS
 - shadcn/ui
-- PostgreSQL
+- PostgreSQL (PGlite embedded in Node.js for local dev/test / remote PostgreSQL)
 - Drizzle ORM
 - Zod
 - Google OAuth
