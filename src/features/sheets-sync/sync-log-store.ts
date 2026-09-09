@@ -36,15 +36,23 @@ export interface ListSyncLogsOptions {
   date?: string;
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Record one sync attempt outcome. */
 export async function recordSyncLog(
   ctx: SyncAttemptContext,
   outcome: SyncLogOutcome,
 ): Promise<void> {
+  const spreadsheetConfigId =
+    typeof ctx.configId === "string" && UUID_PATTERN.test(ctx.configId)
+      ? ctx.configId
+      : null;
+
   await db.insert(syncLogs).values({
     userId: ctx.userId,
     workDate: ctx.workDate,
-    spreadsheetConfigId: ctx.configId,
+    spreadsheetConfigId,
     status: outcome.status,
     payloadHash: outcome.payloadHash,
     changedCells: outcome.changedCells,

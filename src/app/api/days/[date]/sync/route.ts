@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { CATEGORY_KEYS } from "@/features/sheets-sync/mapping";
+import { CATEGORY_KEYS, type CategoryKey } from "@/features/sheets-sync/mapping";
 import {
   executeSync,
   previewSync,
@@ -13,7 +13,7 @@ const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const syncOptionsSchema = z.object({
   includeNotes: z.boolean().optional(),
-  notes: z.record(z.enum(CATEGORY_KEYS), z.string()).optional(),
+  notes: z.record(z.string(), z.string().optional()).optional(),
 });
 
 interface SyncRouteContext {
@@ -100,10 +100,21 @@ export async function POST(
     return jsonError(400, firstIssue(parsedOptions.error));
   }
 
+  const notesOverrides: Partial<Record<CategoryKey, string>> | undefined =
+    parsedOptions.data.notes
+      ? Object.fromEntries(
+          Object.entries(parsedOptions.data.notes).filter(
+            (entry): entry is [CategoryKey, string] =>
+              CATEGORY_KEYS.includes(entry[0] as CategoryKey) &&
+              typeof entry[1] === "string",
+          ),
+        )
+      : undefined;
+
   try {
     const result = await executeSync(authResult.userId, date, {
       includeNotes: parsedOptions.data.includeNotes,
-      notes: parsedOptions.data.notes,
+      notes: notesOverrides,
       accessToken: authResult.accessToken,
     });
     return NextResponse.json(result);
