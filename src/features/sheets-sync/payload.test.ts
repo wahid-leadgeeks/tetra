@@ -120,7 +120,7 @@ describe("buildSyncPayload", () => {
     // Then every mapped cell is present with the exact value
     expect(rowDateValue).toBe("2026-09-03");
     expect(cells).toEqual([
-      { a1: "B5", value: "08:00", columnLabel: "Clock In" },
+      { a1: "B5", value: "8:00", columnLabel: "Clock In" },
       { a1: "C5", value: "12:00", columnLabel: "Break Start" },
       { a1: "D5", value: "12:30", columnLabel: "Break End" },
       { a1: "E5", value: "16:00", columnLabel: "Clock Out" },
@@ -135,6 +135,69 @@ describe("buildSyncPayload", () => {
       { a1: "FP5", value: "0:00", columnLabel: "Training" },
       { a1: "FR5", value: "0:00", columnLabel: "Other Tasks" },
     ]);
+  });
+
+  it("renders clock in, clock out, and break times in H:mm format without leading zero for single-digit hours", () => {
+    const summary = makeSummary({
+      attendance: {
+        id: "att-1",
+        workDate: "2026-09-03",
+        clockInAt: "2026-09-03T01:20:00Z", // 08:20 Jakarta
+        clockOutAt: "2026-09-03T09:00:00Z", // 16:00 Jakarta
+        status: "closed",
+        activeBreak: null,
+        breaks: [
+          {
+            id: "b1",
+            startedAt: "2026-09-03T01:45:00Z", // 08:45 Jakarta
+            endedAt: "2026-09-03T02:00:00Z", // 09:00 Jakarta
+            durationMinutes: 15,
+          },
+        ],
+        breakMinutes: 15,
+      },
+      totals: { attendanceMinutes: 460, breakMinutes: 15, workMinutes: 445 },
+    });
+    const { cells } = buildSyncPayload(summary, MAPPING, {
+      dateValueFormat: "iso",
+      rowNumber: ROW,
+      timezone: TZ,
+    });
+    expect(cells.find((c) => c.a1 === "B5")?.value).toBe("8:20");
+    expect(cells.find((c) => c.a1 === "C5")?.value).toBe("12:00");
+    expect(cells.find((c) => c.a1 === "D5")?.value).toBe("12:15");
+    expect(cells.find((c) => c.a1 === "E5")?.value).toBe("16:00");
+  });
+
+  it("renders single afternoon break start and end in H:mm format", () => {
+    const summary = makeSummary({
+      attendance: {
+        id: "att-1",
+        workDate: "2026-09-03",
+        clockInAt: "2026-09-03T01:00:00Z", // 08:00 Jakarta
+        clockOutAt: "2026-09-03T09:00:00Z", // 16:00 Jakarta
+        status: "closed",
+        activeBreak: null,
+        breaks: [
+          {
+            id: "b1",
+            startedAt: "2026-09-03T06:00:00Z", // 13:00 Jakarta
+            endedAt: "2026-09-03T06:45:00Z", // 13:45 Jakarta
+            durationMinutes: 45,
+          },
+        ],
+        breakMinutes: 45,
+      },
+      totals: { attendanceMinutes: 480, breakMinutes: 45, workMinutes: 435 },
+    });
+    const { cells } = buildSyncPayload(summary, MAPPING, {
+      dateValueFormat: "iso",
+      rowNumber: ROW,
+      timezone: TZ,
+    });
+    expect(cells.find((c) => c.a1 === "B5")?.value).toBe("8:00");
+    expect(cells.find((c) => c.a1 === "C5")?.value).toBe("13:00");
+    expect(cells.find((c) => c.a1 === "D5")?.value).toBe("13:45");
   });
 
   it("renders totals in H:MM format including single-digit hours", () => {

@@ -10,6 +10,7 @@ import {
   nextWorkday,
   previousWorkday,
   zonedClock,
+  zonedClockHMM,
   zonedDayEnd,
   zonedDayKey,
   zonedDayStart,
@@ -45,6 +46,15 @@ describe("time helpers", () => {
   it("renders local clock times", () => {
     const utc = new Date("2026-09-02T01:45:00Z");
     expect(zonedClock(utc, "Asia/Jakarta")).toBe("08:45");
+  });
+
+  it("renders local clock times without leading zero for single-digit hours", () => {
+    const utcMorning = new Date("2026-09-02T01:45:00Z");
+    expect(zonedClockHMM(utcMorning, "Asia/Jakarta")).toBe("8:45");
+    const utcEvening = new Date("2026-09-02T11:00:00Z");
+    expect(zonedClockHMM(utcEvening, "Asia/Jakarta")).toBe("18:00");
+    const utcMidnight = new Date("2026-09-02T17:00:00Z");
+    expect(zonedClockHMM(utcMidnight, "Asia/Jakarta")).toBe("0:00");
   });
 
   it("converts day keys to UTC day boundaries", () => {
