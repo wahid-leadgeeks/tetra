@@ -24,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CategoryPieChart } from "@/components/ui/category-pie-chart";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
 import { DayNavigator } from "@/components/timeline/day-navigator";
@@ -337,32 +338,16 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
                 </div>
               </CardHeader>
               <CardContent className="grid gap-4">
-                {summary.totals.workMinutes > 0 && (
-                  <div className="flex flex-col gap-1.5">
-                    <div
-                      aria-label="Category time distribution"
-                      className="h-3 w-full flex overflow-hidden rounded-full bg-muted/70 shadow-inner"
-                    >
-                      {summary.byCategory
-                        .filter((c) => c.minutes > 0)
-                        .map((category) => {
-                          const theme = getCategoryTheme(category.key);
-                          const pct = Math.max(
-                            2,
-                            (category.minutes / summary.totals.workMinutes) * 100,
-                          );
-                          return (
-                            <div
-                              key={category.key}
-                              title={`${category.name}: ${formatHuman(category.minutes)} (${Math.round((category.minutes / summary.totals.workMinutes) * 100)}%)`}
-                              style={{ width: `${pct}%` }}
-                              className={cn("h-full transition-all duration-300", theme.barColor)}
-                            />
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
+                <div className="flex justify-center py-2">
+                  <CategoryPieChart
+                    categories={summary.byCategory}
+                    totalMinutes={summary.totals.workMinutes}
+                    size="md"
+                    centerTitle="Work Time"
+                    ariaLabel="Category time distribution pie chart"
+                    testId="review-category-pie-chart"
+                  />
+                </div>
 
                 <div className="grid gap-2.5">
                   {summary.byCategory.map((category) => {

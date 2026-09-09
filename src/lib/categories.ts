@@ -20,6 +20,7 @@ export interface CategoryTheme {
   dotClass: string;
   borderClass: string;
   barColor: string;
+  colorHex: string;
   hoverClass: string;
   accentBg: string;
 }
@@ -35,6 +36,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-emerald-500",
     borderClass: "border-l-emerald-500",
     barColor: "bg-emerald-500",
+    colorHex: "#10b981",
     hoverClass: "hover:border-emerald-400 hover:bg-emerald-500/5",
     accentBg: "bg-emerald-500/10",
   },
@@ -48,6 +50,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-rose-500",
     borderClass: "border-l-rose-500",
     barColor: "bg-rose-500",
+    colorHex: "#f43f5e",
     hoverClass: "hover:border-rose-400 hover:bg-rose-500/5",
     accentBg: "bg-rose-500/10",
   },
@@ -61,6 +64,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-violet-500",
     borderClass: "border-l-violet-500",
     barColor: "bg-violet-500",
+    colorHex: "#8b5cf6",
     hoverClass: "hover:border-violet-400 hover:bg-violet-500/5",
     accentBg: "bg-violet-500/10",
   },
@@ -74,6 +78,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-blue-500",
     borderClass: "border-l-blue-500",
     barColor: "bg-blue-500",
+    colorHex: "#3b82f6",
     hoverClass: "hover:border-blue-400 hover:bg-blue-500/5",
     accentBg: "bg-blue-500/10",
   },
@@ -87,6 +92,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-amber-500",
     borderClass: "border-l-amber-500",
     barColor: "bg-amber-500",
+    colorHex: "#f59e0b",
     hoverClass: "hover:border-amber-400 hover:bg-amber-500/5",
     accentBg: "bg-amber-500/10",
   },
@@ -100,6 +106,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-sky-500",
     borderClass: "border-l-sky-500",
     barColor: "bg-sky-500",
+    colorHex: "#0ea5e9",
     hoverClass: "hover:border-sky-400 hover:bg-sky-500/5",
     accentBg: "bg-sky-500/10",
   },
@@ -113,6 +120,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-orange-500",
     borderClass: "border-l-orange-500",
     barColor: "bg-orange-500",
+    colorHex: "#f97316",
     hoverClass: "hover:border-orange-400 hover:bg-orange-500/5",
     accentBg: "bg-orange-500/10",
   },
@@ -126,6 +134,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     dotClass: "bg-slate-400",
     borderClass: "border-l-slate-400",
     barColor: "bg-slate-400",
+    colorHex: "#94a3b8",
     hoverClass: "hover:border-slate-400 hover:bg-slate-500/5",
     accentBg: "bg-slate-500/10",
   },
@@ -145,6 +154,7 @@ const DEFAULT_THEME: CategoryTheme = {
   dotClass: "bg-primary",
   borderClass: "border-l-primary",
   barColor: "bg-primary",
+  colorHex: "#6366f1",
   hoverClass: "hover:border-primary/40",
   accentBg: "bg-primary/10",
 };

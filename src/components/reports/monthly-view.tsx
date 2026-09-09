@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CategoryPieChart } from "@/components/ui/category-pie-chart";
 import { Separator } from "@/components/ui/separator";
 import { getCategoryTheme } from "@/lib/categories";
 import { addDaysISO, formatHuman } from "@/lib/time";
@@ -194,30 +195,16 @@ export function MonthlyView({ month }: MonthlyViewProps) {
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
-              {month.totals.workMinutes > 0 && (
-                <div
-                  aria-label="Monthly category time distribution"
-                  className="h-3 w-full flex overflow-hidden rounded-full bg-muted/70 shadow-inner"
-                >
-                  {month.byCategory
-                    .filter((c) => c.minutes > 0)
-                    .map((category) => {
-                      const theme = getCategoryTheme(category.key);
-                      const pct = Math.max(
-                        2,
-                        (category.minutes / month.totals.workMinutes) * 100,
-                      );
-                      return (
-                        <div
-                          key={category.key}
-                          title={`${category.name}: ${formatHuman(category.minutes)} (${Math.round((category.minutes / month.totals.workMinutes) * 100)}%)`}
-                          style={{ width: `${pct}%` }}
-                          className={cn("h-full transition-all duration-300", theme.barColor)}
-                        />
-                      );
-                    })}
-                </div>
-              )}
+            <div className="flex justify-center py-2">
+              <CategoryPieChart
+                categories={month.byCategory}
+                totalMinutes={month.totals.workMinutes}
+                size="md"
+                centerTitle="Month Total"
+                ariaLabel="Monthly category time distribution pie chart"
+                testId="monthly-category-pie-chart"
+              />
+            </div>
 
               <div className="grid gap-2.5">
                 {month.byCategory.map((category) => {

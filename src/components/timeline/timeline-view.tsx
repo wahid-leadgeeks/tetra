@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CategoryBadge } from "@/components/ui/category-badge";
+import { CategoryPieChart } from "@/components/ui/category-pie-chart";
 import { getCategoryTheme } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import {
@@ -626,25 +627,15 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
               {summary && summary.byCategory.some((c) => c.minutes > 0) ? (
                 <div className="flex flex-col gap-2.5 pt-2 border-t border-border/50">
                   <span className="text-xs font-semibold text-foreground">Categories</span>
-                  <div
-                    aria-label="Day category time distribution"
-                    className="h-2 w-full flex overflow-hidden rounded-full bg-muted/70 shadow-inner"
-                  >
-                    {summary.byCategory
-                      .filter((c) => c.minutes > 0)
-                      .map((category) => {
-                        const theme = getCategoryTheme(category.key);
-                        const totalWork = summary.totals.workMinutes || 1;
-                        const pct = Math.max(3, (category.minutes / totalWork) * 100);
-                        return (
-                          <div
-                            key={category.key}
-                            title={`${category.name}: ${formatHuman(category.minutes)}`}
-                            style={{ width: `${pct}%` }}
-                            className={cn("h-full transition-all duration-300", theme.barColor)}
-                          />
-                        );
-                      })}
+                  <div className="flex justify-center py-2">
+                    <CategoryPieChart
+                      categories={summary.byCategory}
+                      totalMinutes={summary.totals.workMinutes}
+                      size="sm"
+                      centerTitle="Day Total"
+                      ariaLabel="Day category time distribution pie chart"
+                      testId="timeline-category-pie-chart"
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     {summary.byCategory

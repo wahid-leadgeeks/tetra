@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoryBadge } from "@/components/ui/category-badge";
+import { CategoryPieChart } from "@/components/ui/category-pie-chart";
 import {
   Dialog,
   DialogContent,
@@ -403,25 +404,15 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
                       </span>
                     </div>
 
-                    <div
-                      aria-label="Today category distribution"
-                      className="h-2.5 w-full flex overflow-hidden rounded-full bg-muted shadow-inner"
-                    >
-                      {summary.byCategory
-                        .filter((c) => c.minutes > 0)
-                        .map((category) => {
-                          const theme = getCategoryTheme(category.key);
-                          const totalWork = summary.totals.workMinutes || 1;
-                          const pct = Math.max(3, (category.minutes / totalWork) * 100);
-                          return (
-                            <div
-                              key={category.key}
-                              title={`${category.name}: ${formatHuman(category.minutes)}`}
-                              style={{ width: `${pct}%` }}
-                              className={cn("h-full transition-all duration-300", theme.barColor)}
-                            />
-                          );
-                        })}
+                    <div className="flex justify-center py-2">
+                      <CategoryPieChart
+                        categories={summary.byCategory}
+                        totalMinutes={summary.totals.workMinutes}
+                        size="md"
+                        centerTitle="Today"
+                        ariaLabel="Today category distribution pie chart"
+                        testId="today-category-pie-chart"
+                      />
                     </div>
 
                     <div className="flex flex-col gap-1.5 pt-1">
