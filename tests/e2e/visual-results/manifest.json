@@ -4,272 +4,272 @@
     "description": "Login screen with Google Auth and Dev Access",
     "viewport": "1440x900",
     "flow": "Authentication & Onboarding",
-    "capturedAt": "2026-09-09T18:14:39.223Z"
+    "capturedAt": "2026-09-09T19:04:28.743Z"
   },
   {
     "relativePath": "desktop/02-today-not-clocked-in.png",
     "description": "Today screen before clocking in (calm empty state)",
     "viewport": "1440x900",
     "flow": "Today & Attendance",
-    "capturedAt": "2026-09-09T18:14:45.769Z"
+    "capturedAt": "2026-09-09T19:04:35.196Z"
   },
   {
     "relativePath": "desktop/03-guided-tour-spotlight-step1.png",
     "description": "Guided tour step 1 spotlight highlighting Today hero",
     "viewport": "1440x900",
     "flow": "Onboarding & Assistance",
-    "capturedAt": "2026-09-09T18:14:46.617Z"
+    "capturedAt": "2026-09-09T19:04:36.216Z"
   },
   {
     "relativePath": "desktop/04-guided-tour-spotlight-step2.png",
     "description": "Guided tour step 2 spotlight highlighting Today overview",
     "viewport": "1440x900",
     "flow": "Onboarding & Assistance",
-    "capturedAt": "2026-09-09T18:14:47.440Z"
+    "capturedAt": "2026-09-09T19:04:37.052Z"
   },
   {
     "relativePath": "desktop/05-today-clocked-in.png",
     "description": "Today screen clocked in and ready for tasks",
     "viewport": "1440x900",
     "flow": "Today & Attendance",
-    "capturedAt": "2026-09-09T18:14:49.895Z"
+    "capturedAt": "2026-09-09T19:04:39.446Z"
   },
   {
     "relativePath": "desktop/06-start-task-dialog.png",
     "description": "Start task modal dialog with category, task name, and notes",
     "viewport": "1440x900",
     "flow": "Activity Tracking",
-    "capturedAt": "2026-09-09T18:14:51.409Z"
+    "capturedAt": "2026-09-09T19:04:40.971Z"
   },
   {
     "relativePath": "desktop/07-task-active-running.png",
     "description": "Today screen with live active task stopwatch running",
     "viewport": "1440x900",
     "flow": "Activity Tracking",
-    "capturedAt": "2026-09-09T18:14:52.440Z"
+    "capturedAt": "2026-09-09T19:04:41.940Z"
   },
   {
     "relativePath": "desktop/08-task-paused.png",
     "description": "Today screen with paused task timer",
     "viewport": "1440x900",
     "flow": "Activity Tracking",
-    "capturedAt": "2026-09-09T18:14:53.274Z"
+    "capturedAt": "2026-09-09T19:04:42.771Z"
   },
   {
     "relativePath": "desktop/09-break-active.png",
     "description": "Today screen with active break indicator",
     "viewport": "1440x900",
     "flow": "Today & Attendance",
-    "capturedAt": "2026-09-09T18:14:54.592Z"
+    "capturedAt": "2026-09-09T19:04:44.168Z"
   },
   {
     "relativePath": "desktop/10-stop-task-confirm-modal.png",
     "description": "Stop task confirmation safety modal",
     "viewport": "1440x900",
     "flow": "Confirmations & Safety",
-    "capturedAt": "2026-09-09T18:14:55.865Z"
+    "capturedAt": "2026-09-09T19:04:45.558Z"
   },
   {
     "relativePath": "desktop/11-stop-work-confirm-modal.png",
     "description": "Stop work for today confirmation modal",
     "viewport": "1440x900",
     "flow": "Confirmations & Safety",
-    "capturedAt": "2026-09-09T18:14:57.166Z"
+    "capturedAt": "2026-09-09T19:04:46.906Z"
   },
   {
     "relativePath": "desktop/12-today-done-concluded.png",
     "description": "Today screen after concluding the work day",
     "viewport": "1440x900",
     "flow": "Today & Attendance",
-    "capturedAt": "2026-09-09T18:14:58.218Z"
+    "capturedAt": "2026-09-09T19:04:47.931Z"
   },
   {
     "relativePath": "desktop/13-timeline-view.png",
     "description": "Timeline view displaying chronological activity and breaks",
     "viewport": "1440x900",
     "flow": "Timeline & History",
-    "capturedAt": "2026-09-09T18:14:59.030Z"
+    "capturedAt": "2026-09-09T19:04:49.234Z"
   },
   {
     "relativePath": "desktop/14-timeline-add-entry-dialog.png",
     "description": "Timeline modal to manually add missing activity or break",
     "viewport": "1440x900",
     "flow": "Timeline & History",
-    "capturedAt": "2026-09-09T18:14:59.743Z"
+    "capturedAt": "2026-09-09T19:04:50.020Z"
   },
   {
     "relativePath": "desktop/15-timeline-split-dialog.png",
     "description": "Timeline split activity dialog",
     "viewport": "1440x900",
     "flow": "Timeline & History",
-    "capturedAt": "2026-09-09T18:15:00.735Z"
+    "capturedAt": "2026-09-09T19:04:50.960Z"
   },
   {
     "relativePath": "desktop/16-tasks-view.png",
     "description": "Tasks view listing recent tasks with category themes",
     "viewport": "1440x900",
     "flow": "Tasks & Favorites",
-    "capturedAt": "2026-09-09T18:15:01.808Z"
+    "capturedAt": "2026-09-09T19:04:52.493Z"
   },
   {
     "relativePath": "desktop/17-tasks-favorited.png",
     "description": "Tasks view with task starred as favorite",
     "viewport": "1440x900",
     "flow": "Tasks & Favorites",
-    "capturedAt": "2026-09-09T18:15:02.199Z"
+    "capturedAt": "2026-09-09T19:04:52.916Z"
   },
   {
     "relativePath": "desktop/18-today-quick-start.png",
     "description": "Today screen featuring Quick Start chips from favorites",
     "viewport": "1440x900",
     "flow": "Today & Attendance",
-    "capturedAt": "2026-09-09T18:15:05.584Z"
+    "capturedAt": "2026-09-09T19:04:56.273Z"
   },
   {
     "relativePath": "desktop/19-reports-daily-review.png",
     "description": "Daily Review screen showing totals and category breakdown",
     "viewport": "1440x900",
     "flow": "Reports & Sync",
-    "capturedAt": "2026-09-09T18:15:06.842Z"
+    "capturedAt": "2026-09-09T19:04:57.526Z"
   },
   {
     "relativePath": "desktop/20-reports-reviewed-state.png",
     "description": "Daily Review with Reviewed status badge and sync actions",
     "viewport": "1440x900",
     "flow": "Reports & Sync",
-    "capturedAt": "2026-09-09T18:15:09.154Z"
+    "capturedAt": "2026-09-09T19:04:59.834Z"
   },
   {
     "relativePath": "desktop/21-sync-to-file-dialog.png",
     "description": "Sync to file modal dialog for manual spreadsheet export",
     "viewport": "1440x900",
     "flow": "Reports & Sync",
-    "capturedAt": "2026-09-09T18:15:09.919Z"
+    "capturedAt": "2026-09-09T19:05:00.622Z"
   },
   {
     "relativePath": "desktop/22-reports-weekly-summary.png",
     "description": "Weekly report summary with day cards and weekly targets",
     "viewport": "1440x900",
     "flow": "Reports & Sync",
-    "capturedAt": "2026-09-09T18:15:12.729Z"
+    "capturedAt": "2026-09-09T19:05:04.329Z"
   },
   {
     "relativePath": "desktop/23-reports-monthly-summary.png",
     "description": "Monthly report summary with monthly hours and weekly slices",
     "viewport": "1440x900",
     "flow": "Reports & Sync",
-    "capturedAt": "2026-09-09T18:15:15.721Z"
+    "capturedAt": "2026-09-09T19:05:07.309Z"
   },
   {
     "relativePath": "desktop/24-dashboard-overview-tab.png",
     "description": "Dashboard Overview tab with progress KPI cards",
     "viewport": "1440x900",
     "flow": "Dashboard Analytics",
-    "capturedAt": "2026-09-09T18:15:32.920Z"
+    "capturedAt": "2026-09-09T19:05:14.439Z"
   },
   {
     "relativePath": "desktop/25-dashboard-daily-tab.png",
     "description": "Dashboard Daily progress section with categories distribution",
     "viewport": "1440x900",
     "flow": "Dashboard Analytics",
-    "capturedAt": "2026-09-09T18:15:33.506Z"
+    "capturedAt": "2026-09-09T19:05:16.312Z"
   },
   {
     "relativePath": "desktop/26-dashboard-weekly-tab.png",
     "description": "Dashboard Weekly progress section and personal report table",
     "viewport": "1440x900",
     "flow": "Dashboard Analytics",
-    "capturedAt": "2026-09-09T18:15:34.041Z"
+    "capturedAt": "2026-09-09T19:05:16.889Z"
   },
   {
     "relativePath": "desktop/27-dashboard-monthly-tab.png",
     "description": "Dashboard Monthly progress breakdown by week slices",
     "viewport": "1440x900",
     "flow": "Dashboard Analytics",
-    "capturedAt": "2026-09-09T18:15:34.730Z"
+    "capturedAt": "2026-09-09T19:05:17.533Z"
   },
   {
     "relativePath": "desktop/28-settings-view.png",
     "description": "Settings screen with Google Sheets mappings and Calendar sync",
     "viewport": "1440x900",
     "flow": "Settings & Integrations",
-    "capturedAt": "2026-09-09T18:15:57.772Z"
+    "capturedAt": "2026-09-09T19:05:18.866Z"
   },
   {
     "relativePath": "desktop/29-keyboard-shortcuts-dialog.png",
     "description": "Keyboard shortcuts modal dialog (? key)",
     "viewport": "1440x900",
     "flow": "Shortcuts & Accessibility",
-    "capturedAt": "2026-09-09T18:15:59.711Z"
+    "capturedAt": "2026-09-09T19:05:19.546Z"
   },
   {
     "relativePath": "desktop/30-offline-banner.png",
     "description": "Offline banner signaling connection loss with state preservation",
     "viewport": "1440x900",
     "flow": "Resilience & Network",
-    "capturedAt": "2026-09-09T18:16:00.618Z"
+    "capturedAt": "2026-09-09T19:05:20.461Z"
   },
   {
     "relativePath": "desktop/31-sign-out-return-to-login.png",
     "description": "Sign out transition successfully returning user to login screen",
     "viewport": "1440x900",
     "flow": "Authentication & Onboarding",
-    "capturedAt": "2026-09-09T18:16:03.280Z"
+    "capturedAt": "2026-09-09T19:05:22.329Z"
   },
   {
     "relativePath": "mobile/01-mobile-login.png",
     "description": "Mobile login screen with touch-friendly controls",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:28.063Z"
+    "capturedAt": "2026-09-09T19:05:24.628Z"
   },
   {
     "relativePath": "mobile/02-mobile-today-not-clocked-in.png",
     "description": "Mobile Today view with touch start actions and bottom navigation",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:35.649Z"
+    "capturedAt": "2026-09-09T19:05:27.269Z"
   },
   {
     "relativePath": "mobile/03-mobile-today-active-sticky-bar.png",
     "description": "Mobile Today view with persistent sticky active-task bar",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:39.058Z"
+    "capturedAt": "2026-09-09T19:05:29.501Z"
   },
   {
     "relativePath": "mobile/04-mobile-timeline.png",
     "description": "Mobile Timeline view displaying compact activity items and gaps",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:42.845Z"
+    "capturedAt": "2026-09-09T19:05:36.981Z"
   },
   {
     "relativePath": "mobile/05-mobile-dashboard.png",
     "description": "Mobile Dashboard view with adaptive KPI cards and tabs",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:48.119Z"
+    "capturedAt": "2026-09-09T19:05:38.045Z"
   },
   {
     "relativePath": "mobile/06-mobile-reports.png",
     "description": "Mobile Daily Review view with touch-friendly sync options",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:54.049Z"
+    "capturedAt": "2026-09-09T19:05:39.091Z"
   },
   {
     "relativePath": "mobile/07-mobile-tasks.png",
     "description": "Mobile Tasks view with one-tap start buttons and star favorites",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:16:55.351Z"
+    "capturedAt": "2026-09-09T19:05:40.282Z"
   },
   {
     "relativePath": "mobile/08-mobile-settings.png",
     "description": "Mobile Settings view with responsive configuration fields",
     "viewport": "390x844",
     "flow": "Mobile Experience",
-    "capturedAt": "2026-09-09T18:17:11.791Z"
+    "capturedAt": "2026-09-09T19:05:41.382Z"
   }
 ]

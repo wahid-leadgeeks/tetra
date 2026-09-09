@@ -42,6 +42,10 @@ const DATE_SCAN_MAX_ROWS = 2000;
 export interface SyncOptions {
   includeNotes?: boolean;
   notes?: Partial<Record<CategoryKey, string>>;
+  /** Allow sync even if the day is not yet reviewed (e.g. for auto-syncing tasks on Timeline). */
+  allowUnreviewed?: boolean;
+  /** When true, only sync category durations and notes; do not touch attendance or totals. */
+  tasksOnly?: boolean;
 }
 
 export interface SyncResult {
@@ -55,7 +59,7 @@ export interface SyncResult {
 // Public surface (re-exported for route handlers and UI agents)
 // ---------------------------------------------------------------------------
 
-export { getSyncConfig, upsertSyncConfig } from "./config";
+export { getSyncConfig, upsertSyncConfig, updateSyncConfigMapping } from "./config";
 export type { SpreadsheetConfigDTO } from "./config";
 export {
   listSyncLogs,
@@ -125,7 +129,11 @@ export async function executeSync(
 ): Promise<SyncResult> {
   const timezone = await getUserTimezone(userId);
   const summary = await getDaySummary(userId, dayKey, timezone);
-  if (summary.reviewState !== "reviewed") {
+  if (
+    !options.allowUnreviewed &&
+    !options.tasksOnly &&
+    summary.reviewState !== "reviewed"
+  ) {
     throw new Error("Review the day before sync");
   }
 
@@ -160,16 +168,24 @@ export async function executeSync(
     timezone,
     includeNotes: options.includeNotes ?? true,
     notesOverrides: options.notes,
+    tasksOnly: options.tasksOnly,
   });
   const payloadHash = computePayloadHash(rowNumber, cells);
   const writeCtx: SyncAttemptContext = { ...readCtx, payloadHash };
 
-  const currentValues = await googleStep(writeCtx, () =>
+  const { formattedValues, formulaValues } = await googleStep(writeCtx, () =>
     readCurrentCellValues(sheets, config, cells),
   );
-  const cellsToWrite = cells.filter(
-    (cell, i) => currentValues[i] !== cell.value,
-  );
+  const cellsToWrite = cells.filter((cell, i) => {
+    const formula = formulaValues[i];
+    // Formula preservation: Never overwrite spreadsheet formula cells (e.g. =(E-B)-(D-C) or =SUMIF(...))
+    if (typeof formula === "string" && formula.startsWith("=")) {
+      return false;
+    }
+    return formattedValues[i] !== cell.value;
+  });
+
+  const isReviewed = summary.reviewState === "reviewed";
 
   if (cellsToWrite.length === 0) {
     await recordSyncLog(writeCtx, {
@@ -178,7 +194,7 @@ export async function executeSync(
       changedCells: [],
       errorMessage: null,
     });
-    await markSynced(userId, dayKey);
+    await markSynced(userId, dayKey, { setSyncedState: isReviewed });
     return { status: "success", changedCells: [], idempotent: true };
   }
 
@@ -198,7 +214,7 @@ export async function executeSync(
     changedCells,
     errorMessage: null,
   });
-  await markSynced(userId, dayKey);
+  await markSynced(userId, dayKey, { setSyncedState: isReviewed });
   return { status: "success", changedCells, idempotent: false };
 }
 
@@ -373,24 +389,39 @@ async function readDateColumn(
   return res.data.values ?? [];
 }
 
-/** Current FORMATTED values of the target cells, aligned with `cells`. */
+/** Current FORMATTED values and FORMULAS of target cells, aligned with `cells`. */
 async function readCurrentCellValues(
   sheets: sheets_v4.Sheets,
   config: SpreadsheetConfigDTO,
   cells: SyncCellDTO[],
-): Promise<string[]> {
+): Promise<{ formattedValues: string[]; formulaValues: string[] }> {
   const ranges = cells.map((cell) =>
     worksheetRange(config.worksheetName, cell.a1),
   );
-  const res = await sheets.spreadsheets.values.batchGet({
-    spreadsheetId: config.spreadsheetId,
-    ranges,
-  });
-  const valueRanges = res.data.valueRanges ?? [];
-  return cells.map((cell, i) => {
-    const raw = valueRanges[i]?.values?.[0]?.[0];
-    return raw === undefined || raw === null ? "" : String(raw);
-  });
+  const [formattedRes, formulaRes] = await Promise.all([
+    sheets.spreadsheets.values.batchGet({
+      spreadsheetId: config.spreadsheetId,
+      ranges,
+      valueRenderOption: "FORMATTED_VALUE",
+    }),
+    sheets.spreadsheets.values.batchGet({
+      spreadsheetId: config.spreadsheetId,
+      ranges,
+      valueRenderOption: "FORMULA",
+    }),
+  ]);
+  const formattedRanges = formattedRes.data.valueRanges ?? [];
+  const formulaRanges = formulaRes.data.valueRanges ?? [];
+  return {
+    formattedValues: cells.map((cell, i) => {
+      const raw = formattedRanges[i]?.values?.[0]?.[0];
+      return raw === undefined || raw === null ? "" : String(raw);
+    }),
+    formulaValues: cells.map((cell, i) => {
+      const raw = formulaRanges[i]?.values?.[0]?.[0];
+      return raw === undefined || raw === null ? "" : String(raw);
+    }),
+  };
 }
 
 /**
@@ -418,12 +449,17 @@ async function writeCells(
 }
 
 /** Success terminal state: attendance marked synced + lastSyncedAt. */
-async function markSynced(userId: string, workDate: string): Promise<void> {
+async function markSynced(
+  userId: string,
+  workDate: string,
+  options?: { setSyncedState?: boolean },
+): Promise<void> {
+  const setSynced = options?.setSyncedState ?? true;
   await db
     .update(dailyAttendance)
     .set({
       lastSyncedAt: new Date(),
-      reviewState: "synced",
+      ...(setSynced ? { reviewState: "synced" } : {}),
       updatedAt: new Date(),
     })
     .where(

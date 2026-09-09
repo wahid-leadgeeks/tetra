@@ -4,7 +4,7 @@
  * Shared client-side time helpers built on the pure @/lib/time kernel.
  * UI-specific glue only — never re-implement duration math here.
  */
-import { addDaysISO, todayKey, zonedClock, zonedDayStart } from "@/lib/time";
+import { addDaysISO, todayKey, zonedClock, zonedClockHMM, zonedDayStart } from "@/lib/time";
 
 /** "HH:MM" (zoned) → UTC ISO instant on the given day key. */
 export function timeToISO(dayKey: string, time: string, timeZone: string): string {
@@ -39,9 +39,9 @@ export function formatDayShort(dayKey: string): string {
   }).format(new Date(`${dayKey}T12:00:00Z`));
 }
 
-/** ISO instant → "14:32" in the user's timezone. */
+/** ISO instant → "8:20" / "14:32" in the user's timezone (matches spreadsheet unpadded hour). */
 export function formatClock(iso: string, timeZone: string): string {
-  return zonedClock(new Date(iso), timeZone);
+  return zonedClockHMM(new Date(iso), timeZone);
 }
 
 /** ISO instant → "Sep 2, 14:32" in the user's timezone. */

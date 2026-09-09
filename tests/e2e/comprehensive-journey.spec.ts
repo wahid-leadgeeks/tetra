@@ -188,6 +188,8 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     // 11. Timeline screen & Manual entry dialog
     await page.getByTestId("nav-timeline").click();
     await expect(page.getByTestId("timeline")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("auto-sync-switch")).toBeVisible();
+    await expect(page.getByTestId("sync-to-sheet-button")).toBeVisible();
     await takeVisualScreenshot(
       page,
       testInfo,

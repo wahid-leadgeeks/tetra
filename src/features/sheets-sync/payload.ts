@@ -29,6 +29,12 @@ export interface BuildSyncPayloadOptions {
   includeNotes?: boolean;
   /** Preview-dialog edits replacing the compiled notes per category. */
   notesOverrides?: Partial<Record<CategoryKey, string>>;
+  /**
+   * When true, emits only category duration and notes cells (omits attendance
+   * time cells like clock-in, clock-out, and daily totals). Used for auto-syncing
+   * tasks during the workday.
+   */
+  tasksOnly?: boolean;
 }
 
 export interface SyncPayload {
@@ -81,44 +87,49 @@ export function buildSyncPayload(
     timezone,
   );
 
-  const cells: SyncCellDTO[] = [
-    {
-      a1: `${mapping.clockInColumn}${rowNumber}`,
-      value: clockValue(attendance?.clockInAt, timezone),
-      columnLabel: "Clock In",
-    },
-    {
-      a1: `${mapping.breakStartColumn}${rowNumber}`,
-      value: breakStart,
-      columnLabel: "Break Start",
-    },
-    {
-      a1: `${mapping.breakEndColumn}${rowNumber}`,
-      value: breakEnd,
-      columnLabel: "Break End",
-    },
-    {
-      a1: `${mapping.clockOutColumn}${rowNumber}`,
-      value: clockValue(attendance?.clockOutAt, timezone),
-      columnLabel: "Clock Out",
-    },
-    {
-      a1: `${mapping.dailyTotalColumn}${rowNumber}`,
-      value: formatHMM(summary.totals.attendanceMinutes),
-      columnLabel: "Daily Total (Attendance)",
-    },
-    {
-      a1: `${mapping.workTotalColumn}${rowNumber}`,
-      value: formatHMM(summary.totals.workMinutes),
-      columnLabel: "Work Total",
-    },
-    ...CATEGORY_KEYS.map((key) => ({
-      a1: `${mapping.categories[key]}${rowNumber}`,
-      value: formatHMM(categoryMinutes(summary.byCategory, key)),
-      columnLabel: CATEGORY_LABELS[key],
-    })),
-    ...notesCells(summary, mapping, options),
-  ];
+  const categoryCells: SyncCellDTO[] = CATEGORY_KEYS.map((key) => ({
+    a1: `${mapping.categories[key]}${rowNumber}`,
+    value: formatHMM(categoryMinutes(summary.byCategory, key)),
+    columnLabel: CATEGORY_LABELS[key],
+  }));
+  const compiledNotesCells = notesCells(summary, mapping, options);
+
+  const cells: SyncCellDTO[] = options.tasksOnly
+    ? [...categoryCells, ...compiledNotesCells]
+    : [
+        {
+          a1: `${mapping.clockInColumn}${rowNumber}`,
+          value: clockValue(attendance?.clockInAt, timezone),
+          columnLabel: "Clock In",
+        },
+        {
+          a1: `${mapping.breakStartColumn}${rowNumber}`,
+          value: breakStart,
+          columnLabel: "Break Start",
+        },
+        {
+          a1: `${mapping.breakEndColumn}${rowNumber}`,
+          value: breakEnd,
+          columnLabel: "Break End",
+        },
+        {
+          a1: `${mapping.clockOutColumn}${rowNumber}`,
+          value: clockValue(attendance?.clockOutAt, timezone),
+          columnLabel: "Clock Out",
+        },
+        {
+          a1: `${mapping.dailyTotalColumn}${rowNumber}`,
+          value: formatHMM(summary.totals.attendanceMinutes),
+          columnLabel: "Daily Total (Attendance)",
+        },
+        {
+          a1: `${mapping.workTotalColumn}${rowNumber}`,
+          value: formatHMM(summary.totals.workMinutes),
+          columnLabel: "Work Total",
+        },
+        ...categoryCells,
+        ...compiledNotesCells,
+      ];
 
   return {
     rowDateValue:

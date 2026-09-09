@@ -1,6 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getSyncConfig, upsertSyncConfig } from "@/features/sheets-sync/service";
+import {
+  getSyncConfig,
+  updateSyncConfigMapping,
+  upsertSyncConfig,
+} from "@/features/sheets-sync/service";
 import { auth } from "@/server/auth";
 
 function jsonError(status: number, message: string): NextResponse {
@@ -44,5 +48,38 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
   } catch (err) {
     if (err instanceof Error) return jsonError(400, err.message);
     return jsonError(400, "Invalid sync config");
+  }
+}
+
+/** Partially update sync config mapping (e.g. toggle autoSyncTasks). */
+export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const authResult = await requireUserId();
+  if (!authResult.ok) return authResult.response;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
+
+  try {
+    if (typeof body === "object" && body !== null && "mapping" in body) {
+      const config = await updateSyncConfigMapping(
+        authResult.userId,
+        (body as { mapping: Record<string, unknown> }).mapping,
+      );
+      return NextResponse.json(config);
+    }
+    if (typeof body === "object" && body !== null && "autoSyncTasks" in body) {
+      const config = await updateSyncConfigMapping(authResult.userId, {
+        autoSyncTasks: Boolean((body as { autoSyncTasks: boolean }).autoSyncTasks),
+      });
+      return NextResponse.json(config);
+    }
+    return jsonError(400, "Unsupported patch payload");
+  } catch (err) {
+    if (err instanceof Error) return jsonError(400, err.message);
+    return jsonError(400, "Invalid sync config patch");
   }
 }

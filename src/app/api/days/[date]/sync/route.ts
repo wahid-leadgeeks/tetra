@@ -14,6 +14,8 @@ const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const syncOptionsSchema = z.object({
   includeNotes: z.boolean().optional(),
   notes: z.record(z.string(), z.string().optional()).optional(),
+  allowUnreviewed: z.boolean().optional(),
+  tasksOnly: z.boolean().optional(),
 });
 
 interface SyncRouteContext {
@@ -115,6 +117,8 @@ export async function POST(
     const result = await executeSync(authResult.userId, date, {
       includeNotes: parsedOptions.data.includeNotes,
       notes: notesOverrides,
+      allowUnreviewed: parsedOptions.data.allowUnreviewed,
+      tasksOnly: parsedOptions.data.tasksOnly,
       accessToken: authResult.accessToken,
     });
     return NextResponse.json(result);
