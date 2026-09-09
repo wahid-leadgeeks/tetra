@@ -3,7 +3,7 @@
 This gallery documents the end-to-end visual captures executed across all TETRA views, workflows, and viewports.
 
 **Total visual captures:** 39 screenshots  
-**Generated on:** Wed, 09 Sep 2026 18:17:11 GMT
+**Generated on:** Wed, 09 Sep 2026 19:05:41 GMT
 
 ## Table of Contents
 

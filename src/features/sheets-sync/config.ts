@@ -170,6 +170,29 @@ export async function upsertSyncConfig(
   return toConfigDTO(created);
 }
 
+/**
+ * Partially updates the user's active spreadsheet mapping (e.g. toggling autoSyncTasks).
+ * Merges with the existing active mapping or default mapping.
+ */
+export async function updateSyncConfigMapping(
+  userId: string,
+  partialMapping: Partial<SheetMapping>,
+): Promise<SpreadsheetConfigDTO> {
+  const current = await getSyncConfig(userId);
+  const baseMapping = current?.mapping ?? LEADGEEKS_SHEET_MAPPING;
+  const mergedMapping = {
+    ...baseMapping,
+    ...partialMapping,
+  };
+  return upsertSyncConfig(userId, {
+    spreadsheetId: current?.spreadsheetId ?? env.GOOGLE_SPREADSHEET_ID ?? "file",
+    worksheetName: current?.worksheetName ?? env.GOOGLE_SHEET_NAME ?? "Wahid",
+    sheetGid: current?.sheetGid ?? env.GOOGLE_SHEET_GID ?? null,
+    mapping: mergedMapping,
+    timezone: current?.timezone,
+  });
+}
+
 function firstIssueMessage(error: z.ZodError): string {
   const issue = error.issues[0];
   if (!issue) return "invalid input";

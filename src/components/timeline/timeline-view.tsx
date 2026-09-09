@@ -12,7 +12,17 @@
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Coffee, Download, Pencil, Plus, Scissors, Trash2, TriangleAlert } from "lucide-react";
+import {
+  CloudUpload,
+  Coffee,
+  Download,
+  Loader2,
+  Pencil,
+  Plus,
+  Scissors,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { CategoryPieChart } from "@/components/ui/category-pie-chart";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { getCategoryTheme } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import {
@@ -36,7 +48,7 @@ import { DayNavigator } from "@/components/timeline/day-navigator";
 import { EntryDialog, type EntryPrefill } from "@/components/timeline/entry-dialog";
 import { SplitEntryDialog } from "@/components/timeline/split-entry-dialog";
 import { formatClock } from "@/components/timeline/time";
-import { formatHuman } from "@/lib/time";
+import { formatHMM, formatHuman } from "@/lib/time";
 import type {
   BreakDTO,
   CategoryDTO,
@@ -176,6 +188,89 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const [deleteBreak, setDeleteBreak] = useState<BreakDTO | null>(null);
   const [deletingBreak, setDeletingBreak] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [autoSyncTasks, setAutoSyncTasks] = useState(true);
+  const [togglingAutoSync, setTogglingAutoSync] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ id?: string; mapping?: { autoSyncTasks?: boolean } }>("/api/sync-config")
+      .then((config) => {
+        if (!cancelled && config?.mapping?.autoSyncTasks !== undefined) {
+          setAutoSyncTasks(Boolean(config.mapping.autoSyncTasks));
+        }
+      })
+      .catch(() => {
+        // Silently ignore if sync is not configured yet
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleToggleAutoSync(checked: boolean) {
+    setAutoSyncTasks(checked);
+    setTogglingAutoSync(true);
+    try {
+      await apiFetch("/api/sync-config", {
+        method: "PATCH",
+        body: JSON.stringify({ autoSyncTasks: checked }),
+      });
+      toast.success(checked ? "Auto-sync tasks enabled" : "Auto-sync tasks disabled");
+    } catch (err) {
+      setAutoSyncTasks(!checked);
+      toast.error(err instanceof Error ? err.message : "Could not update sync setting");
+    } finally {
+      setTogglingAutoSync(false);
+    }
+  }
+
+  async function syncTasksBackground() {
+    try {
+      const res = await apiFetch<{ status: string; changedCells: { a1: string; value: string }[]; idempotent: boolean }>(
+        `/api/days/${dayKey}/sync`,
+        {
+          method: "POST",
+          body: JSON.stringify({ allowUnreviewed: true, tasksOnly: true }),
+        },
+      );
+      if (!res.idempotent && res.changedCells && res.changedCells.length > 0) {
+        toast.success(`Tasks auto-synced to Google Sheet (${res.changedCells.length} cells)`);
+      }
+    } catch {
+      // Non-blocking background sync; keep quiet on routine errors
+    }
+  }
+
+  function handleSaved() {
+    refresh();
+    if (autoSyncTasks) {
+      void syncTasksBackground();
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await apiFetch<{ status: string; changedCells: { a1: string; value: string }[]; idempotent: boolean }>(
+        `/api/days/${dayKey}/sync`,
+        {
+          method: "POST",
+          body: JSON.stringify({ allowUnreviewed: true }),
+        },
+      );
+      if (res.idempotent || !res.changedCells || res.changedCells.length === 0) {
+        toast.info("Spreadsheet is already up to date.");
+      } else {
+        toast.success(`Synced ${res.changedCells.length} cells to Google Sheet!`);
+      }
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sync failed.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +332,9 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       toast.success("Entry deleted.");
       setDeleteEntry(null);
       refresh();
+      if (autoSyncTasks) {
+        void syncTasksBackground();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not delete.");
     } finally {
@@ -254,6 +352,9 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       toast.success("Break deleted.");
       setDeleteBreak(null);
       refresh();
+      if (autoSyncTasks) {
+        void syncTasksBackground();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not delete break.");
     } finally {
@@ -293,11 +394,46 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   return (
     <div className="w-full">
       <header className="grid gap-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             Timeline
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 h-11"
+              title="Automatically sync task changes and notes to your Google Sheet"
+            >
+              <Switch
+                id="auto-sync-tasks-switch"
+                checked={autoSyncTasks}
+                disabled={togglingAutoSync}
+                onCheckedChange={handleToggleAutoSync}
+                data-testid="auto-sync-switch"
+              />
+              <Label
+                htmlFor="auto-sync-tasks-switch"
+                className="text-xs font-medium cursor-pointer select-none text-muted-foreground whitespace-nowrap"
+              >
+                Auto-sync
+              </Label>
+            </div>
+
+            <Button
+              variant="outline"
+              className="h-11 px-4"
+              onClick={() => void handleSync()}
+              disabled={syncing}
+              data-testid="sync-to-sheet-button"
+              title="Sync this day's tasks, notes, and times directly to your Google Sheet"
+            >
+              {syncing ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <CloudUpload className="mr-2 size-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+              {syncing ? "Syncing…" : "Sync to Sheet"}
+            </Button>
+
             <Button
               variant="outline"
               className="h-11 px-4"
@@ -336,12 +472,18 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         {summary && (
           <p className="text-sm text-muted-foreground">
             Work{" "}
-            <span className="font-medium text-foreground">
-              {formatHuman(summary.totals.workMinutes)}
+            <span className="font-medium text-foreground tabular-nums">
+              {formatHMM(summary.totals.workMinutes)}
+            </span>{" "}
+            <span className="text-xs text-muted-foreground">
+              ({formatHuman(summary.totals.workMinutes)})
             </span>{" "}
             · Break{" "}
-            <span className="font-medium text-foreground">
-              {formatHuman(summary.totals.breakMinutes)}
+            <span className="font-medium text-foreground tabular-nums">
+              {formatHMM(summary.totals.breakMinutes)}
+            </span>{" "}
+            <span className="text-xs text-muted-foreground">
+              ({formatHuman(summary.totals.breakMinutes)})
             </span>{" "}
             · {summary.timeEntries.length}{" "}
             {summary.timeEntries.length === 1 ? "activity" : "activities"}
@@ -466,13 +608,20 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                               </p>
                             )}
                           </div>
-                          <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <div className="flex shrink-0 flex-col items-end gap-0.5">
                             {item.entry.status === "completed" ? (
-                              <p className="font-heading text-base font-semibold tabular-nums text-foreground">
-                                {item.entry.durationMinutes !== null
-                                  ? formatHuman(item.entry.durationMinutes)
-                                  : "—"}
-                              </p>
+                              <>
+                                <p className="font-heading text-base font-semibold tabular-nums text-foreground">
+                                  {item.entry.durationMinutes !== null
+                                    ? formatHMM(item.entry.durationMinutes)
+                                    : "—"}
+                                </p>
+                                {item.entry.durationMinutes !== null && (
+                                  <span className="text-xs text-muted-foreground tabular-nums">
+                                    {formatHuman(item.entry.durationMinutes)}
+                                  </span>
+                                )}
+                              </>
                             ) : (
                               <StatusBadge status={item.entry.status} />
                             )}
@@ -535,13 +684,20 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                           </span>
                         )}
                       </div>
-                      <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                        {item.breakItem.endedAt === null
-                          ? "On break"
-                          : item.breakItem.durationMinutes !== null
-                            ? formatHuman(item.breakItem.durationMinutes)
-                            : "—"}
-                      </p>
+                      <div className="flex shrink-0 flex-col items-end gap-0.5">
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {item.breakItem.endedAt === null
+                            ? "On break"
+                            : item.breakItem.durationMinutes !== null
+                              ? formatHMM(item.breakItem.durationMinutes)
+                              : "—"}
+                        </p>
+                        {item.breakItem.endedAt !== null && item.breakItem.durationMinutes !== null && (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {formatHuman(item.breakItem.durationMinutes)}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex shrink-0 items-center gap-1 border-l border-border/50 pl-2 ml-1">
                         <Button
                           variant="ghost"
@@ -590,22 +746,28 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 p-3 shadow-xs">
+                <div className="flex flex-col gap-0.5 rounded-xl border border-border/60 bg-muted/30 p-3 shadow-xs">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Work Time
                   </span>
                   <p className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">
-                    {formatHuman(summary?.totals.workMinutes ?? 0)}
+                    {formatHMM(summary?.totals.workMinutes ?? 0)}
                   </p>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatHuman(summary?.totals.workMinutes ?? 0)}
+                  </span>
                 </div>
 
-                <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 p-3 shadow-xs">
+                <div className="flex flex-col gap-0.5 rounded-xl border border-border/60 bg-muted/30 p-3 shadow-xs">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Break Time
                   </span>
                   <p className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">
-                    {formatHuman(summary?.totals.breakMinutes ?? 0)}
+                    {formatHMM(summary?.totals.breakMinutes ?? 0)}
                   </p>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatHuman(summary?.totals.breakMinutes ?? 0)}
+                  </span>
                 </div>
               </div>
 
@@ -656,9 +818,14 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                                 {category.name}
                               </span>
                             </div>
-                            <span className="font-semibold text-foreground tabular-nums">
-                              {formatHuman(category.minutes)}
-                            </span>
+                            <div className="flex items-center gap-1.5 tabular-nums">
+                              <span className="font-semibold text-foreground">
+                                {formatHMM(category.minutes)}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                ({formatHuman(category.minutes)})
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
@@ -692,7 +859,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         categoriesError={categoriesError}
         prefill={addPrefill}
         initialKind={addInitialKind}
-        onSaved={refresh}
+        onSaved={handleSaved}
       />
 
       <EntryDialog
@@ -707,7 +874,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         categoriesError={categoriesError}
         entry={editEntry}
         initialKind="entry"
-        onSaved={refresh}
+        onSaved={handleSaved}
       />
 
       <EntryDialog
@@ -722,7 +889,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         categoriesError={categoriesError}
         breakItem={editBreak}
         initialKind="break"
-        onSaved={refresh}
+        onSaved={handleSaved}
       />
 
       <SplitEntryDialog
@@ -734,7 +901,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         dayKey={dayKey}
         timeZone={timeZone}
         categories={categories}
-        onSaved={refresh}
+        onSaved={handleSaved}
       />
 
       <Dialog

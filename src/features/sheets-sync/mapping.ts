@@ -71,6 +71,7 @@ export const mappingSchema = z.strictObject({
   categoryNotes: categoryNotesSchema.optional(),
   autoSyncOnClockIn: z.boolean().optional(),
   autoSyncOnClockOut: z.boolean().optional(),
+  autoSyncTasks: z.boolean().optional(),
 });
 
 export type SheetMapping = z.infer<typeof mappingSchema>;
@@ -107,6 +108,9 @@ export const DEFAULT_SHEET_MAPPING = {
     training: "U",
     other_tasks: "W",
   },
+  autoSyncOnClockIn: true,
+  autoSyncOnClockOut: true,
+  autoSyncTasks: true,
 } satisfies SheetMapping;
 
 /**
@@ -144,5 +148,6 @@ export const LEADGEEKS_SHEET_MAPPING = {
   },
   autoSyncOnClockIn: true,
   autoSyncOnClockOut: true,
+  autoSyncTasks: true,
 } satisfies SheetMapping;
 

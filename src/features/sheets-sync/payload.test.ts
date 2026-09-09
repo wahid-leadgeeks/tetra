@@ -658,5 +658,28 @@ describe("computeSheetBreakTimes", () => {
     const result = computeSheetBreakTimes(breaks, 60, TZ);
     expect(result).toEqual({ breakStart: "12:00", breakEnd: "13:00" });
   });
+
+  it("emits only category time and notes cells when tasksOnly is true", () => {
+    const summary = makeSummary();
+    const payload = buildSyncPayload(summary, NOTES_MAPPING, {
+      dateValueFormat: "iso",
+      rowNumber: ROW,
+      timezone: TZ,
+      tasksOnly: true,
+    });
+
+    // Does not include clockIn, clockOut, breaks, or totals
+    const a1s = payload.cells.map((c) => c.a1);
+    expect(a1s).not.toContain(`${NOTES_MAPPING.clockInColumn}${ROW}`);
+    expect(a1s).not.toContain(`${NOTES_MAPPING.clockOutColumn}${ROW}`);
+    expect(a1s).not.toContain(`${NOTES_MAPPING.breakStartColumn}${ROW}`);
+    expect(a1s).not.toContain(`${NOTES_MAPPING.breakEndColumn}${ROW}`);
+    expect(a1s).not.toContain(`${NOTES_MAPPING.dailyTotalColumn}${ROW}`);
+    expect(a1s).not.toContain(`${NOTES_MAPPING.workTotalColumn}${ROW}`);
+
+    // Includes all 8 category time cells
+    expect(a1s).toContain(`${NOTES_MAPPING.categories.website_management}${ROW}`);
+    expect(a1s).toContain(`${NOTES_MAPPING.categories.meeting}${ROW}`);
+  });
 });
 
