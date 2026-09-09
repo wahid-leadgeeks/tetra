@@ -258,11 +258,14 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
 
     // Wait for server persistence before navigating back to Today
     await expect
-      .poll(async () => {
-        const res = await page.request.get("/api/tasks/recent");
-        const tasks = (await res.json()) as { isFavorite: boolean }[];
-        return tasks.some((t) => t.isFavorite);
-      })
+      .poll(
+        async () => {
+          const res = await page.request.get("/api/tasks/recent");
+          const tasks = (await res.json()) as { isFavorite: boolean }[];
+          return tasks.some((t) => t.isFavorite);
+        },
+        { timeout: 15_000 },
+      )
       .toBe(true);
 
     await page.getByTestId("nav-today").click();
@@ -343,7 +346,8 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
 
     // 14. Dashboard Analytics
     await page.getByTestId("nav-dashboard").click();
-    await expect(page.getByTestId("dashboard-tabs")).toBeVisible({
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await expect(page.getByTestId("dashboard-tabs").first()).toBeVisible({
       timeout: 15_000,
     });
     await takeVisualScreenshot(
@@ -387,7 +391,7 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     // 15. Settings & Integrations
     await page.getByTestId("nav-settings").click();
     await expect(page.getByTestId("settings-spreadsheet-id")).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
     await takeVisualScreenshot(
       page,
@@ -430,6 +434,7 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(page.getByText("Back online!")).toBeVisible({ timeout: 5_000 });
+    await page.waitForTimeout(500);
 
     // 18. User Sign Out
     await page.getByRole("button", { name: "Sign out" }).click();

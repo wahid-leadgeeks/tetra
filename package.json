@@ -12,12 +12,13 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:import-september": "tsx --env-file=.env.local scripts/import-september-tracking.ts",
     "test:sheets-online": "tsx --env-file=.env.local scripts/test-sheets-online.ts"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "4.4.0",

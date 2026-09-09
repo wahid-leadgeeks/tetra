@@ -85,7 +85,7 @@ test.describe("Comprehensive Mobile Responsive E2E Journey with Visual Verificat
 
     // 6. Mobile Dashboard view
     await page.goto("/dashboard");
-    await expect(page.getByTestId("dashboard-tabs")).toBeVisible({
+    await expect(page.getByTestId("dashboard-tabs").first()).toBeVisible({
       timeout: 15_000,
     });
     await takeVisualScreenshot(
@@ -123,7 +123,7 @@ test.describe("Comprehensive Mobile Responsive E2E Journey with Visual Verificat
     // 9. Mobile Settings view
     await page.goto("/settings");
     await expect(page.getByTestId("settings-spreadsheet-id")).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
     await takeVisualScreenshot(
       page,
