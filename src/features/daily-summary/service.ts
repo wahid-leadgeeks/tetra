@@ -13,6 +13,7 @@ import {
   tasks,
   timeEntries,
 } from "@/server/db/schema";
+import { envelopeAttendanceSpan } from "@/features/attendance/domain";
 import { buildDaySummary } from "./domain";
 
 /** Thrown when review is attempted before the day is clocked out. */
@@ -97,6 +98,37 @@ export async function getDaySummary(
     .from(categories)
     .orderBy(asc(categories.sortOrder));
 
+  const now = new Date();
+
+  // Auto-heal attendance boundaries if tasks or breaks fall outside the current attendance span
+  if (attendanceRow) {
+    const intervals = [
+      ...entryRows.map((e) => ({ startedAt: e.startedAt, endedAt: e.endedAt })),
+      ...breakRows.map((b) => ({ startedAt: b.startedAt, endedAt: b.endedAt })),
+    ];
+    const enveloped = envelopeAttendanceSpan(attendanceRow, intervals, now);
+    if (enveloped.expanded) {
+      const updates: Partial<typeof dailyAttendance.$inferInsert> = {
+        clockInAt: enveloped.clockInAt,
+        clockOutAt: enveloped.clockOutAt,
+        updatedAt: now,
+      };
+      if (attendanceRow.reviewState === "synced") {
+        updates.reviewState = "changed_after_sync";
+      }
+      await db
+        .update(dailyAttendance)
+        .set(updates)
+        .where(eq(dailyAttendance.id, attendanceRow.id));
+
+      attendanceRow.clockInAt = enveloped.clockInAt;
+      attendanceRow.clockOutAt = enveloped.clockOutAt;
+      if (attendanceRow.reviewState === "synced") {
+        attendanceRow.reviewState = "changed_after_sync";
+      }
+    }
+  }
+
   return buildDaySummary({
     workDate: dayKey,
     tz,
@@ -112,7 +144,7 @@ export async function getDaySummary(
     entries: entryRows,
     categories: categoryRows,
     reviewStateStored: attendanceRow?.reviewState ?? "draft",
-    now: new Date(),
+    now,
   });
 }
 

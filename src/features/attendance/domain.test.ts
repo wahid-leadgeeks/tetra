@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attendanceTotals,
+  envelopeAttendanceSpan,
   hasBreakOverlap,
   isOpenBreak,
   toAttendanceDTO,
@@ -305,6 +306,78 @@ describe("hasBreakOverlap", () => {
         { excludeId: "b1" },
       ),
     ).toBe(false);
+  });
+});
+
+describe("envelopeAttendanceSpan", () => {
+  const clockIn = new Date("2026-09-08T01:20:00Z"); // 08:20 local
+  const clockOut = new Date("2026-09-08T10:00:00Z"); // 17:00 local
+  const now = new Date("2026-09-08T12:00:00Z");
+
+  it("leaves bounds unchanged when intervals are strictly inside", () => {
+    const result = envelopeAttendanceSpan(
+      { clockInAt: clockIn, clockOutAt: clockOut },
+      [
+        { startedAt: new Date("2026-09-08T02:00:00Z"), endedAt: new Date("2026-09-08T05:00:00Z") },
+        { startedAt: new Date("2026-09-08T06:00:00Z"), endedAt: new Date("2026-09-08T09:00:00Z") },
+      ],
+      now,
+    );
+    expect(result.clockInAt).toEqual(clockIn);
+    expect(result.clockOutAt).toEqual(clockOut);
+    expect(result.expanded).toBe(false);
+  });
+
+  it("expands clockInAt earlier when an entry starts before clockIn", () => {
+    const earlierStart = new Date("2026-09-08T01:00:00Z"); // 08:00 local
+    const result = envelopeAttendanceSpan(
+      { clockInAt: clockIn, clockOutAt: clockOut },
+      [{ startedAt: earlierStart, endedAt: new Date("2026-09-08T05:00:00Z") }],
+      now,
+    );
+    expect(result.clockInAt).toEqual(earlierStart);
+    expect(result.clockOutAt).toEqual(clockOut);
+    expect(result.expanded).toBe(true);
+  });
+
+  it("expands clockOutAt later when an entry ends after clockOut", () => {
+    const laterEnd = new Date("2026-09-08T11:00:00Z"); // 18:00 local
+    const result = envelopeAttendanceSpan(
+      { clockInAt: clockIn, clockOutAt: clockOut },
+      [{ startedAt: new Date("2026-09-08T10:00:00Z"), endedAt: laterEnd }],
+      now,
+    );
+    expect(result.clockInAt).toEqual(clockIn);
+    expect(result.clockOutAt).toEqual(laterEnd);
+    expect(result.expanded).toBe(true);
+  });
+
+  it("expands both clockInAt and clockOutAt when intervals extend in both directions", () => {
+    const earlierStart = new Date("2026-09-08T01:00:00Z"); // 08:00
+    const laterEnd = new Date("2026-09-08T11:00:00Z"); // 18:00
+    const result = envelopeAttendanceSpan(
+      { clockInAt: clockIn, clockOutAt: clockOut },
+      [
+        { startedAt: earlierStart, endedAt: new Date("2026-09-08T05:00:00Z") },
+        { startedAt: new Date("2026-09-08T10:00:00Z"), endedAt: laterEnd },
+      ],
+      now,
+    );
+    expect(result.clockInAt).toEqual(earlierStart);
+    expect(result.clockOutAt).toEqual(laterEnd);
+    expect(result.expanded).toBe(true);
+  });
+
+  it("leaves clockOutAt null when attendance is open but expands clockInAt if needed", () => {
+    const earlierStart = new Date("2026-09-08T01:00:00Z");
+    const result = envelopeAttendanceSpan(
+      { clockInAt: clockIn, clockOutAt: null },
+      [{ startedAt: earlierStart, endedAt: new Date("2026-09-08T05:00:00Z") }],
+      now,
+    );
+    expect(result.clockInAt).toEqual(earlierStart);
+    expect(result.clockOutAt).toBeNull();
+    expect(result.expanded).toBe(true);
   });
 });
 

@@ -114,3 +114,35 @@ export function hasBreakOverlap(
   return false;
 }
 
+/**
+ * Calculates the expanded attendance boundary [clockInAt, clockOutAt] to envelope all
+ * entry and break intervals.
+ * - clockInAt is moved earlier if any interval starts before it.
+ * - clockOutAt (when non-null) is moved later if any interval ends after it.
+ */
+export function envelopeAttendanceSpan(
+  attendance: { clockInAt: Date; clockOutAt: Date | null },
+  intervals: readonly { startedAt: Date; endedAt: Date | null }[],
+  now: Date,
+): { clockInAt: Date; clockOutAt: Date | null; expanded: boolean } {
+  let newClockIn = attendance.clockInAt;
+  let newClockOut = attendance.clockOutAt;
+  let expanded = false;
+
+  for (const item of intervals) {
+    if (item.startedAt.getTime() < newClockIn.getTime()) {
+      newClockIn = item.startedAt;
+      expanded = true;
+    }
+    if (newClockOut !== null) {
+      const itemEnd = item.endedAt ?? now;
+      if (itemEnd.getTime() > newClockOut.getTime()) {
+        newClockOut = itemEnd;
+        expanded = true;
+      }
+    }
+  }
+
+  return { clockInAt: newClockIn, clockOutAt: newClockOut, expanded };
+}
+
