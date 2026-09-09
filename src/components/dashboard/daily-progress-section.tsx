@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CategoryPieChart } from "@/components/ui/category-pie-chart";
 import { ProgressKpiCard } from "@/components/dashboard/progress-kpi-card";
 import type { DailyProgressDTO } from "@/features/dashboard/types";
 import { getCategoryTheme } from "@/lib/categories";
@@ -186,25 +187,16 @@ export function DailyProgressSection({ daily, timezone }: DailyProgressSectionPr
         </CardHeader>
 
         <CardContent className="grid gap-4">
-          {daily.workMinutes > 0 && (
-            <div
-              aria-label="Daily category time distribution"
-              className="flex h-3 w-full overflow-hidden rounded-full bg-muted/70 shadow-inner"
-            >
-              {activeCategories.map((category) => {
-                const theme = getCategoryTheme(category.key);
-                const pct = Math.max(2, (category.minutes / daily.workMinutes) * 100);
-                return (
-                  <div
-                    key={category.key}
-                    title={`${category.name}: ${formatHuman(category.minutes)} (${Math.round((category.minutes / daily.workMinutes) * 100)}%)`}
-                    style={{ width: `${pct}%` }}
-                    className={cn("h-full transition-all duration-300", theme.barColor)}
-                  />
-                );
-              })}
-            </div>
-          )}
+          <div className="flex justify-center py-2">
+            <CategoryPieChart
+              categories={daily.categoryBreakdown}
+              totalMinutes={daily.workMinutes}
+              size="md"
+              centerTitle="Daily"
+              ariaLabel="Daily category time distribution pie chart"
+              testId="daily-category-pie-chart"
+            />
+          </div>
 
           <div className="grid gap-2">
             {daily.categoryBreakdown.map((category) => {

@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CategoryPieChart } from "@/components/ui/category-pie-chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDayLong } from "@/components/timeline/time";
 import { DailyProgressSection } from "@/components/dashboard/daily-progress-section";
@@ -303,7 +304,7 @@ export function DashboardView({
                   </CardTitle>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {initialData.monthly.monthLabel}
+                  {activeMonthlyCategories.length} active • {initialData.monthly.monthLabel}
                 </span>
               </div>
               <CardDescription className="text-xs text-muted-foreground">
@@ -312,28 +313,16 @@ export function DashboardView({
             </CardHeader>
 
             <CardContent className="grid gap-4">
-              {initialData.monthly.workMinutes > 0 && (
-                <div
-                  aria-label="Monthly category distribution snapshot"
-                  className="flex h-3 w-full overflow-hidden rounded-full bg-muted/70 shadow-inner"
-                >
-                  {activeMonthlyCategories.map((category) => {
-                    const theme = getCategoryTheme(category.key);
-                    const pct = Math.max(
-                      2,
-                      (category.minutes / initialData.monthly.workMinutes) * 100,
-                    );
-                    return (
-                      <div
-                        key={category.key}
-                        title={`${category.name}: ${formatHuman(category.minutes)} (${Math.round((category.minutes / initialData.monthly.workMinutes) * 100)}%)`}
-                        style={{ width: `${pct}%` }}
-                        className={cn("h-full transition-all duration-300", theme.barColor)}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+              <div className="flex justify-center py-2">
+                <CategoryPieChart
+                  categories={initialData.monthly.categoryBreakdown}
+                  totalMinutes={initialData.monthly.workMinutes}
+                  size="md"
+                  centerTitle="Monthly"
+                  ariaLabel="Monthly category distribution snapshot pie chart"
+                  testId="dashboard-monthly-category-pie-chart"
+                />
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 {initialData.monthly.categoryBreakdown.map((category) => {
