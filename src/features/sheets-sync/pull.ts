@@ -160,13 +160,31 @@ export function allocateTimelineEntries(params: {
 
     const defaultName = defaultCategoryNames[item.categoryKey] || item.categoryKey;
     const taskCount = Math.max(1, lines.length);
+    const parsedLines = lines.map((line) => {
+      const match = line.match(/^(.*?)\s*\((\d{1,2}:\d{2})\)$/);
+      if (match) {
+        return {
+          text: match[1].trim(),
+          duration: parseClockMinutes(match[2]),
+        };
+      }
+      return { text: line, duration: null };
+    });
+
+    const hasExplicitDurations =
+      parsedLines.length > 0 &&
+      parsedLines.every((p) => p.duration !== null && p.duration > 0);
     const baseDuration = Math.floor(item.durationMinutes / taskCount);
     const remainder = item.durationMinutes % taskCount;
 
     for (let i = 0; i < taskCount; i++) {
-      let duration = baseDuration + (i === 0 ? remainder : 0);
-      const name = lines[i] || defaultName;
-      const notes = lines[i] || defaultName;
+      const parsed = parsedLines[i];
+      let duration =
+        hasExplicitDurations && parsed?.duration
+          ? parsed.duration
+          : baseDuration + (i === 0 ? remainder : 0);
+      const name = parsed?.text || defaultName;
+      const notes = parsed?.text || defaultName;
 
       while (duration > 0) {
         // If cursor has reached break start, skip ahead to break end

@@ -370,9 +370,9 @@ describe("compileCategoryNotes", () => {
     ];
     // When compiled
     const notes = compileCategoryNotes(entries);
-    // Then each category has its deduplicated notes joined by newlines
-    expect(notes.get("meeting")).toBe("Daily standup\nSprint planning");
-    expect(notes.get("training")).toBe("Security training");
+    // Then each category has its deduplicated notes joined by newlines with accumulated duration
+    expect(notes.get("meeting")).toBe("Daily standup (2:00)\nSprint planning (1:00)");
+    expect(notes.get("training")).toBe("Security training (1:00)");
     expect(notes.size).toBe(2);
   });
 
@@ -384,8 +384,45 @@ describe("compileCategoryNotes", () => {
     ];
     // When compiled
     const notes = compileCategoryNotes(entries);
-    // Then the task name is used and the blank note produces nothing extra
-    expect(notes.get("meeting")).toBe("Team meeting");
+    // Then the task name is used with formatted duration and the blank note produces nothing extra
+    expect(notes.get("meeting")).toBe("Team meeting (2:00)");
+  });
+
+  it("formats task and duration as <task/notes> (<duration>) matching spreadsheet source", () => {
+    const entries = [
+      makeEntry({
+        id: "e1",
+        categoryKey: "meeting",
+        taskName: "Infrastructure Management Training",
+        notes: null,
+        durationMinutes: 120,
+      }),
+      makeEntry({
+        id: "e2",
+        categoryKey: "meeting",
+        taskName: "Training",
+        notes: null,
+        durationMinutes: 60,
+      }),
+    ];
+    const notes = compileCategoryNotes(entries);
+    expect(notes.get("meeting")).toBe(
+      "Infrastructure Management Training (2:00)\nTraining (1:00)",
+    );
+  });
+
+  it("strips pre-existing duration in parentheses to avoid duplicates", () => {
+    const entries = [
+      makeEntry({
+        id: "e1",
+        categoryKey: "research",
+        taskName: "IT Department Functions (1:45)",
+        notes: null,
+        durationMinutes: 105,
+      }),
+    ];
+    const notes = compileCategoryNotes(entries);
+    expect(notes.get("research")).toBe("IT Department Functions (1:45)");
   });
 
   it("skips entries that are not completed", () => {
@@ -438,14 +475,14 @@ describe("buildSyncPayload notes cells", () => {
     expect(notesCells).toEqual([
       {
         a1: "S5",
-        value: "Onboarding Wahid",
+        value: "Onboarding Wahid (1:00)",
         columnLabel: "Meeting Notes",
         cellType: "notes",
         categoryKey: "meeting",
       },
       {
         a1: "U5",
-        value: "Welcoming Message from CEO",
+        value: "Welcoming Message from CEO (1:00)",
         columnLabel: "Training Notes",
         cellType: "notes",
         categoryKey: "training",
