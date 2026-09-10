@@ -268,9 +268,9 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
           </Button>
         </Card>
       ) : summary ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start w-full min-w-0">
           {/* Left Column: Totals + Category breakdown */}
-          <div className="lg:col-span-7 flex flex-col gap-6">
+          <div className="lg:col-span-7 min-w-0 w-full flex flex-col gap-6">
             {/* Totals */}
             <Card data-testid="review-totals" data-tour="review-totals" className="shadow-xs border-border/80">
               <CardHeader className="pb-4">
@@ -410,7 +410,7 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
           </div>
 
           {/* Right Column: Actions & Sync + Warnings + Sync history */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
+          <div className="lg:col-span-5 min-w-0 w-full flex flex-col gap-6">
             {/* Review & Sync Actions Card */}
             <Card className="shadow-xs border-border/80" data-tour="review-sync">
               <CardHeader className="pb-3">

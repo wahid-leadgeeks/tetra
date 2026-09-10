@@ -392,7 +392,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full min-w-0">
       <header className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
@@ -493,9 +493,9 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
 
       <Separator className="my-6" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start w-full min-w-0">
         {/* Main timeline column */}
-        <div className="lg:col-span-8 flex flex-col gap-6" data-tour="timeline-main">
+        <div className="lg:col-span-8 min-w-0 w-full flex flex-col gap-6" data-tour="timeline-main">
           {loading ? (
         <TimelineSkeleton />
       ) : error ? (
@@ -534,7 +534,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           </Button>
         </Card>
       ) : (
-        <ol className="grid gap-3" data-testid="timeline">
+        <ol className="grid gap-3 min-w-0 w-full" data-testid="timeline">
           {items.map((item, index) => {
             const gapBefore = gapAfter.get(index - 1) ?? null;
             return (
@@ -546,7 +546,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                 }
               >
                 {gapBefore ? (
-                  <li className="flex items-center gap-3 py-1">
+                  <li className="flex items-center gap-3 py-1 min-w-0 w-full">
                     <div
                       aria-hidden
                       className="h-px flex-1 border-t border-dashed border-border"
@@ -574,7 +574,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                   </li>
                 ) : null}
               {item.kind === "entry" ? (
-                <li>
+                <li className="min-w-0 w-full">
                   {(() => {
                     const theme = getCategoryTheme(
                       item.entry.categoryKey || item.entry.categoryName,
@@ -583,11 +583,11 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                       <Card
                         size="sm"
                         className={cn(
-                          "gap-0 border-l-4 px-4 py-4 sm:px-5 shadow-xs transition-colors",
+                          "gap-0 border-l-4 px-4 py-4 sm:px-5 shadow-xs transition-colors min-w-0 w-full overflow-hidden",
                           theme.borderClass,
                         )}
                       >
-                        <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="flex w-full min-w-0 items-start gap-3 sm:gap-4">
                           <p className="w-12 shrink-0 pt-0.5 text-sm font-medium tabular-nums text-muted-foreground">
                             {formatClock(item.entry.startedAt, timeZone)}
                           </p>
@@ -599,11 +599,11 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                                 size="sm"
                               />
                             </div>
-                            <p className="truncate font-heading text-base font-semibold text-foreground">
+                            <p className="font-heading text-base font-semibold text-foreground break-words [overflow-wrap:anywhere]">
                               {item.entry.taskName}
                             </p>
                             {item.entry.notes && (
-                              <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                              <p className="mt-0.5 text-sm text-muted-foreground break-words line-clamp-3 [overflow-wrap:anywhere]">
                                 {item.entry.notes}
                               </p>
                             )}
@@ -664,12 +664,12 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                   })()}
                 </li>
               ) : (
-                <li>
+                <li className="min-w-0 w-full">
                   <Card
                     size="sm"
-                    className="gap-0 border-l-4 border-l-sky-500 bg-sky-500/[0.04] border-sky-500/20 px-4 py-3 sm:px-5 shadow-xs transition-colors"
+                    className="gap-0 border-l-4 border-l-sky-500 bg-sky-500/[0.04] border-sky-500/20 px-4 py-3 sm:px-5 shadow-xs transition-colors min-w-0 w-full overflow-hidden"
                   >
-                    <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex w-full min-w-0 items-center gap-3 sm:gap-4">
                       <p className="w-12 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
                         {formatClock(item.breakItem.startedAt, timeZone)}
                       </p>
@@ -732,7 +732,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         </div>
 
         {/* Right column: Day Overview Card */}
-        <div className="lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-8">
+        <div className="lg:col-span-4 min-w-0 w-full flex flex-col gap-6 lg:sticky lg:top-8">
           <Card className="shadow-xs border-border/80" data-testid="timeline-summary">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -913,7 +913,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete this entry?</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words [overflow-wrap:anywhere]">
               {deleteEntry
                 ? `${deleteEntry.taskName} · ${formatClock(deleteEntry.startedAt, timeZone)}${
                     deleteEntry.endedAt

@@ -44,9 +44,9 @@ export default async function AppLayout({
         </div>
       </aside>
 
-      <div className="md:pl-64">
+      <div className="md:pl-64 min-w-0">
         <NetworkStatusBanner />
-        <main className="mx-auto w-full max-w-5xl px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl">
+        <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl">
           {children}
         </main>
       </div>
