@@ -6,7 +6,7 @@
  * - at most one open break at a time
  * Durations are always computed server-side from stored timestamps.
  */
-import { and, eq, gte, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { accumulatePause } from "@/features/activities/entry-helpers";
 import { todayKey, zonedDayEnd, zonedDayStart } from "@/lib/time";
 import type { AttendanceDTO, BreakDTO } from "@/lib/types";
@@ -65,18 +65,122 @@ export async function getAttendance(
   return refreshDTO(rows[0], new Date());
 }
 
+/**
+ * Automatically closes any open attendance rows from previous days (workDate < todayKey).
+ * Guarantees that unclosed shifts from previous days do not block tracking today.
+ * Sets clockOutAt to the latest task/break end timestamp on that day (or clockInAt if none).
+ */
+export async function autoClosePastAttendances(
+  userId: string,
+  timezone: string,
+): Promise<void> {
+  const today = todayKey(timezone);
+  const pastOpen = await db
+    .select()
+    .from(dailyAttendance)
+    .where(
+      and(
+        eq(dailyAttendance.userId, userId),
+        eq(dailyAttendance.status, "open"),
+        lt(dailyAttendance.workDate, today),
+      ),
+    );
+
+  for (const open of pastOpen) {
+    const dayStart = zonedDayStart(open.workDate, timezone);
+    const dayEnd = zonedDayEnd(open.workDate, timezone);
+
+    // 1. Close any open breaks
+    await db
+      .update(breakEntries)
+      .set({ endedAt: dayEnd })
+      .where(
+        and(
+          eq(breakEntries.attendanceId, open.id),
+          isNull(breakEntries.endedAt),
+        ),
+      );
+
+    // 2. Complete active/paused tasks from that day
+    await db
+      .update(timeEntries)
+      .set({
+        status: "completed",
+        endedAt: dayEnd,
+        pausedAt: null,
+      })
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          inArray(timeEntries.status, ["active", "paused"]),
+          gte(timeEntries.startedAt, dayStart),
+          lte(timeEntries.startedAt, dayEnd),
+        ),
+      );
+
+    // 3. Find latest task or break end to set effective clockOutAt
+    const dayEntries = await db
+      .select({ startedAt: timeEntries.startedAt, endedAt: timeEntries.endedAt })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          gte(timeEntries.startedAt, dayStart),
+          lte(timeEntries.startedAt, dayEnd),
+        ),
+      );
+
+    const dayBreaks = await db
+      .select({ startedAt: breakEntries.startedAt, endedAt: breakEntries.endedAt })
+      .from(breakEntries)
+      .where(eq(breakEntries.attendanceId, open.id));
+
+    let effectiveClockIn = open.clockInAt;
+    let effectiveClockOut = open.clockInAt;
+
+    for (const e of dayEntries) {
+      if (e.startedAt.getTime() < effectiveClockIn.getTime()) {
+        effectiveClockIn = e.startedAt;
+      }
+      if (e.endedAt && e.endedAt.getTime() > effectiveClockOut.getTime()) {
+        effectiveClockOut = e.endedAt;
+      }
+    }
+
+    for (const b of dayBreaks) {
+      if (b.startedAt.getTime() < effectiveClockIn.getTime()) {
+        effectiveClockIn = b.startedAt;
+      }
+      if (b.endedAt && b.endedAt.getTime() > effectiveClockOut.getTime()) {
+        effectiveClockOut = b.endedAt;
+      }
+    }
+
+    await db
+      .update(dailyAttendance)
+      .set({
+        clockInAt: effectiveClockIn,
+        clockOutAt: effectiveClockOut,
+        status: "closed",
+        updatedAt: new Date(),
+      })
+      .where(eq(dailyAttendance.id, open.id));
+  }
+}
+
 /** Attendance for today in the user's timezone, or null. */
 export async function getAttendanceToday(
   userId: string,
   timezone: string,
 ): Promise<AttendanceDTO | null> {
+  await autoClosePastAttendances(userId, timezone);
   return getAttendance(userId, todayKey(timezone));
 }
 
 /**
  * Clock in: creates today's open attendance row.
- * Throws "Already clocked in" when an open attendance exists on any day,
- * or today already has an attendance row (open or closed).
+ * Automatically closes any unclosed attendance from previous days.
+ * Throws "Already clocked in" when today already has an attendance row (open or closed).
  */
 export async function clockIn(
   userId: string,
@@ -84,6 +188,10 @@ export async function clockIn(
 ): Promise<AttendanceDTO> {
   const now = new Date();
   const workDate = todayKey(timezone);
+
+  // Auto-close any lingering unclosed shifts from previous days
+  await autoClosePastAttendances(userId, timezone);
+
   const conflict = await db
     .select({ id: dailyAttendance.id })
     .from(dailyAttendance)

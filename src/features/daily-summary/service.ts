@@ -4,7 +4,7 @@
  */
 import { and, asc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import type { DaySummaryDTO } from "@/lib/types";
-import { zonedDayEnd, zonedDayStart } from "@/lib/time";
+import { todayKey, zonedDayEnd, zonedDayStart } from "@/lib/time";
 import { db } from "@/server/db";
 import {
   breakEntries,
@@ -14,6 +14,7 @@ import {
   timeEntries,
 } from "@/server/db/schema";
 import { envelopeAttendanceSpan } from "@/features/attendance/domain";
+import { autoClosePastAttendances } from "@/features/attendance/service";
 import { buildDaySummary } from "./domain";
 
 /** Thrown when review is attempted before the day is clocked out. */
@@ -29,6 +30,10 @@ export async function getDaySummary(
   dayKey: string,
   tz: string,
 ): Promise<DaySummaryDTO> {
+  if (dayKey === todayKey(tz)) {
+    await autoClosePastAttendances(userId, tz);
+  }
+
   const dayStart = zonedDayStart(dayKey, tz);
   const dayEnd = zonedDayEnd(dayKey, tz);
 
