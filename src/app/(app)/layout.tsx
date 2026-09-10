@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { MobileNav, SidebarNav } from "@/components/app-nav/app-nav";
+import { HeaderNav } from "@/components/app-nav/header-nav";
 import { SignOutButton } from "@/components/app-nav/sign-out-button";
 import { Wordmark } from "@/components/app-nav/wordmark";
 import { TourProvider } from "@/components/guide-tour/tour-provider";
@@ -24,10 +25,12 @@ export default async function AppLayout({
   }
 
   const email = session.user.email ?? "";
+  const name = session.user.name ?? email.split("@")[0] ?? "User";
+  const timezone = session.user.timezone ?? "Asia/Jakarta";
 
   return (
     <TourProvider>
-      <div className="min-h-svh">
+      <div className="min-h-svh flex flex-col">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         <div className="px-6 pt-7 pb-7">
           <Wordmark />
@@ -44,9 +47,10 @@ export default async function AppLayout({
         </div>
       </aside>
 
-      <div className="md:pl-64 min-w-0">
+      <div className="md:pl-64 min-w-0 flex flex-col flex-1">
         <NetworkStatusBanner />
-        <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl">
+        <HeaderNav email={email} name={name} timezone={timezone} />
+        <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl flex-1">
           {children}
         </main>
       </div>
