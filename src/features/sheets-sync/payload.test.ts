@@ -659,6 +659,35 @@ describe("computeSheetBreakTimes", () => {
     expect(result).toEqual({ breakStart: "12:00", breakEnd: "13:00" });
   });
 
+  it("preserves actual timestamps for a midday break crossing noon (e.g. Friday 11:25 to 12:25)", () => {
+    // Single 60m break at 11:25 Jakarta (04:25 UTC)
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-11T04:25:00Z", // 11:25 Jakarta
+        endedAt: "2026-09-11T05:25:00Z", // 12:25 Jakarta
+        durationMinutes: 60,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 60, TZ);
+    expect(result).toEqual({ breakStart: "11:25", breakEnd: "12:25" });
+  });
+
+  it("preserves actual timestamps for an extended Friday break (11:30 to 13:00)", () => {
+    // Single 90m break at 11:30 Jakarta (04:30 UTC)
+    const breaks: BreakDTO[] = [
+      {
+        id: "b1",
+        startedAt: "2026-09-04T04:30:00Z", // 11:30 Jakarta
+        endedAt: "2026-09-04T06:00:00Z", // 13:00 Jakarta
+        durationMinutes: 90,
+      },
+    ];
+    const result = computeSheetBreakTimes(breaks, 90, TZ);
+    expect(result).toEqual({ breakStart: "11:30", breakEnd: "13:00" });
+  });
+
+
   it("emits only category time and notes cells when tasksOnly is true", () => {
     const summary = makeSummary();
     const payload = buildSyncPayload(summary, NOTES_MAPPING, {

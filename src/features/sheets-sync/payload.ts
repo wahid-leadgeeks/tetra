@@ -274,14 +274,9 @@ export function computeSheetBreakTimes(
     return { breakStart: "", breakEnd: "" };
   }
 
-  const hasBreakBeforeNoon = breaks.some((b) => {
-    const clock = clockValue(b.startedAt, timezone);
-    if (!clock) return false;
-    const [h] = clock.split(":").map(Number);
-    return h !== undefined && !Number.isNaN(h) && h < 12;
-  });
-
-  if (hasBreakBeforeNoon || breaks.length > 1) {
+  // If there are multiple breaks, unite them starting from 12:00
+  // to avoid over-deducting the wall-clock span between separate breaks
+  if (breaks.length > 1) {
     const startMinutes = 12 * 60; // 12:00 in minutes
     const endMinutes = startMinutes + totalBreakMinutes;
     const endHour = Math.floor(endMinutes / 60) % 24;
@@ -293,9 +288,38 @@ export function computeSheetBreakTimes(
     };
   }
 
+  // Single break:
+  const single = breaks[0];
+  const startClock = clockValue(single?.startedAt, timezone);
+  const endClock = clockValue(single?.endedAt, timezone);
+
+  // If it is a micro-pause completely before noon (duration < 30m and ends before 12:00),
+  // unite it starting from 12:00 as requested for morning micro-pauses.
+  // But if it crosses noon (e.g. Friday prayer break 11:25-12:25) or is a full break (>= 30m),
+  // preserve the actual break start and end times.
+  const isMicroPauseBeforeNoon = (() => {
+    if (totalBreakMinutes >= 30) return false;
+    if (!endClock) return false;
+    const [endH] = endClock.split(":").map(Number);
+    return endH !== undefined && !Number.isNaN(endH) && endH < 12;
+  })();
+
+  if (isMicroPauseBeforeNoon) {
+    const startMinutes = 12 * 60;
+    const endMinutes = startMinutes + totalBreakMinutes;
+    const endHour = Math.floor(endMinutes / 60) % 24;
+    const endMinute = endMinutes % 60;
+    const breakEnd = `${endHour}:${String(endMinute).padStart(2, "0")}`;
+    return {
+      breakStart: "12:00",
+      breakEnd,
+    };
+  }
+
   return {
-    breakStart: clockValue(breaks[0]?.startedAt, timezone),
-    breakEnd: clockValue(breaks[0]?.endedAt, timezone),
+    breakStart: startClock,
+    breakEnd: endClock,
   };
 }
+
 
