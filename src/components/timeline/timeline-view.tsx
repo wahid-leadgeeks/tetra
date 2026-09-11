@@ -17,6 +17,7 @@ import {
   Coffee,
   Download,
   Loader2,
+  LogOut,
   Pencil,
   Plus,
   Scissors,
@@ -45,6 +46,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
 import { DayNavigator } from "@/components/timeline/day-navigator";
+import { EditAttendanceDialog } from "@/components/timeline/edit-attendance-dialog";
 import { EntryDialog, type EntryPrefill } from "@/components/timeline/entry-dialog";
 import { SplitEntryDialog } from "@/components/timeline/split-entry-dialog";
 import { formatClock } from "@/components/timeline/time";
@@ -191,6 +193,24 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const [syncing, setSyncing] = useState(false);
   const [autoSyncTasks, setAutoSyncTasks] = useState(true);
   const [togglingAutoSync, setTogglingAutoSync] = useState(false);
+  const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
+  const [clockingOut, setClockingOut] = useState(false);
+
+  async function handleQuickClockOut() {
+    setClockingOut(true);
+    try {
+      await apiFetch(`/api/days/${dayKey}/attendance`, {
+        method: "POST",
+        body: JSON.stringify({ action: "clock_out" }),
+      });
+      toast.success("Workday closed.");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to clock out.");
+    } finally {
+      setClockingOut(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -772,18 +792,75 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
               </div>
 
               {/* Attendance */}
-              <div className="flex items-center justify-between text-xs py-2 px-3 rounded-lg border border-border/60 bg-muted/20">
-                <span className="font-medium text-muted-foreground">Attendance</span>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {summary?.attendance
-                    ? `${formatClock(summary.attendance.clockInAt, timeZone)} → ${
-                        summary.attendance.clockOutAt
-                          ? formatClock(summary.attendance.clockOutAt, timeZone)
-                          : "Open"
-                      }`
-                    : "No attendance"}
-                </span>
-              </div>
+              {summary?.attendance && !summary.attendance.clockOutAt ? (
+                <div className="flex flex-col gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.04] shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                      <span className="text-xs font-semibold text-foreground">Attendance</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400">
+                      {formatClock(summary.attendance.clockInAt, timeZone)} → Open
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="flex-1 h-8 text-xs font-medium cursor-pointer"
+                      onClick={() => void handleQuickClockOut()}
+                      disabled={clockingOut}
+                      data-testid="timeline-clockout-button"
+                    >
+                      <LogOut className="size-3.5 mr-1" />
+                      {clockingOut ? "Closing…" : "Clock out"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2.5 text-xs cursor-pointer"
+                      onClick={() => setAttendanceDialogOpen(true)}
+                      data-testid="timeline-edit-attendance"
+                    >
+                      <Pencil className="size-3 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs py-2 px-3 rounded-lg border border-border/60 bg-muted/20">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">Attendance</span>
+                    {summary?.attendance && (
+                      <span className="size-1.5 rounded-full bg-emerald-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {summary?.attendance
+                        ? `${formatClock(summary.attendance.clockInAt, timeZone)} → ${
+                            summary.attendance.clockOutAt
+                              ? formatClock(summary.attendance.clockOutAt, timeZone)
+                              : "Open"
+                          }`
+                        : "No attendance"}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                      onClick={() => setAttendanceDialogOpen(true)}
+                      title={summary?.attendance ? "Edit attendance" : "Set attendance"}
+                      aria-label="Manage attendance"
+                    >
+                      {summary?.attendance ? (
+                        <Pencil className="size-3" />
+                      ) : (
+                        <Plus className="size-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Day's Categories */}
               {summary && summary.byCategory.some((c) => c.minutes > 0) ? (
@@ -981,6 +1058,16 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditAttendanceDialog
+        open={attendanceDialogOpen}
+        onOpenChange={setAttendanceDialogOpen}
+        dayKey={dayKey}
+        timeZone={timeZone}
+        attendance={summary?.attendance ?? null}
+        timeEntries={summary?.timeEntries ?? []}
+        onSuccess={refresh}
+      />
     </div>
   );
 }

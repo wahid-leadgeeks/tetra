@@ -9,7 +9,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarRange,
+  Clock,
   Download,
+  LogOut,
+  Pencil,
   TriangleAlert,
   Upload,
   Wrench,
@@ -25,6 +28,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CategoryPieChart } from "@/components/ui/category-pie-chart";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
 import { DayNavigator } from "@/components/timeline/day-navigator";
@@ -35,6 +46,7 @@ import {
 } from "@/components/timeline/time";
 import { SyncPreviewDialog } from "@/components/reports/sync-preview-dialog";
 import { FileSyncDialog } from "@/components/reports/file-sync-dialog";
+import { EditAttendanceDialog } from "@/components/timeline/edit-attendance-dialog";
 import { getCategoryTheme } from "@/lib/categories";
 import { formatHuman } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -113,6 +125,9 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
   const [marking, setMarking] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
+  const [clockingOut, setClockingOut] = useState(false);
+  const [clockOutConfirmOpen, setClockOutConfirmOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,7 +172,48 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
     summary?.reviewState === "ready" ||
     summary?.reviewState === "changed_after_sync";
 
+  async function handleQuickClockOut() {
+    setClockingOut(true);
+    try {
+      await apiFetch(`/api/days/${dayKey}/attendance`, {
+        method: "POST",
+        body: JSON.stringify({ action: "clock_out" }),
+      });
+      toast.success("Workday closed.");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to clock out.");
+    } finally {
+      setClockingOut(false);
+    }
+  }
+
+  async function handleClockOutAndReview() {
+    setClockingOut(true);
+    try {
+      await apiFetch(`/api/days/${dayKey}/attendance`, {
+        method: "POST",
+        body: JSON.stringify({ action: "clock_out" }),
+      });
+      await apiFetch<{ reviewState: ReviewState }>(
+        `/api/days/${dayKey}/review`,
+        { method: "POST" },
+      );
+      toast.success("Workday closed and marked reviewed.");
+      setClockOutConfirmOpen(false);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not review.");
+    } finally {
+      setClockingOut(false);
+    }
+  }
+
   async function handleMarkReviewed() {
+    if (summary?.attendance && !summary.attendance.clockOutAt) {
+      setClockOutConfirmOpen(true);
+      return;
+    }
     setMarking(true);
     try {
       await apiFetch<{ reviewState: ReviewState }>(
@@ -307,22 +363,61 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
                 </div>
 
                 {/* Attendance row */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Attendance
-                  </p>
-                  <p
-                    className="font-heading text-sm sm:text-base font-semibold tabular-nums text-foreground"
-                    data-testid="review-attendance"
-                  >
-                    {attendance
-                      ? `${formatClock(attendance.clockInAt, timeZone)} → ${
-                          attendance.clockOutAt
-                            ? formatClock(attendance.clockOutAt, timeZone)
-                            : "Open"
-                        }`
-                      : "No attendance recorded"}
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Attendance
+                    </p>
+                    {attendance && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] px-1.5 py-0 h-4.5 font-medium",
+                          !attendance.clockOutAt
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+                        )}
+                      >
+                        {!attendance.clockOutAt ? "Open" : "Closed"}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p
+                      className="font-heading text-sm sm:text-base font-semibold tabular-nums text-foreground"
+                      data-testid="review-attendance"
+                    >
+                      {attendance
+                        ? `${formatClock(attendance.clockInAt, timeZone)} → ${
+                            attendance.clockOutAt
+                              ? formatClock(attendance.clockOutAt, timeZone)
+                              : "Open"
+                          }`
+                        : "No attendance recorded"}
+                    </p>
+                    {attendance && !attendance.clockOutAt && (
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 text-xs font-medium cursor-pointer"
+                        onClick={() => void handleQuickClockOut()}
+                        disabled={clockingOut}
+                        data-testid="review-quick-clockout"
+                      >
+                        <LogOut className="size-3 mr-1" />
+                        {clockingOut ? "Closing…" : "Clock out"}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                      onClick={() => setAttendanceDialogOpen(true)}
+                      title={attendance ? "Edit attendance" : "Set attendance"}
+                      aria-label="Manage attendance"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -505,12 +600,26 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
                       </li>
                     ))}
                   </ul>
-                  <Button asChild variant="outline" className="h-10 w-fit px-4 text-xs font-medium">
-                    <Link href={`/timeline?date=${dayKey}`}>
-                      <Wrench aria-hidden className="size-3.5" />
-                      Fix issues on Timeline
-                    </Link>
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {summary.warnings.some((w) => w.type === "missing_clock_out") && (
+                      <Button
+                        size="sm"
+                        className="h-9 px-3 text-xs font-medium cursor-pointer"
+                        onClick={() => void handleQuickClockOut()}
+                        disabled={clockingOut}
+                        data-testid="review-clockout-action"
+                      >
+                        <LogOut aria-hidden className="size-3.5 mr-1.5" />
+                        {clockingOut ? "Closing…" : "Clock out now"}
+                      </Button>
+                    )}
+                    <Button asChild variant="outline" className="h-9 px-3 text-xs font-medium">
+                      <Link href={`/timeline?date=${dayKey}`}>
+                        <Wrench aria-hidden className="size-3.5 mr-1.5" />
+                        Fix issues on Timeline
+                      </Link>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -572,6 +681,53 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
         onOpenChange={setFileSyncOpen}
         dayKey={dayKey}
         onSynced={refresh}
+      />
+
+      {/* Clock out before reviewing confirmation */}
+      <Dialog open={clockOutConfirmOpen} onOpenChange={setClockOutConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="size-5 text-primary" />
+              Clock out before reviewing?
+            </DialogTitle>
+            <DialogDescription>
+              Your attendance for this day is currently open (
+              {attendance ? formatClock(attendance.clockInAt, timeZone) : "08:00"} → Open).
+              To review and sync this day, the shift must be closed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 text-xs text-muted-foreground leading-relaxed">
+            Would you like to clock out now at the end of your activities and mark the day reviewed?
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setClockOutConfirmOpen(false);
+                setAttendanceDialogOpen(true);
+              }}
+            >
+              Set Custom Times
+            </Button>
+            <Button
+              onClick={() => void handleClockOutAndReview()}
+              disabled={clockingOut}
+            >
+              {clockingOut ? "Closing…" : "Clock Out & Review"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <EditAttendanceDialog
+        open={attendanceDialogOpen}
+        onOpenChange={setAttendanceDialogOpen}
+        dayKey={dayKey}
+        timeZone={timeZone}
+        attendance={attendance}
+        timeEntries={summary?.timeEntries ?? []}
+        onSuccess={refresh}
       />
     </div>
   );

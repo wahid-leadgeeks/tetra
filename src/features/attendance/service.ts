@@ -396,6 +396,217 @@ export async function clockOut(
   return refreshDTO(updated[0], now);
 }
 
+export interface UpdateAttendanceInput {
+  clockInAt?: Date | string | null;
+  clockOutAt?: Date | string | null;
+  status?: "open" | "closed";
+  action?: "clock_in" | "clock_out" | "update";
+}
+
+/**
+ * Updates or creates attendance times (clock-in, clock-out, status) for a given workDate.
+ * Auto-envelopes all day's tasks and breaks, auto-closes open breaks and active tasks on clock-out.
+ */
+export async function updateAttendanceTimes(
+  userId: string,
+  workDate: string,
+  timezone: string,
+  input: UpdateAttendanceInput,
+): Promise<AttendanceDTO> {
+  const dayStart = zonedDayStart(workDate, timezone);
+  const dayEnd = zonedDayEnd(workDate, timezone);
+  const now = new Date();
+
+  // Find existing attendance
+  const existingRows = await db
+    .select()
+    .from(dailyAttendance)
+    .where(
+      and(
+        eq(dailyAttendance.userId, userId),
+        eq(dailyAttendance.workDate, workDate),
+      ),
+    )
+    .limit(1);
+
+  const existing = existingRows[0] ?? null;
+
+  // Query entries and breaks for boundaries
+  const dayEntries = await db
+    .select({ startedAt: timeEntries.startedAt, endedAt: timeEntries.endedAt })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        gte(timeEntries.startedAt, dayStart),
+        lte(timeEntries.startedAt, dayEnd),
+      ),
+    );
+
+  const dayBreaks = existing
+    ? await db
+        .select({ startedAt: breakEntries.startedAt, endedAt: breakEntries.endedAt })
+        .from(breakEntries)
+        .where(eq(breakEntries.attendanceId, existing.id))
+    : [];
+
+  let minEventStart: Date | null = null;
+  let maxEventEnd: Date | null = null;
+
+  for (const e of dayEntries) {
+    if (!minEventStart || e.startedAt.getTime() < minEventStart.getTime()) {
+      minEventStart = e.startedAt;
+    }
+    const end = e.endedAt ?? now;
+    if (!maxEventEnd || end.getTime() > maxEventEnd.getTime()) {
+      maxEventEnd = end;
+    }
+  }
+
+  for (const b of dayBreaks) {
+    if (!minEventStart || b.startedAt.getTime() < minEventStart.getTime()) {
+      minEventStart = b.startedAt;
+    }
+    const end = b.endedAt ?? now;
+    if (!maxEventEnd || end.getTime() > maxEventEnd.getTime()) {
+      maxEventEnd = end;
+    }
+  }
+
+  // Parse input timestamps if provided
+  let clockInDate: Date | null = input.clockInAt
+    ? typeof input.clockInAt === "string"
+      ? new Date(input.clockInAt)
+      : input.clockInAt
+    : null;
+
+  let clockOutDate: Date | null = input.clockOutAt
+    ? typeof input.clockOutAt === "string"
+      ? new Date(input.clockOutAt)
+      : input.clockOutAt
+    : null;
+
+  if (input.action === "clock_out") {
+    if (!clockOutDate) {
+      clockOutDate = maxEventEnd ?? now;
+    }
+    input.status = "closed";
+  } else if (input.action === "clock_in") {
+    if (!clockInDate) {
+      clockInDate = minEventStart ?? now;
+    }
+    input.status = "open";
+  }
+
+  if (!existing) {
+    const finalClockIn = clockInDate ?? minEventStart ?? now;
+    let finalClockOut = clockOutDate;
+    const finalStatus: "open" | "closed" =
+      input.status ?? (finalClockOut ? "closed" : "open");
+
+    if (finalStatus === "closed" && !finalClockOut) {
+      finalClockOut =
+        maxEventEnd && maxEventEnd.getTime() > finalClockIn.getTime()
+          ? maxEventEnd
+          : now;
+    }
+
+    const [created] = await db
+      .insert(dailyAttendance)
+      .values({
+        userId,
+        workDate,
+        clockInAt: finalClockIn,
+        clockOutAt: finalStatus === "closed" ? finalClockOut : null,
+        status: finalStatus,
+        reviewState: finalStatus === "closed" ? "ready" : "draft",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    return refreshDTO(created, now);
+  }
+
+  // Existing attendance updates
+  let finalClockIn = clockInDate ?? existing.clockInAt;
+  let finalClockOut =
+    input.clockOutAt !== undefined ? clockOutDate : existing.clockOutAt;
+  const finalStatus =
+    input.status ?? (finalClockOut !== null ? "closed" : existing.status);
+
+  if (finalStatus === "closed" && !finalClockOut) {
+    finalClockOut =
+      maxEventEnd && maxEventEnd.getTime() > finalClockIn.getTime()
+        ? maxEventEnd
+        : now;
+  }
+
+  // Enveloping checks
+  if (minEventStart && finalClockIn.getTime() > minEventStart.getTime()) {
+    finalClockIn = minEventStart;
+  }
+  if (finalStatus === "closed" && finalClockOut) {
+    if (maxEventEnd && finalClockOut.getTime() < maxEventEnd.getTime()) {
+      finalClockOut = maxEventEnd;
+    }
+    if (finalClockOut.getTime() < finalClockIn.getTime()) {
+      finalClockOut = finalClockIn;
+    }
+  }
+
+  // If closing attendance:
+  if (finalStatus === "closed") {
+    await db
+      .update(breakEntries)
+      .set({ endedAt: finalClockOut ?? now })
+      .where(
+        and(
+          eq(breakEntries.attendanceId, existing.id),
+          isNull(breakEntries.endedAt),
+        ),
+      );
+
+    await db
+      .update(timeEntries)
+      .set({
+        endedAt: finalClockOut ?? now,
+        status: "completed",
+        pausedAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          inArray(timeEntries.status, ["active", "paused"]),
+          gte(timeEntries.startedAt, dayStart),
+          lte(timeEntries.startedAt, dayEnd),
+        ),
+      );
+  }
+
+  const reviewState =
+    existing.reviewState === "synced"
+      ? "changed_after_sync"
+      : finalStatus === "closed"
+        ? "ready"
+        : "draft";
+
+  const [updated] = await db
+    .update(dailyAttendance)
+    .set({
+      clockInAt: finalClockIn,
+      clockOutAt: finalStatus === "closed" ? finalClockOut : null,
+      status: finalStatus,
+      reviewState,
+      updatedAt: now,
+    })
+    .where(eq(dailyAttendance.id, existing.id))
+    .returning();
+
+  return refreshDTO(updated, now);
+}
+
 /**
  * Start a break on the open attendance.
  * Throws "Not clocked in" / "Already on break".
