@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Calendar,
   CalendarDays,
   Clock,
   LayoutDashboard,
@@ -62,13 +63,21 @@ export const NAV_ITEMS: readonly NavItem[] = [
     shortcut: "5",
   },
   {
+    href: "/calendar",
+    label: "Calendar",
+    icon: Calendar,
+    testId: "nav-calendar",
+    shortcut: "6",
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: Settings,
     testId: "nav-settings",
-    shortcut: "6",
+    shortcut: "7",
   },
 ];
+
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
@@ -136,7 +145,7 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-6 pb-[env(safe-area-inset-bottom)]">
+      <ul className="mx-auto grid max-w-lg grid-cols-7 pb-[env(safe-area-inset-bottom)]">
         {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item.href);
           return (

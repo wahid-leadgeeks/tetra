@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -211,3 +212,39 @@ export const calendarConfigs = pgTable("calendar_configs", {
     .notNull()
     .defaultNow(),
 });
+
+export const calendarEvents = pgTable(
+  "calendar_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    calendarId: text("calendar_id").notNull().default("primary"),
+    googleEventId: text("google_event_id"),
+    title: text("title").notNull(),
+    description: text("description"),
+    categoryId: uuid("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
+    startAt: timestamp("start_at", { withTimezone: true, mode: "date" }).notNull(),
+    endAt: timestamp("end_at", { withTimezone: true, mode: "date" }).notNull(),
+    allDay: boolean("all_day").notNull().default(false),
+    meetUrl: text("meet_url"),
+    guests: jsonb("guests"),
+    sendUpdates: text("send_updates").notNull().default("all"),
+    htmlLink: text("html_link"),
+    status: text("status").notNull().default("confirmed"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("calendar_events_user_start_idx").on(t.userId, t.startAt),
+    unique("calendar_events_user_google_event_unique").on(t.userId, t.googleEventId),
+  ],
+);
+

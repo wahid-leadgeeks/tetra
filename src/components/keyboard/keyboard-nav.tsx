@@ -13,8 +13,10 @@ export const SCREEN_SHORTCUTS: Readonly<Record<string, string>> = {
   "3": "/timeline",
   "4": "/tasks",
   "5": "/reports",
-  "6": "/settings",
+  "6": "/calendar",
+  "7": "/settings",
 };
+
 
 /**
  * Shared ignore contract: keys do nothing while the user is typing

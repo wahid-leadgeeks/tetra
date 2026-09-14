@@ -56,3 +56,56 @@ export interface ImportCalendarEventsResultDTO {
   createdTaskIds: string[];
   createdEntryIds: string[];
 }
+
+export interface CalendarGuestDTO {
+  email: string;
+  displayName?: string | null;
+  responseStatus?: "needsAction" | "declined" | "tentative" | "accepted" | null;
+}
+
+export interface CalendarEventDTO {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  categoryId: string | null;
+  categoryKey?: string | null;
+  categoryName?: string | null;
+  startAt: string; // ISO 8601
+  endAt: string;   // ISO 8601
+  allDay: boolean;
+  calendarId: string;
+  googleEventId: string | null;
+  meetUrl: string | null;
+  guests: CalendarGuestDTO[];
+  sendUpdates: "all" | "none";
+  htmlLink: string | null;
+  status: "confirmed" | "cancelled";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCalendarEventInput {
+  title: string;
+  description?: string | null;
+  categoryId?: string | null;
+  startAt: string;
+  endAt: string;
+  allDay?: boolean;
+  guests?: Array<string | { email: string; displayName?: string }>;
+  createMeet?: boolean;
+  sendUpdates?: "all" | "none";
+}
+
+export interface UpdateCalendarEventInput {
+  title?: string;
+  description?: string | null;
+  categoryId?: string | null;
+  startAt?: string;
+  endAt?: string;
+  allDay?: boolean;
+  guests?: Array<string | { email: string; displayName?: string }>;
+  createMeet?: boolean;
+  sendUpdates?: "all" | "none";
+}
+

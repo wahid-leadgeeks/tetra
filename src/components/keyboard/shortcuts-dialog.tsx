@@ -36,7 +36,7 @@ const SHORTCUT_ROWS: readonly ShortcutRow[] = [
         <span aria-hidden="true" className="text-muted-foreground">
           –
         </span>
-        <Kbd>6</Kbd>
+        <Kbd>7</Kbd>
       </>
     ),
     action: "Go to screen",

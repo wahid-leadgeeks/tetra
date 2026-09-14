@@ -138,6 +138,13 @@ export interface RawCalendarEvent {
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
   status?: string;
+  meetUrl?: string | null;
+  guests?: Array<{
+    email: string;
+    displayName?: string | null;
+    responseStatus?: "needsAction" | "declined" | "tentative" | "accepted" | null;
+  }>;
+  htmlLink?: string | null;
 }
 
 /**
@@ -168,22 +175,264 @@ export async function fetchCalendarEvents(options: {
     const items = res.data.items ?? [];
     return items
       .filter((item) => item.status !== "cancelled" && item.summary)
-      .map((item) => ({
-        id: item.id ?? Math.random().toString(36).slice(2),
-        summary: item.summary ?? "Untitled Event",
-        description: item.description ?? null,
-        start: {
-          dateTime: item.start?.dateTime ?? undefined,
-          date: item.start?.date ?? undefined,
-        },
-        end: {
-          dateTime: item.end?.dateTime ?? undefined,
-          date: item.end?.date ?? undefined,
-        },
-        status: item.status ?? "confirmed",
-      }));
+      .map((item) => {
+        const meetUrl =
+          item.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ||
+          item.hangoutLink ||
+          null;
+
+        const guests = (item.attendees ?? []).map((a) => ({
+          email: a.email || "",
+          displayName: a.displayName || null,
+          responseStatus: (a.responseStatus as "needsAction" | "declined" | "tentative" | "accepted" | null) || null,
+        }));
+
+        return {
+          id: item.id ?? Math.random().toString(36).slice(2),
+          summary: item.summary ?? "Untitled Event",
+          description: item.description ?? null,
+          start: {
+            dateTime: item.start?.dateTime ?? undefined,
+            date: item.start?.date ?? undefined,
+          },
+          end: {
+            dateTime: item.end?.dateTime ?? undefined,
+            date: item.end?.date ?? undefined,
+          },
+          status: item.status ?? "confirmed",
+          meetUrl,
+          guests,
+          htmlLink: item.htmlLink ?? null,
+        };
+      });
   } catch (err) {
     console.error("Failed to fetch Google Calendar events:", err);
     return [];
   }
 }
+
+/**
+ * Inserts a new event into Google Calendar, optionally creating a Google Meet conference.
+ */
+export async function createGoogleCalendarEvent(options: {
+  userId: string;
+  calendarId?: string;
+  title: string;
+  description?: string | null;
+  startAt: Date | string;
+  endAt: Date | string;
+  allDay?: boolean;
+  timeZone: string;
+  createMeet?: boolean;
+  guests?: Array<string | { email: string; displayName?: string }>;
+  sendUpdates?: "all" | "none";
+}): Promise<{
+  googleEventId: string;
+  meetUrl: string | null;
+  htmlLink: string | null;
+  status: string;
+  guests: Array<{ email: string; displayName?: string | null; responseStatus?: "needsAction" | "declined" | "tentative" | "accepted" | null }>;
+} | null> {
+  const client = await getCalendarClient({ userId: options.userId });
+  if (!client) {
+    return null;
+  }
+
+  const attendees = options.guests?.map((g) => {
+    if (typeof g === "string") return { email: g };
+    return { email: g.email, displayName: g.displayName || undefined };
+  });
+
+  const startObj = options.allDay
+    ? {
+        date:
+          typeof options.startAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(options.startAt)
+            ? options.startAt
+            : new Date(options.startAt).toISOString().split("T")[0],
+      }
+    : {
+        dateTime: new Date(options.startAt).toISOString(),
+        timeZone: options.timeZone,
+      };
+
+  const endObj = options.allDay
+    ? {
+        date:
+          typeof options.endAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(options.endAt)
+            ? options.endAt
+            : new Date(options.endAt).toISOString().split("T")[0],
+      }
+    : {
+        dateTime: new Date(options.endAt).toISOString(),
+        timeZone: options.timeZone,
+      };
+
+  const res = await client.events.insert({
+    calendarId: options.calendarId || "primary",
+    conferenceDataVersion: options.createMeet ? 1 : 0,
+    sendUpdates: options.sendUpdates ?? (attendees && attendees.length > 0 ? "all" : "none"),
+    requestBody: {
+      summary: options.title,
+      description: options.description || undefined,
+      start: startObj,
+      end: endObj,
+      attendees,
+      conferenceData: options.createMeet
+        ? {
+            createRequest: {
+              requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+          }
+        : undefined,
+    },
+  });
+
+  const meetUrl =
+    res.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ||
+    res.data.hangoutLink ||
+    null;
+
+  return {
+    googleEventId: res.data.id || crypto.randomUUID(),
+    meetUrl,
+    htmlLink: res.data.htmlLink || null,
+    status: res.data.status || "confirmed",
+    guests: (res.data.attendees ?? []).map((a) => ({
+      email: a.email || "",
+      displayName: a.displayName || null,
+      responseStatus: (a.responseStatus as "needsAction" | "declined" | "tentative" | "accepted" | null) || null,
+    })),
+  };
+}
+
+/**
+ * Patches an existing Google Calendar event.
+ */
+export async function patchGoogleCalendarEvent(options: {
+  userId: string;
+  calendarId?: string;
+  googleEventId: string;
+  title?: string;
+  description?: string | null;
+  startAt?: Date | string;
+  endAt?: Date | string;
+  allDay?: boolean;
+  timeZone: string;
+  createMeet?: boolean;
+  guests?: Array<string | { email: string; displayName?: string }>;
+  sendUpdates?: "all" | "none";
+}): Promise<{
+  googleEventId: string;
+  meetUrl: string | null;
+  htmlLink: string | null;
+  status: string;
+  guests: Array<{ email: string; displayName?: string | null; responseStatus?: "needsAction" | "declined" | "tentative" | "accepted" | null }>;
+} | null> {
+  const client = await getCalendarClient({ userId: options.userId });
+  if (!client) {
+    return null;
+  }
+
+  const patchBody: Record<string, unknown> = {};
+
+  if (options.title !== undefined) {
+    patchBody.summary = options.title;
+  }
+  if (options.description !== undefined) {
+    patchBody.description = options.description || null;
+  }
+  if (options.startAt !== undefined) {
+    patchBody.start = options.allDay
+      ? {
+          date:
+            typeof options.startAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(options.startAt)
+              ? options.startAt
+              : new Date(options.startAt).toISOString().split("T")[0],
+        }
+      : {
+          dateTime: new Date(options.startAt).toISOString(),
+          timeZone: options.timeZone,
+        };
+  }
+  if (options.endAt !== undefined) {
+    patchBody.end = options.allDay
+      ? {
+          date:
+            typeof options.endAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(options.endAt)
+              ? options.endAt
+              : new Date(options.endAt).toISOString().split("T")[0],
+        }
+      : {
+          dateTime: new Date(options.endAt).toISOString(),
+          timeZone: options.timeZone,
+        };
+  }
+  if (options.guests !== undefined) {
+    patchBody.attendees = options.guests.map((g) => {
+      if (typeof g === "string") return { email: g };
+      return { email: g.email, displayName: g.displayName || undefined };
+    });
+  }
+  if (options.createMeet) {
+    patchBody.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    };
+  }
+
+  const res = await client.events.patch({
+    calendarId: options.calendarId || "primary",
+    eventId: options.googleEventId,
+    conferenceDataVersion: options.createMeet ? 1 : 0,
+    sendUpdates: options.sendUpdates ?? "all",
+    requestBody: patchBody,
+  });
+
+  const meetUrl =
+    res.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ||
+    res.data.hangoutLink ||
+    null;
+
+  return {
+    googleEventId: res.data.id || options.googleEventId,
+    meetUrl,
+    htmlLink: res.data.htmlLink || null,
+    status: res.data.status || "confirmed",
+    guests: (res.data.attendees ?? []).map((a) => ({
+      email: a.email || "",
+      displayName: a.displayName || null,
+      responseStatus: (a.responseStatus as "needsAction" | "declined" | "tentative" | "accepted" | null) || null,
+    })),
+  };
+}
+
+/**
+ * Deletes an event from Google Calendar.
+ */
+export async function deleteGoogleCalendarEvent(options: {
+  userId: string;
+  calendarId?: string;
+  googleEventId: string;
+  sendUpdates?: "all" | "none";
+}): Promise<boolean> {
+  const client = await getCalendarClient({ userId: options.userId });
+  if (!client) {
+    return false;
+  }
+
+  try {
+    await client.events.delete({
+      calendarId: options.calendarId || "primary",
+      eventId: options.googleEventId,
+      sendUpdates: options.sendUpdates ?? "all",
+    });
+    return true;
+  } catch (err) {
+    console.error("Failed to delete Google Calendar event:", err);
+    return false;
+  }
+}
+
