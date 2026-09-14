@@ -14,7 +14,6 @@ export const SCREEN_SHORTCUTS: Readonly<Record<string, string>> = {
   "4": "/tasks",
   "5": "/reports",
   "6": "/calendar",
-  "7": "/settings",
 };
 
 

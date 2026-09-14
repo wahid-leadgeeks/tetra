@@ -9,8 +9,8 @@ import {
 } from "@/features/dashboard/domain";
 
 describe("Milestone 2: Navigation & Shortcut Contracts", () => {
-  it("defines 7 navigation items in NAV_ITEMS with Dashboard at index 1 and Calendar at index 5", () => {
-    expect(NAV_ITEMS).toHaveLength(7);
+  it("defines 6 navigation items in NAV_ITEMS with Dashboard at index 1 and Calendar at index 5", () => {
+    expect(NAV_ITEMS).toHaveLength(6);
 
     expect(NAV_ITEMS[0]).toMatchObject({
       href: "/",
@@ -53,24 +53,16 @@ describe("Milestone 2: Navigation & Shortcut Contracts", () => {
       shortcut: "6",
       testId: "nav-calendar",
     });
-
-    expect(NAV_ITEMS[6]).toMatchObject({
-      href: "/settings",
-      label: "Settings",
-      shortcut: "7",
-      testId: "nav-settings",
-    });
   });
 
-  it("maps keyboard shortcuts 1 through 7 correctly, mapping key 2 to /dashboard and 6 to /calendar", () => {
+  it("maps keyboard shortcuts 1 through 6 correctly, mapping key 2 to /dashboard and 6 to /calendar", () => {
     expect(SCREEN_SHORTCUTS["1"]).toBe("/");
     expect(SCREEN_SHORTCUTS["2"]).toBe("/dashboard");
     expect(SCREEN_SHORTCUTS["3"]).toBe("/timeline");
     expect(SCREEN_SHORTCUTS["4"]).toBe("/tasks");
     expect(SCREEN_SHORTCUTS["5"]).toBe("/reports");
     expect(SCREEN_SHORTCUTS["6"]).toBe("/calendar");
-    expect(SCREEN_SHORTCUTS["7"]).toBe("/settings");
-    expect(Object.keys(SCREEN_SHORTCUTS)).toHaveLength(7);
+    expect(Object.keys(SCREEN_SHORTCUTS)).toHaveLength(6);
   });
 });
 

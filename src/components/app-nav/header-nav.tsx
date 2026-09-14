@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Settings, Sparkles } from "lucide-react";
 
 import { useTour } from "@/components/guide-tour/tour-provider";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { Wordmark } from "@/components/app-nav/wordmark";
 import { NAV_ITEMS } from "@/components/app-nav/app-nav";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface HeaderNavProps {
@@ -17,7 +18,7 @@ interface HeaderNavProps {
   timezone: string;
 }
 
-export function HeaderNav({ email, name }: HeaderNavProps) {
+export function HeaderNav({ email, name, timezone }: HeaderNavProps) {
   const pathname = usePathname();
   const { openTour } = useTour();
 
@@ -26,7 +27,7 @@ export function HeaderNav({ email, name }: HeaderNavProps) {
       item.href === "/"
         ? pathname === "/"
         : pathname === item.href || pathname.startsWith(`${item.href}/`),
-    ) ?? { label: "TETRA", href: "/" };
+    ) ?? { label: pathname.startsWith("/settings") ? "Settings" : "TETRA", href: "/" };
 
   const initials = (name || email || "U")
     .split(" ")
@@ -62,8 +63,8 @@ export function HeaderNav({ email, name }: HeaderNavProps) {
         </div>
       </div>
 
-      {/* Right side: Actions, Notifications & Profile */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* Right side: Actions, Settings, Notifications & Profile */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -79,24 +80,69 @@ export function HeaderNav({ email, name }: HeaderNavProps) {
           <TooltipContent side="bottom">Interactive app tour</TooltipContent>
         </Tooltip>
 
+        {/* Header Settings Link */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              href="/settings"
+              data-testid="header-settings-button"
+              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+              aria-label="Settings"
+            >
+              <Settings className="size-4" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Settings</TooltipContent>
+        </Tooltip>
+
         {/* Notifications Feature */}
         <NotificationMenu />
 
-        {/* User initials indicator */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div
+        {/* User profile with Popover Menu */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
               data-testid="header-user-avatar"
-              className="flex size-8 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary select-none cursor-default"
+              className="flex size-8 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary select-none cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all"
+              aria-label="User Profile"
             >
               {initials}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="end" className="w-64 p-3 shadow-lg border-border/80">
+            <div className="flex items-center gap-3 pb-3 border-b border-border/60">
+              <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
+                {initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-xs text-foreground truncate">{name}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{email}</p>
+                <span className="inline-block mt-1 text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">
+                  {timezone}
+                </span>
+              </div>
             </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p className="font-medium text-xs">{name}</p>
-            <p className="text-[11px] text-muted-foreground">{email}</p>
-          </TooltipContent>
-        </Tooltip>
+
+            <div className="py-2 space-y-1">
+              <Link
+                href="/settings"
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
+              >
+                <Settings className="size-4 text-muted-foreground" />
+                <span>Settings</span>
+              </Link>
+              <button
+                type="button"
+                onClick={openTour}
+                className="flex w-full items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors text-left"
+              >
+                <Sparkles className="size-4 text-primary" />
+                <span>Guide Tour</span>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
   );

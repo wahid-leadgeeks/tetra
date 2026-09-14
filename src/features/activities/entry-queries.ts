@@ -4,7 +4,7 @@
  */
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { zonedDayEnd, zonedDayStart } from "@/lib/time";
-import type { CategoryDTO, TaskDTO, TimeEntryDTO } from "@/lib/types";
+import type { CategoryDTO, TaskDTO, TaskStatus, TimeEntryDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { categories, tasks, timeEntries } from "@/server/db/schema";
 import { toTimeEntryDTO } from "./domain";
@@ -24,14 +24,63 @@ export async function listCategories(): Promise<CategoryDTO[]> {
   }));
 }
 
+/** All tasks for the user, with category details and status for Kanban board. */
+export async function listAllTasks(userId: string): Promise<TaskDTO[]> {
+  const rows = await db
+    .select({
+      id: tasks.id,
+      name: tasks.name,
+      categoryId: tasks.categoryId,
+      categoryKey: categories.key,
+      categoryName: categories.name,
+      status: tasks.status,
+      description: tasks.description,
+      isFavorite: tasks.isFavorite,
+      lastUsedAt: tasks.lastUsedAt,
+      createdAt: tasks.createdAt,
+    })
+    .from(tasks)
+    .leftJoin(categories, eq(tasks.categoryId, categories.id))
+    .where(eq(tasks.userId, userId))
+    .orderBy(
+      desc(tasks.isFavorite),
+      sql`${tasks.lastUsedAt} desc nulls last`,
+      asc(tasks.name),
+    );
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    categoryId: row.categoryId,
+    categoryKey: row.categoryKey ?? undefined,
+    categoryName: row.categoryName ?? undefined,
+    status: (row.status as TaskStatus) || "todo",
+    description: row.description ?? null,
+    isFavorite: row.isFavorite,
+    lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
+    createdAt: row.createdAt ? row.createdAt.toISOString() : undefined,
+  }));
+}
+
 /** Most recently used tasks, for the quick-pick row. Favorites pin first. */
 export async function listRecentTasks(
   userId: string,
   limit = 8,
 ): Promise<TaskDTO[]> {
   const rows = await db
-    .select()
+    .select({
+      id: tasks.id,
+      name: tasks.name,
+      categoryId: tasks.categoryId,
+      categoryKey: categories.key,
+      categoryName: categories.name,
+      status: tasks.status,
+      description: tasks.description,
+      isFavorite: tasks.isFavorite,
+      lastUsedAt: tasks.lastUsedAt,
+    })
     .from(tasks)
+    .leftJoin(categories, eq(tasks.categoryId, categories.id))
     .where(eq(tasks.userId, userId))
     .orderBy(
       desc(tasks.isFavorite),
@@ -39,10 +88,15 @@ export async function listRecentTasks(
       asc(tasks.name),
     )
     .limit(limit);
+
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
     categoryId: row.categoryId,
+    categoryKey: row.categoryKey ?? undefined,
+    categoryName: row.categoryName ?? undefined,
+    status: (row.status as TaskStatus) || "todo",
+    description: row.description ?? null,
     isFavorite: row.isFavorite,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
   }));

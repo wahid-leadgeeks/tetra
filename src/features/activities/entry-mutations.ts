@@ -6,9 +6,9 @@
 import { and, eq } from "drizzle-orm";
 import { expandAttendanceBounds } from "@/features/attendance/service";
 import { todayKey, zonedDayKey } from "@/lib/time";
-import type { TimeEntryDTO } from "@/lib/types";
+import type { TaskDTO, TaskStatus, TimeEntryDTO } from "@/lib/types";
 import { db } from "@/server/db";
-import { tasks, timeEntries } from "@/server/db/schema";
+import { categories, tasks, timeEntries } from "@/server/db/schema";
 import { validateNoOverlap } from "./domain";
 import {
   accumulatePause,
@@ -233,3 +233,127 @@ export async function deleteEntry(
     await markDayChanged(tx, userId, zonedDayKey(entry.startedAt, timeZone));
   });
 }
+
+export interface CreateTaskInput {
+  name: string;
+  categoryId: string;
+  status?: TaskStatus;
+  description?: string | null;
+  isFavorite?: boolean;
+}
+
+export interface UpdateTaskInput {
+  name?: string;
+  categoryId?: string;
+  status?: TaskStatus;
+  description?: string | null;
+  isFavorite?: boolean;
+}
+
+/** Create a new task directly (e.g. from Kanban). */
+export async function createTask(
+  userId: string,
+  input: CreateTaskInput,
+): Promise<TaskDTO> {
+  await assertCategoryExists(db, input.categoryId);
+  const trimmed = input.name.trim();
+  if (!trimmed) throw new Error("Task name cannot be empty");
+
+  const [created] = await db
+    .insert(tasks)
+    .values({
+      userId,
+      name: trimmed,
+      categoryId: input.categoryId,
+      status: input.status ?? "todo",
+      description: input.description ?? null,
+      isFavorite: input.isFavorite ?? false,
+      lastUsedAt: new Date(),
+    })
+    .returning();
+
+  const [cat] = await db
+    .select({ key: categories.key, name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, created.categoryId))
+    .limit(1);
+
+  return {
+    id: created.id,
+    name: created.name,
+    categoryId: created.categoryId,
+    categoryKey: cat?.key,
+    categoryName: cat?.name,
+    status: (created.status as TaskStatus) || "todo",
+    description: created.description ?? null,
+    isFavorite: created.isFavorite,
+    lastUsedAt: created.lastUsedAt ? created.lastUsedAt.toISOString() : null,
+    createdAt: created.createdAt.toISOString(),
+  };
+}
+
+/** Update an existing task's name, category, status, or favorite state. */
+export async function updateTask(
+  userId: string,
+  taskId: string,
+  input: UpdateTaskInput,
+): Promise<TaskDTO> {
+  const existingRows = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+    .limit(1);
+
+  const existing = existingRows[0];
+  if (!existing) throw new Error("Task not found");
+
+  if (input.categoryId) {
+    await assertCategoryExists(db, input.categoryId);
+  }
+
+  const [updated] = await db
+    .update(tasks)
+    .set({
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite } : {}),
+      lastUsedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId))
+    .returning();
+
+  const [cat] = await db
+    .select({ key: categories.key, name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, updated.categoryId))
+    .limit(1);
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    categoryId: updated.categoryId,
+    categoryKey: cat?.key,
+    categoryName: cat?.name,
+    status: (updated.status as TaskStatus) || "todo",
+    description: updated.description ?? null,
+    isFavorite: updated.isFavorite,
+    lastUsedAt: updated.lastUsedAt ? updated.lastUsedAt.toISOString() : null,
+    createdAt: updated.createdAt.toISOString(),
+  };
+}
+
+/** Delete a task. */
+export async function deleteTask(
+  userId: string,
+  taskId: string,
+): Promise<boolean> {
+  const result = await db
+    .delete(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+    .returning({ id: tasks.id });
+
+  return result.length > 0;
+}
+

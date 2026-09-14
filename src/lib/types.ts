@@ -20,12 +20,19 @@ export interface CategoryDTO {
   sortOrder: number;
 }
 
+export type TaskStatus = "todo" | "in_progress" | "done";
+
 export interface TaskDTO {
   id: string;
   name: string;
   categoryId: string;
+  categoryKey?: string;
+  categoryName?: string;
+  status: TaskStatus;
+  description?: string | null;
   isFavorite: boolean;
   lastUsedAt: string | null;
+  createdAt?: string;
 }
 
 export interface TimeEntryDTO {

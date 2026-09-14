@@ -3,7 +3,7 @@
  * behind the Today screen's Quick start chips.
  */
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { TaskDTO } from "@/lib/types";
+import type { TaskDTO, TaskStatus } from "@/lib/types";
 import { db } from "@/server/db";
 import { tasks } from "@/server/db/schema";
 
@@ -14,6 +14,8 @@ function toTaskDTO(row: TaskRow): TaskDTO {
     id: row.id,
     name: row.name,
     categoryId: row.categoryId,
+    status: (row.status as TaskStatus) || "todo",
+    description: row.description ?? null,
     isFavorite: row.isFavorite,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
   };

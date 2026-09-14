@@ -9,7 +9,6 @@ import {
   Clock,
   LayoutDashboard,
   ListTodo,
-  Settings,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -68,13 +67,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Calendar,
     testId: "nav-calendar",
     shortcut: "6",
-  },
-  {
-    href: "/settings",
-    label: "Settings",
-    icon: Settings,
-    testId: "nav-settings",
-    shortcut: "7",
   },
 ];
 
@@ -145,7 +137,7 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-7 pb-[env(safe-area-inset-bottom)]">
+      <ul className="mx-auto grid max-w-lg grid-cols-6 pb-[env(safe-area-inset-bottom)]">
         {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item.href);
           return (

@@ -50,10 +50,10 @@ export function accumulatePause(entry: TimeEntryCore, at: Date): number {
 }
 
 export async function assertCategoryExists(
-  tx: Tx,
+  client: Tx | typeof db,
   categoryId: string,
 ): Promise<void> {
-  const rows = await tx
+  const rows = await client
     .select({ id: categories.id })
     .from(categories)
     .where(eq(categories.id, categoryId))
