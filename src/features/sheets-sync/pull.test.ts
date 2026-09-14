@@ -229,4 +229,36 @@ describe("allocateTimelineEntries", () => {
       endMinutes: 660, // 60 min
     });
   });
+
+  it("pro-rates explicit note durations to strictly match category durationMinutes when they diverge", () => {
+    // e.g. Wed Sep 2: notes sum to 6:55 (415m) but cell says 5:55 (355m)
+    const items: RawCategoryItem[] = [
+      {
+        categoryKey: "training",
+        durationMinutes: 355, // 5:55
+        notes:
+          "Growth Department Introduction (0:25)\n" +
+          "Operations Department Introduction (0:30)\n" +
+          "Introduction to Finance & Accounting Department (0:30)\n" +
+          "Independent learning, writing summary for notes and onboarding diary (3:30)\n" +
+          "creating presentation about relationship of IT department with other department on Leadgeeks (2:00)",
+      },
+    ];
+
+    const result = allocateTimelineEntries({
+      categoryItems: items,
+      clockInMinutes: 650, // 10:50
+      breakStartMinutes: 720, // 12:00
+      breakEndMinutes: 810, // 13:30
+      defaultCategoryNames,
+    });
+
+    // Total allocated work time must equal exactly 355 minutes (5:55)
+    const totalWorkMinutes = result.reduce(
+      (sum, e) => sum + (e.endMinutes - e.startMinutes),
+      0,
+    );
+    expect(totalWorkMinutes).toBe(355);
+  });
 });
+

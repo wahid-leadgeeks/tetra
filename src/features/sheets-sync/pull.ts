@@ -159,8 +159,9 @@ export function allocateTimelineEntries(params: {
       .filter(Boolean);
 
     const defaultName = defaultCategoryNames[item.categoryKey] || item.categoryKey;
-    const taskCount = Math.max(1, lines.length);
-    const parsedLines = lines.map((line) => {
+    const normalizedLines = lines.length > 0 ? lines : [""];
+    const taskCount = normalizedLines.length;
+    const parsedLines = normalizedLines.map((line) => {
       const match = line.match(/^(.*?)\s*\((\d{1,2}:\d{2})\)$/);
       if (match) {
         return {
@@ -171,20 +172,51 @@ export function allocateTimelineEntries(params: {
       return { text: line, duration: null };
     });
 
+
     const hasExplicitDurations =
       parsedLines.length > 0 &&
       parsedLines.every((p) => p.duration !== null && p.duration > 0);
-    const baseDuration = Math.floor(item.durationMinutes / taskCount);
-    const remainder = item.durationMinutes % taskCount;
+
+    let lineDurations: number[];
+    if (hasExplicitDurations) {
+      const totalExplicit = parsedLines.reduce(
+        (sum, p) => sum + (p.duration ?? 0),
+        0,
+      );
+      if (totalExplicit === item.durationMinutes || item.durationMinutes <= 0) {
+        lineDurations = parsedLines.map((p) => p.duration!);
+      } else {
+        // Pro-rate note durations so they strictly sum to the category's authoritative durationMinutes
+        const scale = item.durationMinutes / totalExplicit;
+        lineDurations = parsedLines.map((p) =>
+          Math.max(1, Math.round((p.duration ?? 0) * scale)),
+        );
+        const allocatedSum = lineDurations.reduce((sum, d) => sum + d, 0);
+        let diff = item.durationMinutes - allocatedSum;
+        let idx = 0;
+        while (diff !== 0 && idx < lineDurations.length) {
+          const step = diff > 0 ? 1 : -1;
+          if (lineDurations[idx]! + step >= 1) {
+            lineDurations[idx]! += step;
+            diff -= step;
+          }
+          idx = (idx + 1) % lineDurations.length;
+        }
+      }
+    } else {
+      const baseDuration = Math.floor(item.durationMinutes / taskCount);
+      const remainder = item.durationMinutes % taskCount;
+      lineDurations = parsedLines.map(
+        (_, i) => baseDuration + (i === 0 ? remainder : 0),
+      );
+    }
 
     for (let i = 0; i < taskCount; i++) {
       const parsed = parsedLines[i];
-      let duration =
-        hasExplicitDurations && parsed?.duration
-          ? parsed.duration
-          : baseDuration + (i === 0 ? remainder : 0);
+      let duration = lineDurations[i] ?? 0;
       const name = parsed?.text || defaultName;
       const notes = parsed?.text || defaultName;
+
 
       while (duration > 0) {
         // If cursor has reached break start, skip ahead to break end
