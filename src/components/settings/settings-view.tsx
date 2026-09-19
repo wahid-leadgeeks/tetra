@@ -87,6 +87,11 @@ interface SheetMappingForm {
   dailyTotalColumn: string;
   workTotalColumn: string;
   categories: Record<CategoryKey, string>;
+  categoryNotes?: Record<CategoryKey, string>;
+  autoSyncOnClockIn?: boolean;
+  autoSyncOnClockOut?: boolean;
+  autoSyncTasks?: boolean;
+  headerRow?: number;
 }
 
 interface SyncConfigForm {
@@ -101,7 +106,12 @@ interface SyncConfigResponse {
   spreadsheetId: string | null;
   worksheetName: string | null;
   sheetGid?: string | null;
-  mapping: Partial<SheetMappingForm> | null;
+  mapping: (Partial<SheetMappingForm> & {
+    categoryNotes?: Record<CategoryKey, string>;
+    autoSyncOnClockIn?: boolean;
+    autoSyncOnClockOut?: boolean;
+    autoSyncTasks?: boolean;
+  }) | null;
   timezone: string | null;
   headerRow?: number;
   notesColumn?: string;
@@ -266,6 +276,10 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                 ...DEFAULT_MAPPING.categories,
                 ...(config.mapping?.categories ?? {}),
               },
+              categoryNotes: config.mapping?.categoryNotes,
+              autoSyncOnClockIn: config.mapping?.autoSyncOnClockIn ?? true,
+              autoSyncOnClockOut: config.mapping?.autoSyncOnClockOut ?? true,
+              autoSyncTasks: config.mapping?.autoSyncTasks ?? true,
             },
             timezone: config.timezone ?? userTimezone ?? "Asia/Jakarta",
           });
@@ -378,6 +392,10 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
               training: form.mapping.categories.training,
               other_tasks: form.mapping.categories.other_tasks,
             },
+            ...(form.mapping.categoryNotes ? { categoryNotes: form.mapping.categoryNotes } : {}),
+            autoSyncOnClockIn: form.mapping.autoSyncOnClockIn ?? true,
+            autoSyncOnClockOut: form.mapping.autoSyncOnClockOut ?? true,
+            autoSyncTasks: form.mapping.autoSyncTasks ?? true,
             ...(headerRow !== undefined ? { headerRow } : {}),
           },
         }),
@@ -552,6 +570,91 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                         }
                       />
                     ))}
+                  </div>
+                </fieldset>
+
+                <fieldset className="grid gap-3 pt-1 border-t border-border/60">
+                  <legend className="text-sm font-medium">
+                    Auto-sync preferences
+                  </legend>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically write shifts and tasks directly to the official Google Sheet without requiring manual submission.
+                  </p>
+                  <div className="grid gap-3 pt-1 sm:grid-cols-3">
+                    <label className="flex items-start gap-2.5 rounded-lg border border-border/70 p-3 hover:bg-muted/30 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        className="size-4 mt-0.5 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={form.mapping.autoSyncOnClockIn ?? true}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            mapping: {
+                              ...prev.mapping,
+                              autoSyncOnClockIn: e.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-foreground block">
+                          Clock-in Auto-sync
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block leading-tight">
+                          Sync clock-in time to Google Sheet as soon as work starts.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 rounded-lg border border-border/70 p-3 hover:bg-muted/30 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        className="size-4 mt-0.5 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={form.mapping.autoSyncOnClockOut ?? true}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            mapping: {
+                              ...prev.mapping,
+                              autoSyncOnClockOut: e.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-foreground block">
+                          Clock-out Auto-sync
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block leading-tight">
+                          Sync full day report (times &amp; totals) when work day ends.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 rounded-lg border border-border/70 p-3 hover:bg-muted/30 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        className="size-4 mt-0.5 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={form.mapping.autoSyncTasks ?? true}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            mapping: {
+                              ...prev.mapping,
+                              autoSyncTasks: e.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-foreground block">
+                          Tasks Auto-sync
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block leading-tight">
+                          Sync work total, category hours &amp; notes when tasks change.
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </fieldset>
 

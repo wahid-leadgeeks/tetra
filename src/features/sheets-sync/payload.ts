@@ -94,8 +94,14 @@ export function buildSyncPayload(
   }));
   const compiledNotesCells = notesCells(summary, mapping, options);
 
+  const workTotalCell: SyncCellDTO = {
+    a1: `${mapping.workTotalColumn}${rowNumber}`,
+    value: formatHMM(summary.totals.workMinutes),
+    columnLabel: "Work Total",
+  };
+
   const cells: SyncCellDTO[] = options.tasksOnly
-    ? [...categoryCells, ...compiledNotesCells]
+    ? [workTotalCell, ...categoryCells, ...compiledNotesCells]
     : [
         {
           a1: `${mapping.clockInColumn}${rowNumber}`,
@@ -122,11 +128,7 @@ export function buildSyncPayload(
           value: formatHMM(summary.totals.attendanceMinutes),
           columnLabel: "Daily Total (Attendance)",
         },
-        {
-          a1: `${mapping.workTotalColumn}${rowNumber}`,
-          value: formatHMM(summary.totals.workMinutes),
-          columnLabel: "Work Total",
-        },
+        workTotalCell,
         ...categoryCells,
         ...compiledNotesCells,
       ];

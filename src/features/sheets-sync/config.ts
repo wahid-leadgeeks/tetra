@@ -41,12 +41,24 @@ type SpreadsheetConfigRow = typeof spreadsheetConfigs.$inferSelect;
 function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
   // Re-parsed at the boundary — a corrupt jsonb fails loudly here.
   let mapping = mappingSchema.parse(row.mapping);
+  const isLeadGeeks = row.spreadsheetId.includes("1BxiMVs0XR");
+  const fallback = isLeadGeeks ? LEADGEEKS_SHEET_MAPPING : DEFAULT_SHEET_MAPPING;
+
   if (
-    row.spreadsheetId.includes("1BxiMVs0XR") &&
+    isLeadGeeks &&
     (mapping.categories.meeting === "R" || mapping.headerRow === undefined)
   ) {
-    mapping = LEADGEEKS_SHEET_MAPPING;
+    mapping = { ...LEADGEEKS_SHEET_MAPPING, ...mapping };
   }
+
+  mapping = {
+    ...mapping,
+    categoryNotes: mapping.categoryNotes ?? fallback.categoryNotes,
+    autoSyncOnClockIn: mapping.autoSyncOnClockIn ?? fallback.autoSyncOnClockIn ?? true,
+    autoSyncOnClockOut: mapping.autoSyncOnClockOut ?? fallback.autoSyncOnClockOut ?? true,
+    autoSyncTasks: mapping.autoSyncTasks ?? fallback.autoSyncTasks ?? true,
+    headerRow: mapping.headerRow ?? fallback.headerRow,
+  };
   return {
     id: row.id,
     spreadsheetId: row.spreadsheetId,
@@ -138,6 +150,44 @@ export async function upsertSyncConfig(
     .orderBy(desc(spreadsheetConfigs.updatedAt))
     .limit(1);
 
+  const isLeadGeeks = spreadsheetId.includes("1BxiMVs0XR");
+  const fallback = isLeadGeeks ? LEADGEEKS_SHEET_MAPPING : DEFAULT_SHEET_MAPPING;
+  const existingMapping = existing.length > 0 ? (existing[0].mapping as Partial<SheetMapping>) : null;
+
+  const resolvedMapping: SheetMapping = {
+    ...fallback,
+    ...(existingMapping ?? {}),
+    ...mapping,
+    categories: {
+      ...fallback.categories,
+      ...(existingMapping?.categories ?? {}),
+      ...mapping.categories,
+    },
+    categoryNotes:
+      mapping.categoryNotes ??
+      existingMapping?.categoryNotes ??
+      fallback.categoryNotes,
+    autoSyncOnClockIn:
+      mapping.autoSyncOnClockIn ??
+      existingMapping?.autoSyncOnClockIn ??
+      fallback.autoSyncOnClockIn ??
+      true,
+    autoSyncOnClockOut:
+      mapping.autoSyncOnClockOut ??
+      existingMapping?.autoSyncOnClockOut ??
+      fallback.autoSyncOnClockOut ??
+      true,
+    autoSyncTasks:
+      mapping.autoSyncTasks ??
+      existingMapping?.autoSyncTasks ??
+      fallback.autoSyncTasks ??
+      true,
+    headerRow:
+      mapping.headerRow ??
+      existingMapping?.headerRow ??
+      fallback.headerRow,
+  };
+
   if (existing.length > 0) {
     const [updated] = await db
       .update(spreadsheetConfigs)
@@ -145,7 +195,7 @@ export async function upsertSyncConfig(
         spreadsheetId,
         worksheetName,
         sheetGid: sheetGid ?? null,
-        mapping,
+        mapping: resolvedMapping,
         timezone: resolvedTimezone,
         active: true,
         updatedAt: new Date(),
@@ -162,7 +212,7 @@ export async function upsertSyncConfig(
       spreadsheetId,
       worksheetName,
       sheetGid: sheetGid ?? null,
-      mapping,
+      mapping: resolvedMapping,
       timezone: resolvedTimezone,
       active: true,
     })

@@ -108,6 +108,7 @@ export const DEFAULT_SHEET_MAPPING = {
     training: "U",
     other_tasks: "W",
   },
+  headerRow: 1,
   autoSyncOnClockIn: true,
   autoSyncOnClockOut: true,
   autoSyncTasks: true,

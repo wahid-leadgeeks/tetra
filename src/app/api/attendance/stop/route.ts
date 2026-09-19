@@ -35,7 +35,7 @@ export async function POST(req: Request): Promise<Response> {
       message?: string;
     } = { attempted: false };
 
-    if (config && config.mapping.autoSyncOnClockOut === true) {
+    if (config && config.mapping.autoSyncOnClockOut !== false) {
       const sheets = await getSheetsClient({
         userId,
         accessToken: session.accessToken,

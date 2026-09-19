@@ -78,7 +78,7 @@ export async function POST(
 
     if (attendance.status === "closed") {
       const config = await getSyncConfig(userId);
-      if (config && config.mapping.autoSyncOnClockOut === true) {
+      if (config && config.mapping.autoSyncOnClockOut !== false) {
         const sheets = await getSheetsClient({
           userId,
           accessToken: session?.accessToken,

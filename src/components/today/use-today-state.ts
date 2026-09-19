@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import { todayKey } from "@/lib/time";
 import type { AttendanceDTO, DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
-import { emitNotification } from "@/features/notifications/store";
 
 export type PendingAction =
   | "clock-in"
@@ -170,14 +169,6 @@ export function useTodayState(timezone: string) {
       } else {
         toast.success("Work day started");
       }
-      emitNotification({
-        type: "attendance",
-        severity: "info",
-        title: "Workday Started",
-        message: "You are clocked in. Logging tasks will track time towards your daily target.",
-        href: "/",
-        actionLabel: "View Today",
-      });
       await settle();
       return true;
     }
@@ -217,14 +208,6 @@ export function useTodayState(timezone: string) {
       } else {
         toast.success("Work day ended");
       }
-      emitNotification({
-        type: "attendance",
-        severity: "success",
-        title: "Workday Ended",
-        message: "Shift closed. Review and verify your daily summary before final submission.",
-        href: "/reports",
-        actionLabel: "Review Day",
-      });
       await settle();
       return true;
     }
@@ -238,13 +221,6 @@ export function useTodayState(timezone: string) {
     );
     if (attendance) {
       toast.success("On break");
-      emitNotification({
-        type: "attendance",
-        severity: "reminder",
-        title: "Break Started",
-        message: "Work timers paused. Enjoy your break!",
-        href: "/",
-      });
       await settle();
       return true;
     }
@@ -258,13 +234,6 @@ export function useTodayState(timezone: string) {
     );
     if (attendance) {
       toast.success("Back from break");
-      emitNotification({
-        type: "attendance",
-        severity: "info",
-        title: "Break Ended",
-        message: "Welcome back! Ready for the next activity.",
-        href: "/",
-      });
       await settle();
       return true;
     }
@@ -302,10 +271,30 @@ export function useTodayState(timezone: string) {
     if (entry) {
       toast.success("Task stopped");
       await settle();
+      const targetDay = summary?.workDate;
+      if (targetDay) {
+        fetch(`/api/days/${targetDay}/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ allowUnreviewed: true, tasksOnly: true }),
+        })
+          .then(async (res) => {
+            if (!res.ok) return;
+            const data = await res.json().catch(() => null);
+            if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
+              toast.success(
+                `Tasks auto-synced to Google Sheet (${data.changedCells.length} ${
+                  data.changedCells.length === 1 ? "cell" : "cells"
+                })`,
+              );
+            }
+          })
+          .catch(() => {});
+      }
       return true;
     }
     return false;
-  }, [post, settle]);
+  }, [post, settle, summary?.workDate]);
 
   const pauseTask = useCallback(async (): Promise<boolean> => {
     const entry = await post<TimeEntryDTO>(

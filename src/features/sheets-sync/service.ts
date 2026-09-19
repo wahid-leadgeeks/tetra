@@ -139,6 +139,9 @@ export async function executeSync(
 
   const config = await getSyncConfig(userId);
   if (!config) throw new SyncNotConfiguredError("No spreadsheet configured");
+  if (options.tasksOnly && config.mapping.autoSyncTasks === false) {
+    return { status: "success", changedCells: [], idempotent: true };
+  }
   const sheets = await getSheetsClient({
     userId,
     accessToken: options.accessToken,
