@@ -18,6 +18,9 @@ export interface CalendarEventSuggestionDTO {
   hasOverlap: boolean;
   overlappingEntryIds: string[];
   overlappingTaskNames: string[];
+  meetUrl?: string | null;
+  htmlLink?: string | null;
+  isImported: boolean;
 }
 
 export interface CalendarConfigDTO {

@@ -145,6 +145,20 @@ export interface RawCalendarEvent {
     responseStatus?: "needsAction" | "declined" | "tentative" | "accepted" | null;
   }>;
   htmlLink?: string | null;
+  transparency?: string | null;
+  location?: string | null;
+}
+
+/**
+ * Extracts a Google Meet URL from event location or description text as a fallback.
+ */
+function extractGoogleMeetUrl(
+  description?: string | null,
+  location?: string | null,
+): string | null {
+  const text = `${location ?? ""} ${description ?? ""}`;
+  const match = text.match(/https?:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i);
+  return match ? match[0] : null;
 }
 
 /**
@@ -163,14 +177,17 @@ export async function fetchCalendarEvents(options: {
   }
 
   try {
-    const res = await client.events.list({
+    const listParams: calendar_v3.Params$Resource$Events$List & { conferenceDataVersion?: number } = {
       calendarId: options.calendarId || "primary",
       timeMin: options.timeMin.toISOString(),
       timeMax: options.timeMax.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
       timeZone: options.timeZone,
-    });
+      conferenceDataVersion: 1,
+    };
+
+    const res = await client.events.list(listParams as calendar_v3.Params$Resource$Events$List);
 
     const items = res.data.items ?? [];
     return items
@@ -179,6 +196,7 @@ export async function fetchCalendarEvents(options: {
         const meetUrl =
           item.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ||
           item.hangoutLink ||
+          extractGoogleMeetUrl(item.description, item.location) ||
           null;
 
         const guests = (item.attendees ?? []).map((a) => ({
@@ -203,6 +221,8 @@ export async function fetchCalendarEvents(options: {
           meetUrl,
           guests,
           htmlLink: item.htmlLink ?? null,
+          transparency: item.transparency ?? null,
+          location: item.location ?? null,
         };
       });
   } catch (err) {

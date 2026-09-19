@@ -19,6 +19,17 @@ export const DEFAULT_CATEGORY_RULES: readonly CalendarRuleDTO[] = [
       "call",
       "interview",
       "debrief",
+      "smart goals",
+      "goals",
+      "planning",
+      "session",
+      "alignment",
+      "business review",
+      "quarterly review",
+      "presentation",
+      "townhall",
+      "all-hands",
+      "all hands",
     ],
   },
   {
@@ -121,15 +132,35 @@ export const DEFAULT_CATEGORY_RULES: readonly CalendarRuleDTO[] = [
   },
 ];
 
+export interface MatchCategoryOptions {
+  customRules?: readonly CalendarRuleDTO[] | null;
+  hasMeetUrl?: boolean;
+  guestCount?: number;
+}
+
 /**
  * Matches an event title & description against category rules using word boundary matching.
+ * Also checks event heuristics (e.g. Google Meet link or multiple guests) before falling back.
  * Returns the matching category key and display name.
  */
 export function matchCategory(
   title: string,
   description?: string | null,
-  customRules?: readonly CalendarRuleDTO[] | null,
+  optionsOrCustomRules?: readonly CalendarRuleDTO[] | null | MatchCategoryOptions,
 ): { categoryKey: string; categoryName: string } {
+  let customRules: readonly CalendarRuleDTO[] | null | undefined;
+  let hasMeetUrl = false;
+  let guestCount = 0;
+
+  if (Array.isArray(optionsOrCustomRules)) {
+    customRules = optionsOrCustomRules;
+  } else if (optionsOrCustomRules) {
+    const opts = optionsOrCustomRules as MatchCategoryOptions;
+    customRules = opts.customRules;
+    hasMeetUrl = !!opts.hasMeetUrl;
+    guestCount = opts.guestCount ?? 0;
+  }
+
   const rules = customRules && customRules.length > 0 ? customRules : DEFAULT_CATEGORY_RULES;
   const content = `${title} ${description ?? ""}`.toLowerCase();
 
@@ -145,6 +176,15 @@ export function matchCategory(
         };
       }
     }
+  }
+
+  // Heuristic: If event has a video meeting link or multiple guests and no specific tech category matched,
+  // classify as Meeting rather than Other Tasks
+  if (hasMeetUrl || guestCount > 1) {
+    return {
+      categoryKey: "meeting",
+      categoryName: "Meeting",
+    };
   }
 
   return {

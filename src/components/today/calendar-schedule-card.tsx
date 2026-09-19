@@ -6,8 +6,10 @@ import {
   AlertCircle,
   Calendar,
   CalendarDays,
+  Check,
   ExternalLink,
   RefreshCw,
+  Video,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +109,8 @@ export function CalendarScheduleCard({
     onImportSuccess?.();
   };
 
-  const nonOverlappingCount = events.filter((e) => !e.hasOverlap).length;
+  const readyToImportCount = events.filter((e) => !e.isImported && !e.hasOverlap).length;
+  const importedCount = events.filter((e) => e.isImported).length;
 
   return (
     <>
@@ -226,7 +229,9 @@ export function CalendarScheduleCard({
                     key={event.id}
                     className={cn(
                       "flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border p-2.5 transition-all text-xs",
-                      event.hasOverlap
+                      event.isImported
+                        ? "border-emerald-500/25 bg-emerald-500/[0.02]"
+                        : event.hasOverlap
                         ? "border-amber-500/25 bg-amber-500/[0.02]"
                         : "border-border/60 bg-card hover:bg-muted/30",
                     )}
@@ -249,13 +254,35 @@ export function CalendarScheduleCard({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {event.meetUrl && (
+                        <a
+                          href={event.meetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors shrink-0"
+                          title="Join Google Meet"
+                        >
+                          <Video className="size-3 shrink-0" />
+                          <span>Meet</span>
+                        </a>
+                      )}
+
                       <CategoryBadge
                         categoryKey={event.suggestedCategoryKey}
                         categoryName={event.suggestedCategoryName}
                         size="sm"
                       />
 
-                      {event.hasOverlap ? (
+                      {event.isImported ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-normal"
+                          title="Already recorded on your timeline"
+                        >
+                          <Check className="size-2.5 shrink-0" />
+                          Imported
+                        </Badge>
+                      ) : event.hasOverlap ? (
                         <Badge
                           variant="outline"
                           className="text-[10px] gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 font-normal"
@@ -277,10 +304,14 @@ export function CalendarScheduleCard({
 
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/50">
                 <span className="text-xs text-muted-foreground">
-                  {nonOverlappingCount > 0
-                    ? `${nonOverlappingCount} new ${
-                        nonOverlappingCount === 1 ? "activity" : "activities"
+                  {readyToImportCount > 0
+                    ? `${readyToImportCount} new ${
+                        readyToImportCount === 1 ? "activity" : "activities"
                       } ready to import`
+                    : importedCount > 0
+                    ? `${importedCount} ${
+                        importedCount === 1 ? "activity" : "activities"
+                      } already recorded on timeline`
                     : "All events overlap existing entries"}
                 </span>
 
@@ -289,6 +320,7 @@ export function CalendarScheduleCard({
                   size="sm"
                   className="h-8 gap-1.5 text-xs font-medium shadow-xs"
                   onClick={() => setImportDialogOpen(true)}
+                  disabled={readyToImportCount === 0}
                   data-testid="calendar-import-button"
                 >
                   <Calendar className="size-3.5" />
@@ -305,6 +337,7 @@ export function CalendarScheduleCard({
         onOpenChange={setImportDialogOpen}
         events={events}
         onImportSuccess={handleImportSuccess}
+        dayKey={effectiveDayKey}
       />
     </>
   );

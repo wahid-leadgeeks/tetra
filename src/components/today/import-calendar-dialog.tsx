@@ -31,6 +31,7 @@ interface ImportCalendarDialogProps {
   onOpenChange: (open: boolean) => void;
   events: CalendarEventSuggestionDTO[];
   onImportSuccess: () => void;
+  dayKey?: string;
 }
 
 interface EditableEventItem {
@@ -45,6 +46,7 @@ interface EditableEventItem {
   durationMinutes: number;
   hasOverlap: boolean;
   overlappingTaskNames: string[];
+  isImported: boolean;
 }
 
 export function ImportCalendarDialog({
@@ -52,11 +54,12 @@ export function ImportCalendarDialog({
   onOpenChange,
   events,
   onImportSuccess,
+  dayKey,
 }: ImportCalendarDialogProps) {
   const [items, setItems] = useState<EditableEventItem[]>(() =>
     events.map((e) => ({
       id: e.id,
-      selected: !e.hasOverlap, // uncheck if overlapping by default so user reviews carefully
+      selected: !e.isImported && !e.hasOverlap, // uncheck if already imported or overlapping
       title: e.title,
       categoryKey: e.suggestedCategoryKey,
       startedAt: e.startedAt,
@@ -66,6 +69,7 @@ export function ImportCalendarDialog({
       durationMinutes: e.durationMinutes,
       hasOverlap: e.hasOverlap,
       overlappingTaskNames: e.overlappingTaskNames,
+      isImported: e.isImported,
     })),
   );
 
@@ -76,7 +80,7 @@ export function ImportCalendarDialog({
     setItems(
       events.map((e) => ({
         id: e.id,
-        selected: !e.hasOverlap,
+        selected: !e.isImported && !e.hasOverlap,
         title: e.title,
         categoryKey: e.suggestedCategoryKey,
         startedAt: e.startedAt,
@@ -86,6 +90,7 @@ export function ImportCalendarDialog({
         durationMinutes: e.durationMinutes,
         hasOverlap: e.hasOverlap,
         overlappingTaskNames: e.overlappingTaskNames,
+        isImported: e.isImported,
       })),
     );
   }
@@ -143,6 +148,30 @@ export function ImportCalendarDialog({
       );
       onOpenChange(false);
       onImportSuccess();
+
+      // Non-blocking auto-sync to Google Sheet if configured
+      const targetDay =
+        dayKey ||
+        (selectedItems[0]?.startedAt ? selectedItems[0].startedAt.slice(0, 10) : null);
+      if (targetDay) {
+        fetch(`/api/days/${targetDay}/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ allowUnreviewed: true, tasksOnly: true }),
+        })
+          .then(async (res) => {
+            if (!res.ok) return;
+            const data = await res.json().catch(() => null);
+            if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
+              toast.success(
+                `Tasks auto-synced to Google Sheet (${data.changedCells.length} ${
+                  data.changedCells.length === 1 ? "cell" : "cells"
+                })`,
+              );
+            }
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -170,7 +199,9 @@ export function ImportCalendarDialog({
               key={item.id}
               className={cn(
                 "flex flex-col gap-3 rounded-xl border p-3.5 transition-all",
-                item.selected
+                item.isImported
+                  ? "border-emerald-500/30 bg-emerald-500/[0.02] opacity-80"
+                  : item.selected
                   ? "border-border bg-card shadow-xs"
                   : "border-border/40 bg-muted/20 opacity-70",
               )}
@@ -181,7 +212,8 @@ export function ImportCalendarDialog({
                     type="checkbox"
                     checked={item.selected}
                     onChange={() => toggleSelect(item.id)}
-                    className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                    disabled={item.isImported || importing}
+                    className="size-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer disabled:opacity-50"
                   />
                   <span className="font-mono text-xs font-semibold text-foreground">
                     {item.formattedClock}
@@ -193,12 +225,17 @@ export function ImportCalendarDialog({
                   )}
                 </label>
 
-                {item.hasOverlap && (
+                {item.isImported ? (
+                  <Badge variant="outline" className="text-[11px] gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-normal">
+                    <Check className="size-3 shrink-0" />
+                    Imported
+                  </Badge>
+                ) : item.hasOverlap ? (
                   <Badge variant="outline" className="text-[11px] gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10">
                     <AlertCircle className="size-3 shrink-0" />
                     Overlaps: {item.overlappingTaskNames.join(", ")}
                   </Badge>
-                )}
+                ) : null}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">

@@ -11,6 +11,23 @@ describe("Calendar Category Rule Matching", () => {
     expect(matchCategory("1:1 with Manager").categoryKey).toBe("meeting");
     expect(matchCategory("Sprint Retrospective").categoryKey).toBe("meeting");
     expect(matchCategory("Client Call").categoryKey).toBe("meeting");
+    expect(matchCategory("IT Department 2026 SMART Goals").categoryKey).toBe("meeting");
+    expect(matchCategory("Quarterly Planning Session").categoryKey).toBe("meeting");
+    expect(matchCategory("Company Alignment Review").categoryKey).toBe("meeting");
+  });
+
+  it("classifies event as meeting when Google Meet link or multiple guests are present", () => {
+    expect(
+      matchCategory("Product Sync Without Keywords", null, {
+        hasMeetUrl: true,
+      }).categoryKey,
+    ).toBe("meeting");
+
+    expect(
+      matchCategory("Executive Check", null, {
+        guestCount: 3,
+      }).categoryKey,
+    ).toBe("meeting");
   });
 
   it("matches training keywords accurately", () => {
@@ -154,5 +171,61 @@ describe("Calendar Event Processing", () => {
     expect(suggestion!.isAllDay).toBe(true);
     expect(suggestion!.formattedClock).toBe("All day");
     expect(suggestion!.hasOverlap).toBe(false);
+  });
+
+  it("filters out daily reminders and non-work transparent notes from Today schedule", () => {
+    const dailyReminder: RawCalendarEvent = {
+      id: "rem-1",
+      summary: "Daily Reminder: Submit Timesheet",
+      start: { dateTime: "2026-09-08T02:00:00.000Z" },
+      end: { dateTime: "2026-09-08T02:15:00.000Z" },
+    };
+    expect(processCalendarEvent(dailyReminder, existingDTOs, "Asia/Jakarta")).toBeNull();
+
+    const transparentNote: RawCalendarEvent = {
+      id: "rem-2",
+      summary: "Review checklist note",
+      transparency: "transparent",
+      start: { dateTime: "2026-09-08T04:00:00.000Z" },
+      end: { dateTime: "2026-09-08T05:00:00.000Z" },
+    };
+    expect(processCalendarEvent(transparentNote, existingDTOs, "Asia/Jakarta")).toBeNull();
+  });
+
+  it("detects already-imported calendar events and sets isImported without overlap conflict", () => {
+    const importedTimelineDTOs: TimeEntryDTO[] = [
+      {
+        id: "e-smart-goals",
+        taskId: "t-smart-goals",
+        taskName: "IT Department 2026 SMART Goals",
+        categoryId: "c-meeting",
+        categoryKey: "meeting",
+        categoryName: "Meeting",
+        startedAt: "2026-09-08T03:00:00.000Z",
+        endedAt: "2026-09-08T04:00:00.000Z",
+        status: "completed",
+        notes: null,
+        source: "manual",
+        durationMinutes: 60,
+        pausedSeconds: 0,
+        pausedAt: null,
+      },
+    ];
+
+    const rawEvent: RawCalendarEvent = {
+      id: "gcal-smart-goals",
+      summary: "IT Department 2026 SMART Goals",
+      start: { dateTime: "2026-09-08T03:00:00.000Z" },
+      end: { dateTime: "2026-09-08T04:00:00.000Z" },
+      meetUrl: "https://meet.google.com/abc-defg-hij",
+    };
+
+    const suggestion = processCalendarEvent(rawEvent, importedTimelineDTOs, "Asia/Jakarta");
+    expect(suggestion).not.toBeNull();
+    expect(suggestion!.isImported).toBe(true);
+    expect(suggestion!.hasOverlap).toBe(false);
+    expect(suggestion!.overlappingEntryIds).toHaveLength(0);
+    expect(suggestion!.meetUrl).toBe("https://meet.google.com/abc-defg-hij");
+    expect(suggestion!.suggestedCategoryKey).toBe("meeting");
   });
 });

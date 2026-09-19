@@ -22,6 +22,64 @@ export interface ExistingEntrySpan {
 }
 
 /**
+ * Checks whether an existing timeline entry was imported from this calendar event.
+ * Matches if the time span is identical or within 2 minutes AND task name matches event title.
+ */
+export function isMatchingImportedEntry(
+  entry: ExistingEntrySpan,
+  eventSummary: string,
+  eventStart: Date,
+  eventEnd: Date,
+): boolean {
+  const startDiff = Math.abs(entry.startedAt.getTime() - eventStart.getTime());
+  const endDiff = entry.endedAt
+    ? Math.abs(entry.endedAt.getTime() - eventEnd.getTime())
+    : Infinity;
+
+  // Timestamps must align within 2 minutes
+  if (startDiff > 120_000 || endDiff > 120_000) {
+    return false;
+  }
+
+  const normEntry = entry.taskName.trim().toLowerCase();
+  const normEvent = eventSummary.trim().toLowerCase();
+
+  return (
+    normEntry === normEvent ||
+    normEntry.includes(normEvent) ||
+    normEvent.includes(normEntry)
+  );
+}
+
+/**
+ * Detects whether an event is a daily reminder, note, or non-work transparent item
+ * that should not clutter the active daily work schedule.
+ */
+export function isReminderOrNonWorkEvent(event: RawCalendarEvent): boolean {
+  const summary = (event.summary || "").trim().toLowerCase();
+
+  // Explicit reminder patterns in summary
+  if (
+    /^(daily\s+)?reminder\b/i.test(summary) ||
+    /:\s*reminder\b/i.test(summary) ||
+    /\b(daily\s+reminder)\b/i.test(summary)
+  ) {
+    return true;
+  }
+
+  // Google Calendar Free / Transparent events that have no video conference or guests are reminders/notes
+  if (
+    event.transparency === "transparent" &&
+    !event.meetUrl &&
+    (!event.guests || event.guests.length === 0)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Checks whether an event span [eventStart, eventEnd] overlaps with any existing entry.
  * Half-open interval rule: [A_start, A_end) overlaps [B_start, B_end) if A_start < B_end and A_end > B_start.
  */
@@ -45,6 +103,7 @@ export function findOverlappingEntries(
 
 /**
  * Converts a raw Google Calendar event into a full CalendarEventSuggestionDTO.
+ * Returns null if the event is a reminder or non-work event that should not be tracked.
  */
 export function processCalendarEvent(
   event: RawCalendarEvent,
@@ -52,6 +111,11 @@ export function processCalendarEvent(
   timeZone: string,
   customRules?: readonly CalendarRuleDTO[] | null,
 ): CalendarEventSuggestionDTO | null {
+  // Exclude daily reminders & transparent non-work items from Today's Schedule
+  if (isReminderOrNonWorkEvent(event)) {
+    return null;
+  }
+
   const isAllDay = !!event.start.date && !event.start.dateTime;
 
   let startDate: Date;
@@ -71,7 +135,11 @@ export function processCalendarEvent(
   const { categoryKey, categoryName } = matchCategory(
     event.summary,
     event.description,
-    customRules,
+    {
+      customRules,
+      hasMeetUrl: !!event.meetUrl,
+      guestCount: event.guests?.length ?? 0,
+    },
   );
 
   const entrySpans: ExistingEntrySpan[] = existingEntries.map((e) => ({
@@ -81,7 +149,20 @@ export function processCalendarEvent(
     endedAt: e.endedAt ? new Date(e.endedAt) : null,
   }));
 
-  const overlapping = isAllDay ? [] : findOverlappingEntries(startDate, endDate, entrySpans);
+  // Detect whether this event was already imported into the timeline
+  let isImported = false;
+  const nonImportedSpans: ExistingEntrySpan[] = [];
+
+  for (const span of entrySpans) {
+    if (!isAllDay && isMatchingImportedEntry(span, event.summary, startDate, endDate)) {
+      isImported = true;
+    } else {
+      nonImportedSpans.push(span);
+    }
+  }
+
+  // Only consider non-imported entries when checking for scheduling conflicts
+  const overlapping = isAllDay ? [] : findOverlappingEntries(startDate, endDate, nonImportedSpans);
 
   return {
     id: event.id,
@@ -97,5 +178,8 @@ export function processCalendarEvent(
     hasOverlap: overlapping.length > 0,
     overlappingEntryIds: overlapping.map((o) => o.id),
     overlappingTaskNames: overlapping.map((o) => o.taskName),
+    meetUrl: event.meetUrl ?? null,
+    htmlLink: event.htmlLink ?? null,
+    isImported,
   };
 }
