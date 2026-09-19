@@ -3,7 +3,11 @@ export type NotificationType =
   | "timer"
   | "review"
   | "sync"
-  | "system";
+  | "system"
+  | "gap"
+  | "meeting"
+  | "missing_day"
+  | "weekly_target";
 
 export type NotificationSeverity =
   | "info"

@@ -96,7 +96,7 @@ export function HeaderNav({ email, name, timezone }: HeaderNavProps) {
         </Tooltip>
 
         {/* Notifications Feature */}
-        <NotificationMenu />
+        <NotificationMenu timezone={timezone} />
 
         {/* User profile with Popover Menu */}
         <Popover>

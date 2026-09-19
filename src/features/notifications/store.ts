@@ -1,25 +1,24 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { isBannerSuppressedForDate, mergeCompanionAlerts } from "./domain";
 import type { TetraNotification } from "./types";
 
 const STORAGE_KEY = "tetra_notifications_v1";
 const BROWSER_NOTIF_KEY = "tetra_browser_notifications_v1";
 
-const INITIAL_NOTIFICATIONS: TetraNotification[] = [
-  {
-    id: "welcome-system",
-    type: "system",
-    severity: "info",
-    title: "Welcome to TETRA",
-    message:
-      "TETRA is your lightweight tracking companion. Start tasks as you work, then sync to your Google Sheet.",
-    timestamp: "2026-01-01T00:00:00.000Z",
-    read: false,
-    href: "/timeline",
-    actionLabel: "View Timeline",
-  },
-];
+const INITIAL_NOTIFICATIONS: TetraNotification[] = [];
+
+function cleanLegacySpam(list: TetraNotification[]): TetraNotification[] {
+  return list.filter(
+    (n) =>
+      n.title !== "Break Started" &&
+      n.title !== "Break Ended" &&
+      n.title !== "Workday Started" &&
+      n.title !== "Workday Ended" &&
+      n.id !== "welcome-system",
+  );
+}
 
 export function sendBrowserAlert(title: string, body: string): void {
   if (typeof window === "undefined" || typeof Notification === "undefined") {
@@ -56,7 +55,7 @@ function getNotificationsSnapshot(): TetraNotification[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        memoryNotifications = parsed;
+        memoryNotifications = cleanLegacySpam(parsed);
         return memoryNotifications;
       }
     }
@@ -181,6 +180,69 @@ function subscribeToBrowserAlerts(callback: () => void) {
   };
 }
 
+// Banner overlay suppression preference state (per calendar date)
+const BANNER_SUPPRESSED_KEY = "tetra_banner_suppressed_date_v1";
+let memoryBannerSuppressedDate: string | null = null;
+const bannerPrefListeners = new Set<() => void>();
+
+function notifyBannerPrefSubscribers() {
+  for (const listener of bannerPrefListeners) {
+    listener();
+  }
+}
+
+function getBannerSuppressedDateSnapshot(): string | null {
+  if (typeof window === "undefined") return null;
+  if (memoryBannerSuppressedDate !== null) return memoryBannerSuppressedDate;
+  try {
+    memoryBannerSuppressedDate = localStorage.getItem(BANNER_SUPPRESSED_KEY);
+  } catch {
+    memoryBannerSuppressedDate = null;
+  }
+  return memoryBannerSuppressedDate;
+}
+
+function getServerBannerSuppressedSnapshot(): string | null {
+  return null;
+}
+
+function subscribeToBannerSuppressed(callback: () => void) {
+  bannerPrefListeners.add(callback);
+  const handleStorageChange = (e: StorageEvent) => {
+    if (e.key === BANNER_SUPPRESSED_KEY) {
+      memoryBannerSuppressedDate = e.newValue;
+      notifyBannerPrefSubscribers();
+    }
+  };
+  window.addEventListener("storage", handleStorageChange);
+  return () => {
+    bannerPrefListeners.delete(callback);
+    window.removeEventListener("storage", handleStorageChange);
+  };
+}
+
+export function suppressBannerToday(currentTodayKey: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(BANNER_SUPPRESSED_KEY, currentTodayKey);
+    memoryBannerSuppressedDate = currentTodayKey;
+    notifyBannerPrefSubscribers();
+  } catch {
+    // Ignore
+  }
+}
+
+export function unsuppressBannerToday(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(BANNER_SUPPRESSED_KEY);
+    memoryBannerSuppressedDate = null;
+    notifyBannerPrefSubscribers();
+  } catch {
+    // Ignore
+  }
+}
+
 // Hydration helper
 function subscribeHydration() {
   return () => {};
@@ -203,6 +265,12 @@ export function emitNotification(
   );
 }
 
+export function syncCompanionAlerts(serverAlerts: TetraNotification[]): void {
+  const current = cleanLegacySpam(getNotificationsSnapshot());
+  const updated = mergeCompanionAlerts(current, serverAlerts);
+  setStoredNotifications(updated);
+}
+
 export function useNotifications() {
   const notifications = useSyncExternalStore(
     subscribeToNotifications,
@@ -214,6 +282,12 @@ export function useNotifications() {
     subscribeToBrowserAlerts,
     getBrowserAlertsSnapshot,
     getServerBrowserAlertsSnapshot,
+  );
+
+  const bannerSuppressedDate = useSyncExternalStore(
+    subscribeToBannerSuppressed,
+    getBannerSuppressedDateSnapshot,
+    getServerBannerSuppressedSnapshot,
   );
 
   const isLoaded = useSyncExternalStore(
@@ -247,6 +321,20 @@ export function useNotifications() {
     setStoredNotifications([]);
   }, []);
 
+  const refreshAlerts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.notifications)) {
+          syncCompanionAlerts(data.notifications);
+        }
+      }
+    } catch {
+      // Ignore network errors
+    }
+  }, []);
+
   const toggleBrowserAlerts = useCallback(async (): Promise<boolean> => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
       return false;
@@ -275,6 +363,19 @@ export function useNotifications() {
     return granted;
   }, []);
 
+  const isBannerMutedToday = useCallback(
+    (today: string) => isBannerSuppressedForDate(bannerSuppressedDate, today),
+    [bannerSuppressedDate],
+  );
+
+  const muteBannerToday = useCallback((today: string) => {
+    suppressBannerToday(today);
+  }, []);
+
+  const unmuteBannerToday = useCallback(() => {
+    unsuppressBannerToday();
+  }, []);
+
   return {
     notifications,
     unreadCount,
@@ -283,7 +384,12 @@ export function useNotifications() {
     markAllAsRead,
     removeNotification,
     clearAll,
+    refreshAlerts,
     browserAlertsEnabled,
     toggleBrowserAlerts,
+    bannerSuppressedDate,
+    isBannerMutedToday,
+    muteBannerToday,
+    unmuteBannerToday,
   };
 }

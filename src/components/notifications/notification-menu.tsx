@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Bell,
   BellOff,
   BellRing,
+  Calendar,
+  CalendarX2,
   CheckCheck,
   Clock,
   ExternalLink,
   Info,
   Layers,
   Sparkles,
+  Target,
   Trash2,
   TriangleAlert,
   X,
@@ -32,11 +35,20 @@ import {
 import { useNotifications } from "@/features/notifications/store";
 import { formatRelativeTime } from "@/features/notifications/domain";
 import type { TetraNotification } from "@/features/notifications/types";
+import { todayKey } from "@/lib/time";
 
 function getNotificationIcon(notification: TetraNotification) {
   switch (notification.type) {
     case "attendance":
       return <Clock className="size-4 text-emerald-600 dark:text-emerald-400" />;
+    case "gap":
+      return <Clock className="size-4 text-amber-600 dark:text-amber-400" />;
+    case "meeting":
+      return <Calendar className="size-4 text-indigo-600 dark:text-indigo-400" />;
+    case "missing_day":
+      return <CalendarX2 className="size-4 text-rose-600 dark:text-rose-400" />;
+    case "weekly_target":
+      return <Target className="size-4 text-violet-600 dark:text-violet-400" />;
     case "review":
       return <Sparkles className="size-4 text-primary" />;
     case "sync":
@@ -48,7 +60,11 @@ function getNotificationIcon(notification: TetraNotification) {
   }
 }
 
-export function NotificationMenu() {
+interface NotificationMenuProps {
+  timezone?: string;
+}
+
+export function NotificationMenu({ timezone = "Asia/Jakarta" }: NotificationMenuProps) {
   const {
     notifications,
     unreadCount,
@@ -56,12 +72,29 @@ export function NotificationMenu() {
     markAllAsRead,
     clearAll,
     removeNotification,
+    refreshAlerts,
     browserAlertsEnabled,
     toggleBrowserAlerts,
+    isBannerMutedToday,
+    muteBannerToday,
+    unmuteBannerToday,
   } = useNotifications();
+
+  const currentTodayKey = todayKey(timezone);
+  const isMutedToday = isBannerMutedToday(currentTodayKey);
 
   const [tab, setTab] = useState<"all" | "unread">("all");
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    void refreshAlerts();
+  }, [refreshAlerts]);
+
+  useEffect(() => {
+    if (open) {
+      void refreshAlerts();
+    }
+  }, [open, refreshAlerts]);
 
   const displayedNotifications = useMemo(() => {
     if (tab === "unread") {
@@ -298,10 +331,35 @@ export function NotificationMenu() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border/60 bg-muted/15 px-3 py-2 text-center">
-          <span className="text-[11px] text-muted-foreground">
-            TETRA companion notifications
-          </span>
+        <div className="border-t border-border/60 bg-muted/15 px-3 py-2 flex items-center justify-between text-[11px] text-muted-foreground">
+          {isMutedToday ? (
+            <>
+              <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                <BellOff className="size-3 shrink-0" />
+                <span>Banner snoozed today</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => unmuteBannerToday()}
+                className="font-medium text-primary hover:underline cursor-pointer"
+                data-testid="unmute-banner-button"
+              >
+                Un-snooze
+              </button>
+            </>
+          ) : (
+            <>
+              <span>Startup banner active</span>
+              <button
+                type="button"
+                onClick={() => muteBannerToday(currentTodayKey)}
+                className="hover:text-foreground hover:underline cursor-pointer"
+                data-testid="mute-banner-button"
+              >
+                Snooze today
+              </button>
+            </>
+          )}
         </div>
       </PopoverContent>
     </Popover>

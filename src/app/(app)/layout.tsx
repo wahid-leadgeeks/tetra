@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/app-nav/wordmark";
 import { TourProvider } from "@/components/guide-tour/tour-provider";
 import { KeyboardNav } from "@/components/keyboard/keyboard-nav";
 import { NetworkStatusBanner } from "@/components/network-status";
+import { NotificationBannerOverlay } from "@/components/notifications/notification-banner-overlay";
 import { auth } from "@/server/auth";
 
 /**
@@ -50,6 +51,7 @@ export default async function AppLayout({
       <div className="md:pl-64 min-w-0 flex flex-col flex-1">
         <NetworkStatusBanner />
         <HeaderNav email={email} name={name} timezone={timezone} />
+        <NotificationBannerOverlay timezone={timezone} />
         <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl flex-1">
           {children}
         </main>
