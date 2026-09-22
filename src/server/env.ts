@@ -16,6 +16,10 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
+  DISABLE_AUTH: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 export const env = envSchema.parse(process.env);

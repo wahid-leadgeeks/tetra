@@ -204,7 +204,7 @@ async function refreshGoogleAccessToken(token: JWT): Promise<JWT> {
   }
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
   secret: env.AUTH_SECRET,
@@ -283,3 +283,84 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+export const { handlers, signIn, signOut } = nextAuth;
+
+let defaultUserCache: {
+  id: string;
+  name: string;
+  email: string;
+  timezone: string;
+  image?: string | null;
+} | null = null;
+
+async function getBypassSession(): Promise<import("next-auth").Session | null> {
+  if (defaultUserCache) {
+    return {
+      user: {
+        id: defaultUserCache.id,
+        name: defaultUserCache.name,
+        email: defaultUserCache.email,
+        timezone: defaultUserCache.timezone,
+        image: defaultUserCache.image ?? null,
+      },
+      hasGoogleAuth: false,
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+
+  const defaultEmail = process.env.DEFAULT_USER_EMAIL || "user@example.com";
+  let [u] = await db.select().from(users).where(eq(users.email, defaultEmail)).limit(1);
+  if (!u) {
+    const allUsers = await db.select().from(users).limit(1);
+    u = allUsers[0];
+  }
+  if (!u) {
+    [u] = await db
+      .insert(users)
+      .values({
+        name: "Default User",
+        email: defaultEmail,
+        timezone: env.DEFAULT_TIMEZONE,
+      })
+      .returning();
+  }
+
+  defaultUserCache = {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    timezone: u.timezone || env.DEFAULT_TIMEZONE,
+    image: u.image,
+  };
+
+  return {
+    user: {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      timezone: u.timezone || env.DEFAULT_TIMEZONE,
+      image: u.image ?? null,
+    },
+    hasGoogleAuth: false,
+    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+export const auth = (async (
+  ...args: Parameters<typeof nextAuth.auth>
+): Promise<import("next-auth").Session | null> => {
+  if (
+    process.env.DISABLE_AUTH === "true" ||
+    process.env.NEXT_PUBLIC_DISABLE_AUTH === "true" ||
+    env.DISABLE_AUTH === true
+  ) {
+    const session = await getBypassSession();
+    if (session) return session;
+  }
+  return (
+    nextAuth.auth as (
+      ...args: unknown[]
+    ) => Promise<import("next-auth").Session | null>
+  )(...args);
+}) as typeof nextAuth.auth;

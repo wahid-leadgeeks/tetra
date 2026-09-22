@@ -42,11 +42,7 @@ export async function POST(req: Request): Promise<Response> {
       });
 
       if (!sheets) {
-        autoSyncResult = {
-          attempted: true,
-          success: false,
-          message: "Google Sheets credentials not configured",
-        };
+        autoSyncResult = { attempted: false };
       } else {
         try {
           // 1. Mark day reviewed so executeSync can run

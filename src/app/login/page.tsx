@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { env } from "@/server/env";
 
@@ -13,6 +14,14 @@ interface LoginPageProps {
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  if (
+    env.DISABLE_AUTH ||
+    process.env.DISABLE_AUTH === "true" ||
+    process.env.NEXT_PUBLIC_DISABLE_AUTH === "true"
+  ) {
+    redirect("/");
+  }
+
   const { error } = await searchParams;
   return (
     <LoginForm

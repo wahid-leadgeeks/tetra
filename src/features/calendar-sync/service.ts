@@ -19,6 +19,7 @@ import {
   fetchCalendarEvents,
   listUserCalendars,
   patchGoogleCalendarEvent,
+  type RawCalendarEvent,
 } from "./google";
 import { matchCategory } from "./rules";
 import type {
@@ -157,12 +158,47 @@ export async function getCalendarSchedule(
 }> {
   const config = await getCalendarConfig(userId);
 
-  if (!config.hasGoogleAuth || !config.syncEnabled) {
-    return { events: [], config, hasGoogleAuth: config.hasGoogleAuth };
-  }
-
   const timeMin = zonedDayStart(dayKey, timeZone);
   const timeMax = zonedDayEnd(dayKey, timeZone);
+
+  if (!config.hasGoogleAuth || !config.syncEnabled) {
+    const dbEvents = await db
+      .select()
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.userId, userId),
+          gte(calendarEvents.startAt, timeMin),
+          lte(calendarEvents.startAt, timeMax),
+        ),
+      );
+
+    if (dbEvents.length > 0) {
+      const daySummary = await getDaySummary(userId, dayKey, timeZone);
+      const existingEntries = daySummary.timeEntries;
+      const suggestions = dbEvents
+        .map((evt) => {
+          const raw: RawCalendarEvent = {
+            id: evt.googleEventId || evt.id,
+            summary: evt.title,
+            description: evt.description || undefined,
+            meetUrl: evt.meetUrl || undefined,
+            start: { dateTime: evt.startAt.toISOString() },
+            end: { dateTime: evt.endAt.toISOString() },
+          };
+          return processCalendarEvent(raw, existingEntries, timeZone, config.categoryRules);
+        })
+        .filter((item): item is CalendarEventSuggestionDTO => item !== null);
+
+      return {
+        events: suggestions,
+        config: { ...config, syncEnabled: true },
+        hasGoogleAuth: true,
+      };
+    }
+
+    return { events: [], config, hasGoogleAuth: config.hasGoogleAuth };
+  }
 
   try {
     // Fetch raw calendar events

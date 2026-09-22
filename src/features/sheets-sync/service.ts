@@ -250,11 +250,7 @@ export async function syncClockIn(
     accessToken: options.accessToken,
   });
   if (!sheets) {
-    return {
-      attempted: true,
-      success: false,
-      message: "Google Sheets credentials not configured",
-    };
+    return { attempted: false };
   }
 
   const timezone = await getUserTimezone(userId);

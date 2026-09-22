@@ -18,16 +18,20 @@ export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
-  if (session?.error === "RefreshAccessTokenError") {
+  const isAuthDisabled =
+    process.env.DISABLE_AUTH === "true" ||
+    process.env.NEXT_PUBLIC_DISABLE_AUTH === "true";
+
+  if (session?.error === "RefreshAccessTokenError" && !isAuthDisabled) {
     redirect("/login?error=SessionExpired");
   }
-  if (!session?.user?.id) {
+  if (!session?.user?.id && !isAuthDisabled) {
     redirect("/login");
   }
 
-  const email = session.user.email ?? "";
-  const name = session.user.name ?? email.split("@")[0] ?? "User";
-  const timezone = session.user.timezone ?? "Asia/Jakarta";
+  const email = session?.user?.email ?? "";
+  const name = session?.user?.name ?? email.split("@")[0] ?? "User";
+  const timezone = session?.user?.timezone ?? "Asia/Jakarta";
 
   return (
     <TourProvider>
