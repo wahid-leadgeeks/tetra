@@ -38,10 +38,21 @@ export const upsertSyncConfigSchema = z.object({
 
 type SpreadsheetConfigRow = typeof spreadsheetConfigs.$inferSelect;
 
+function isLeadGeeksSheet(
+  spreadsheetId: string,
+  worksheetName?: string | null,
+): boolean {
+  return (
+    spreadsheetId.includes("1BxiMVs0XR") ||
+    spreadsheetId.includes("1BxiMVs0XRA5n") ||
+    (worksheetName != null && worksheetName.toLowerCase() === "user")
+  );
+}
+
 function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
   // Re-parsed at the boundary — a corrupt jsonb fails loudly here.
   let mapping = mappingSchema.parse(row.mapping);
-  const isLeadGeeks = row.spreadsheetId.includes("1BxiMVs0XR");
+  const isLeadGeeks = isLeadGeeksSheet(row.spreadsheetId, row.worksheetName);
   const fallback = isLeadGeeks ? LEADGEEKS_SHEET_MAPPING : DEFAULT_SHEET_MAPPING;
 
   if (
@@ -94,7 +105,10 @@ export async function getSyncConfig(
   // Fallback to environment variables if configured
   if (env.GOOGLE_SPREADSHEET_ID) {
     const timezone = await getUserTimezone(userId);
-    const isLeadGeeks = env.GOOGLE_SPREADSHEET_ID.includes("1BxiMVs0XR");
+    const isLeadGeeks = isLeadGeeksSheet(
+      env.GOOGLE_SPREADSHEET_ID,
+      env.GOOGLE_SHEET_NAME,
+    );
     return {
       id: "env-default",
       spreadsheetId: env.GOOGLE_SPREADSHEET_ID,
@@ -150,7 +164,7 @@ export async function upsertSyncConfig(
     .orderBy(desc(spreadsheetConfigs.updatedAt))
     .limit(1);
 
-  const isLeadGeeks = spreadsheetId.includes("1BxiMVs0XR");
+  const isLeadGeeks = isLeadGeeksSheet(spreadsheetId, worksheetName);
   const fallback = isLeadGeeks ? LEADGEEKS_SHEET_MAPPING : DEFAULT_SHEET_MAPPING;
   const existingMapping = existing.length > 0 ? (existing[0].mapping as Partial<SheetMapping>) : null;
 
