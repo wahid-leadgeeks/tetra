@@ -688,7 +688,7 @@ describe("computeSheetBreakTimes", () => {
   });
 
 
-  it("emits category time, notes, and workTotal cells when tasksOnly is true", () => {
+  it("emits full day cells including attendance, breaks, out, dailyTotal, and workTotal", () => {
     const summary = makeSummary();
     const payload = buildSyncPayload(summary, NOTES_MAPPING, {
       dateValueFormat: "iso",
@@ -697,16 +697,14 @@ describe("computeSheetBreakTimes", () => {
       tasksOnly: true,
     });
 
-    // Does not include clockIn, clockOut, breaks, or dailyTotal
     const a1s = payload.cells.map((c) => c.a1);
-    expect(a1s).not.toContain(`${NOTES_MAPPING.clockInColumn}${ROW}`);
-    expect(a1s).not.toContain(`${NOTES_MAPPING.clockOutColumn}${ROW}`);
-    expect(a1s).not.toContain(`${NOTES_MAPPING.breakStartColumn}${ROW}`);
-    expect(a1s).not.toContain(`${NOTES_MAPPING.breakEndColumn}${ROW}`);
-    expect(a1s).not.toContain(`${NOTES_MAPPING.dailyTotalColumn}${ROW}`);
-
-    // Includes workTotalColumn and all 8 category time cells
+    expect(a1s).toContain(`${NOTES_MAPPING.clockInColumn}${ROW}`);
+    expect(a1s).toContain(`${NOTES_MAPPING.clockOutColumn}${ROW}`);
+    expect(a1s).toContain(`${NOTES_MAPPING.breakStartColumn}${ROW}`);
+    expect(a1s).toContain(`${NOTES_MAPPING.breakEndColumn}${ROW}`);
+    expect(a1s).toContain(`${NOTES_MAPPING.dailyTotalColumn}${ROW}`);
     expect(a1s).toContain(`${NOTES_MAPPING.workTotalColumn}${ROW}`);
+
     const workTotalCell = payload.cells.find((c) => c.a1 === `${NOTES_MAPPING.workTotalColumn}${ROW}`);
     expect(workTotalCell?.value).toBe("7:37"); // 457 minutes from makeSummary
     expect(a1s).toContain(`${NOTES_MAPPING.categories.website_management}${ROW}`);

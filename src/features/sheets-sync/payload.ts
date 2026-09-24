@@ -100,38 +100,40 @@ export function buildSyncPayload(
     columnLabel: "Work Total",
   };
 
-  const cells: SyncCellDTO[] = options.tasksOnly
-    ? [workTotalCell, ...categoryCells, ...compiledNotesCells]
-    : [
-        {
-          a1: `${mapping.clockInColumn}${rowNumber}`,
-          value: clockValue(attendance?.clockInAt, timezone),
-          columnLabel: "Clock In",
-        },
-        {
-          a1: `${mapping.breakStartColumn}${rowNumber}`,
-          value: breakStart,
-          columnLabel: "Break Start",
-        },
-        {
-          a1: `${mapping.breakEndColumn}${rowNumber}`,
-          value: breakEnd,
-          columnLabel: "Break End",
-        },
-        {
-          a1: `${mapping.clockOutColumn}${rowNumber}`,
-          value: clockValue(attendance?.clockOutAt, timezone),
-          columnLabel: "Clock Out",
-        },
-        {
-          a1: `${mapping.dailyTotalColumn}${rowNumber}`,
-          value: formatHMM(summary.totals.attendanceMinutes),
-          columnLabel: "Daily Total (Attendance)",
-        },
-        workTotalCell,
-        ...categoryCells,
-        ...compiledNotesCells,
-      ];
+  const attendanceCells: SyncCellDTO[] = [
+    {
+      a1: `${mapping.clockInColumn}${rowNumber}`,
+      value: clockValue(attendance?.clockInAt, timezone),
+      columnLabel: "Clock In",
+    },
+    {
+      a1: `${mapping.breakStartColumn}${rowNumber}`,
+      value: breakStart,
+      columnLabel: "Break Start",
+    },
+    {
+      a1: `${mapping.breakEndColumn}${rowNumber}`,
+      value: breakEnd,
+      columnLabel: "Break End",
+    },
+    {
+      a1: `${mapping.clockOutColumn}${rowNumber}`,
+      value: clockValue(attendance?.clockOutAt, timezone),
+      columnLabel: "Clock Out",
+    },
+    {
+      a1: `${mapping.dailyTotalColumn}${rowNumber}`,
+      value: formatHMM(summary.totals.attendanceMinutes),
+      columnLabel: "Daily Total (Attendance)",
+    },
+  ];
+
+  const cells: SyncCellDTO[] = [
+    ...attendanceCells,
+    workTotalCell,
+    ...categoryCells,
+    ...compiledNotesCells,
+  ];
 
   return {
     rowDateValue:

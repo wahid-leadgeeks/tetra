@@ -157,14 +157,14 @@ export function ImportCalendarDialog({
         fetch(`/api/days/${targetDay}/sync`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allowUnreviewed: true, tasksOnly: true }),
+          body: JSON.stringify({ allowUnreviewed: true }),
         })
           .then(async (res) => {
             if (!res.ok) return;
             const data = await res.json().catch(() => null);
             if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
               toast.success(
-                `Tasks auto-synced to Google Sheet (${data.changedCells.length} ${
+                `Auto-synced to Google Sheet (${data.changedCells.length} ${
                   data.changedCells.length === 1 ? "cell" : "cells"
                 })`,
               );

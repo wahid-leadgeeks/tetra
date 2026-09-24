@@ -205,6 +205,9 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       });
       toast.success("Workday closed.");
       refresh();
+      if (autoSyncTasks) {
+        void syncTasksBackground();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to clock out.");
     } finally {
@@ -236,7 +239,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         method: "PATCH",
         body: JSON.stringify({ autoSyncTasks: checked }),
       });
-      toast.success(checked ? "Auto-sync tasks enabled" : "Auto-sync tasks disabled");
+      toast.success(checked ? "Auto-sync enabled" : "Auto-sync disabled");
     } catch (err) {
       setAutoSyncTasks(!checked);
       toast.error(err instanceof Error ? err.message : "Could not update sync setting");
@@ -251,11 +254,11 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         `/api/days/${dayKey}/sync`,
         {
           method: "POST",
-          body: JSON.stringify({ allowUnreviewed: true, tasksOnly: true }),
+          body: JSON.stringify({ allowUnreviewed: true }),
         },
       );
       if (!res.idempotent && res.changedCells && res.changedCells.length > 0) {
-        toast.success(`Tasks auto-synced to Google Sheet (${res.changedCells.length} cells)`);
+        toast.success(`Auto-synced to Google Sheet (${res.changedCells.length} cells)`);
       }
     } catch {
       // Non-blocking background sync; keep quiet on routine errors
@@ -421,7 +424,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
           <div className="flex flex-wrap items-center gap-2">
             <div
               className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 h-11"
-              title="Automatically sync task changes and notes to your Google Sheet"
+              title="Automatically sync attendance, breaks, tasks, and totals to your Google Sheet"
             >
               <Switch
                 id="auto-sync-tasks-switch"

@@ -185,7 +185,12 @@ export async function executeSync(
     if (typeof formula === "string" && formula.startsWith("=")) {
       return false;
     }
-    return formattedValues[i] !== cell.value;
+    const current = formattedValues[i];
+    // If the computed value is empty and the sheet has "0:00" or empty, keep existing to preserve formula inputs
+    if (cell.value === "" && (current === "0:00" || current === "" || current === undefined)) {
+      return false;
+    }
+    return current !== cell.value;
   });
 
   const isReviewed = summary.reviewState === "reviewed";
