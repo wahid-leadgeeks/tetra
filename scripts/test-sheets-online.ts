@@ -19,7 +19,7 @@ async function main() {
   console.log(`Target Spreadsheet ID : ${spreadsheetId}`);
   console.log(`Target Worksheet Name  : ${sheetName}`);
   console.log(`Target Sheet GID       : ${sheetGid}`);
-  console.log(`Spreadsheet URL        : https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetGid}\n`);
+  console.log(`Spreadsheet URL        : https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${sheetGid}#gid=${sheetGid}\n`);
 
   // Check available credentials
   console.log("--- Checking Credentials ---");

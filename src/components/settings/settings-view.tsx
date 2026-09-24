@@ -521,7 +521,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                 {form.spreadsheetId ? (
                   <div className="flex items-center gap-2 pt-1 text-xs">
                     <a
-                      href={`https://docs.google.com/spreadsheets/d/${form.spreadsheetId}/edit${form.sheetGid ? `#gid=${form.sheetGid}` : ""}`}
+                      href={`https://docs.google.com/spreadsheets/d/${form.spreadsheetId}/edit${form.sheetGid ? `?gid=${form.sheetGid}#gid=${form.sheetGid}` : ""}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
