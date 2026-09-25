@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   formatDayLong,
-  isToday,
   nextDay,
   nextWorkday,
   previousDay,
