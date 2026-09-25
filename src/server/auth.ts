@@ -319,7 +319,7 @@ async function getBypassSession(): Promise<import("next-auth").Session | null> {
     [u] = await db
       .insert(users)
       .values({
-        name: "Default User",
+        name: process.env.DEFAULT_USER_NAME || "Default User",
         email: defaultEmail,
         timezone: env.DEFAULT_TIMEZONE,
       })

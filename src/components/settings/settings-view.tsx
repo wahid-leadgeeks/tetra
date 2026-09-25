@@ -467,7 +467,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                           spreadsheetId: e.target.value,
                         }))
                       }
-                      placeholder="e.g. 1BxiMVs0XR..."
+                      placeholder="e.g. 1BxiMVs0X..."
                       autoComplete="off"
                       spellCheck={false}
                       data-testid="settings-spreadsheet-id"
@@ -485,7 +485,7 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
                           worksheetName: e.target.value,
                         }))
                       }
-                      placeholder="e.g. User"
+                      placeholder="e.g. Sheet1"
                       autoComplete="off"
                     />
                     <p className="text-[11px] text-muted-foreground">

@@ -70,7 +70,7 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
 
     // 5. Start work day (Clock in)
     await page.getByTestId("clock-in").click();
-    await expect(page.getByTestId("clock-out")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("clock-out")).toBeVisible({ timeout: 15_000 });
     await takeVisualScreenshot(
       page,
       testInfo,

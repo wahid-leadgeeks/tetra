@@ -62,8 +62,8 @@ describe("Google Sheets Online Reading & Inspection", () => {
   it("fails gracefully when no Google credentials (OAuth or Service Account) are available", async () => {
     const result = await testReadSpreadsheet({
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
-      sheetGid: "0",
+      worksheetName: "Employee1",
+      sheetGid: "12345678",
     });
 
     expect(result.ok).toBe(false);
@@ -74,11 +74,11 @@ describe("Google Sheets Online Reading & Inspection", () => {
   it("reads online spreadsheet metadata and cell values with an OAuth token", async () => {
     mockSpreadsheetsGet.mockResolvedValueOnce({
       data: {
-        properties: { title: "LeadGeeks Employee Tracking 2026" },
+        properties: { title: "Company Employee Tracking 2026" },
         sheets: [
           { properties: { sheetId: 0, title: "Overview" } },
-          { properties: { sheetId: 0, title: "Sheet1" } },
-          { properties: { sheetId: 1976323692, title: "Team" } },
+          { properties: { sheetId: 12345678, title: "Employee1" } },
+          { properties: { sheetId: 12345679, title: "Team" } },
         ],
       },
     });
@@ -96,20 +96,20 @@ describe("Google Sheets Online Reading & Inspection", () => {
     const result = await testReadSpreadsheet({
       accessToken: "mock_oauth_access_token",
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
-      sheetGid: "0",
+      worksheetName: "Employee1",
+      sheetGid: "12345678",
     });
 
     expect(result.ok).toBe(true);
     expect(result.authMethod).toBe("oauth_user");
-    expect(result.spreadsheetTitle).toBe("LeadGeeks Employee Tracking 2026");
+    expect(result.spreadsheetTitle).toBe("Company Employee Tracking 2026");
     expect(result.targetSheetFound).toBe(true);
-    expect(result.targetSheetName).toBe("Sheet1");
-    expect(result.targetSheetGid).toBe("0");
+    expect(result.targetSheetName).toBe("Employee1");
+    expect(result.targetSheetGid).toBe("12345678");
     expect(result.sheets).toHaveLength(3);
     expect(result.rowCount).toBe(3);
     expect(result.columnCount).toBe(5);
-    expect(result.sampleRange).toBe("'Sheet1'!A1:Z15");
+    expect(result.sampleRange).toBe("'Employee1'!A1:Z15");
     expect(result.sampleValues?.[0][0]).toBe("Date");
     expect(result.sampleValues?.[1][0]).toBe("2026-09-01");
   });
@@ -117,9 +117,9 @@ describe("Google Sheets Online Reading & Inspection", () => {
   it("matches target sheet by GID fallback if tab title was renamed", async () => {
     mockSpreadsheetsGet.mockResolvedValueOnce({
       data: {
-        properties: { title: "LeadGeeks Employee Tracking 2026" },
+        properties: { title: "Company Employee Tracking 2026" },
         sheets: [
-          { properties: { sheetId: 0, title: "Team Sheet" } }, // renamed
+          { properties: { sheetId: 12345678, title: "Team Sheet" } }, // renamed
         ],
       },
     });
@@ -133,14 +133,14 @@ describe("Google Sheets Online Reading & Inspection", () => {
     const result = await testReadSpreadsheet({
       accessToken: "mock_oauth_access_token",
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
-      sheetGid: "0",
+      worksheetName: "Employee1",
+      sheetGid: "12345678",
     });
 
     expect(result.ok).toBe(true);
     expect(result.targetSheetFound).toBe(true);
     expect(result.targetSheetName).toBe("Team Sheet");
-    expect(result.targetSheetGid).toBe("0");
+    expect(result.targetSheetGid).toBe("12345678");
   });
 
   it("reports descriptive error when target worksheet tab is not found", async () => {
@@ -157,25 +157,25 @@ describe("Google Sheets Online Reading & Inspection", () => {
     const result = await testReadSpreadsheet({
       accessToken: "mock_oauth_access_token",
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
-      sheetGid: "0",
+      worksheetName: "Employee1",
+      sheetGid: "12345678",
     });
 
     expect(result.ok).toBe(false);
     expect(result.targetSheetFound).toBe(false);
-    expect(result.error).toContain('Worksheet tab "Sheet1" not found in spreadsheet "Company Sheet"');
+    expect(result.error).toContain('Worksheet tab "Employee1" not found in spreadsheet "Company Sheet"');
     expect(result.error).toContain('Available tabs: "Sheet1", "Summary"');
   });
 
   it("captures and surfaces Google API permission denied (403) errors cleanly", async () => {
     mockSpreadsheetsGet.mockRejectedValueOnce(
-      new Error("The caller does not have permission to access spreadsheet 1BxiMVs0XR..."),
+      new Error("The caller does not have permission to access spreadsheet 1BxiMVs0X..."),
     );
 
     const result = await testReadSpreadsheet({
       accessToken: "invalid_or_unauthorized_token",
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
+      worksheetName: "Employee1",
     });
 
     expect(result.ok).toBe(false);
@@ -195,8 +195,8 @@ describe("Google Sheets Online Reading & Inspection", () => {
 
     mockSpreadsheetsGet.mockResolvedValueOnce({
       data: {
-        properties: { title: "LeadGeeks Employee Tracking 2026" },
-        sheets: [{ properties: { sheetId: 0, title: "Sheet1" } }],
+        properties: { title: "Company Employee Tracking 2026" },
+        sheets: [{ properties: { sheetId: 12345678, title: "Employee1" } }],
       },
     });
 
@@ -209,8 +209,8 @@ describe("Google Sheets Online Reading & Inspection", () => {
     const result = await testReadSpreadsheet({
       userId: "user-123",
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
-      sheetGid: "0",
+      worksheetName: "Employee1",
+      sheetGid: "12345678",
     });
 
     expect(result.ok).toBe(true);
@@ -228,7 +228,7 @@ describe("Google Sheets Online Reading & Inspection", () => {
     const result = await testReadSpreadsheet({
       accessToken: "expired_token_without_refresh",
       spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-      worksheetName: "Sheet1",
+      worksheetName: "Employee1",
     });
 
     expect(result.ok).toBe(false);

@@ -241,7 +241,7 @@ describe("allocateTimelineEntries", () => {
           "Operations Department Introduction (0:30)\n" +
           "Introduction to Finance & Accounting Department (0:30)\n" +
           "Independent learning, writing summary for notes and onboarding diary (3:30)\n" +
-          "creating presentation about relationship of IT department with other department on Leadgeeks (2:00)",
+          "creating presentation about relationship of IT department with other department (2:00)",
       },
     ];
 

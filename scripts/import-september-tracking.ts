@@ -43,15 +43,15 @@ const SEPTEMBER_DATA: DayPlan[] = [
       // Meeting (1h 40m = 100m)
       {
         categoryKey: "meeting",
-        taskName: "Onboarding User - Information Technology",
-        notes: "Onboarding User - Information Technology",
+        taskName: "Onboarding - Information Technology",
+        notes: "Onboarding - Information Technology",
         start: "08:30",
         end: "09:10",
       },
       {
         categoryKey: "meeting",
-        taskName: "Special Event for User on LeadGeeks",
-        notes: "Special Event for User on LeadGeeks",
+        taskName: "Special Event - Team Overview",
+        notes: "Special Event - Team Overview",
         start: "09:10",
         end: "09:40",
       },
@@ -72,8 +72,8 @@ const SEPTEMBER_DATA: DayPlan[] = [
       },
       {
         categoryKey: "training",
-        taskName: "Introduction to LeadGeeks",
-        notes: "Introduction to LeadGeeks",
+        taskName: "Introduction to Company",
+        notes: "Introduction to Company",
         start: "10:50",
         end: "11:30",
       },
@@ -182,8 +182,8 @@ const SEPTEMBER_DATA: DayPlan[] = [
       },
       {
         categoryKey: "training",
-        taskName: "Creating presentation about LeadGeeks",
-        notes: "Creating presentation about LeadGeeks",
+        taskName: "Creating presentation about IT department",
+        notes: "Creating presentation about IT department",
         start: "15:55",
         end: "18:15",
       },
@@ -198,8 +198,8 @@ const SEPTEMBER_DATA: DayPlan[] = [
       // Meeting (2h 35m = 155m)
       {
         categoryKey: "meeting",
-        taskName: "How IT Works at LeadGeeks",
-        notes: "How IT Works at LeadGeeks",
+        taskName: "How IT Works in Company",
+        notes: "How IT Works in Company",
         start: "08:30",
         end: "11:05",
       },
@@ -221,8 +221,8 @@ const SEPTEMBER_DATA: DayPlan[] = [
       },
       {
         categoryKey: "training",
-        taskName: "Preparing presentation about LeadGeeks",
-        notes: "Preparing presentation about LeadGeeks",
+        taskName: "Preparing presentation about IT department",
+        notes: "Preparing presentation about IT department",
         start: "15:05",
         end: "18:00",
       },
@@ -316,8 +316,9 @@ async function main() {
   const emailArg = args.find((a) => a.startsWith("--email="))?.split("=")[1];
   const nameArg = args.find((a) => a.startsWith("--name="))?.split("=")[1];
 
-  const targetEmail = emailArg || "user@example.com";
-  const targetName = nameArg || "Sheet1";
+  const targetEmail =
+    emailArg || process.env.DEFAULT_USER_EMAIL || "user@example.com";
+  const targetName = nameArg || process.env.DEFAULT_USER_NAME || "Demo User";
   const timezone = "Asia/Jakarta";
 
   console.log(`Importing September 2026 data for user: ${targetName} <${targetEmail}>`);

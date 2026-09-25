@@ -470,7 +470,7 @@ describe("buildSyncPayload notes cells", () => {
     // Given a reviewed day with meeting and training entries
     const summary = makeSummary({
       timeEntries: [
-        makeEntry({ id: "e1", taskName: "Onboarding User" }),
+        makeEntry({ id: "e1", taskName: "Onboarding Employee" }),
         makeEntry({
           id: "e2",
           categoryKey: "training",
@@ -490,7 +490,7 @@ describe("buildSyncPayload notes cells", () => {
     expect(notesCells).toEqual([
       {
         a1: "S5",
-        value: "Onboarding User (1:00)",
+        value: "Onboarding Employee (1:00)",
         columnLabel: "Meeting Notes",
         cellType: "notes",
         categoryKey: "meeting",

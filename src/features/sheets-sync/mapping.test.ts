@@ -214,6 +214,6 @@ describe("worksheetRange A1 notation", () => {
 
   it("safely escapes single quotes in worksheet names", async () => {
     const { worksheetRange } = await import("./google");
-    expect(worksheetRange("User's Sheet", "B5")).toBe("'Sheet1''s Sheet'!B5");
+    expect(worksheetRange("User's Sheet", "B5")).toBe("'User''s Sheet'!B5");
   });
 });

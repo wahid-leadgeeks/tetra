@@ -39,14 +39,10 @@ export const upsertSyncConfigSchema = z.object({
 type SpreadsheetConfigRow = typeof spreadsheetConfigs.$inferSelect;
 
 function isLeadGeeksSheet(
-  spreadsheetId: string,
-  worksheetName?: string | null,
+  _spreadsheetId?: string,
+  _worksheetName?: string | null,
 ): boolean {
-  return (
-    spreadsheetId.includes("1BxiMVs0XR") ||
-    spreadsheetId.includes("1BxiMVs0XRA5n") ||
-    (worksheetName != null && worksheetName.toLowerCase() === "user")
-  );
+  return process.env.SHEET_MAPPING_FORMAT === "leadgeeks";
 }
 
 function toConfigDTO(row: SpreadsheetConfigRow): SpreadsheetConfigDTO {
@@ -112,7 +108,7 @@ export async function getSyncConfig(
     return {
       id: "env-default",
       spreadsheetId: env.GOOGLE_SPREADSHEET_ID,
-      worksheetName: env.GOOGLE_SHEET_NAME || (isLeadGeeks ? "Sheet1" : "Sheet1"),
+      worksheetName: env.GOOGLE_SHEET_NAME || "Sheet1",
       sheetGid: env.GOOGLE_SHEET_GID || null,
       mapping: isLeadGeeks ? LEADGEEKS_SHEET_MAPPING : DEFAULT_SHEET_MAPPING,
       timezone,
@@ -243,7 +239,7 @@ export async function updateSyncConfigMapping(
   partialMapping: Partial<SheetMapping>,
 ): Promise<SpreadsheetConfigDTO> {
   const current = await getSyncConfig(userId);
-  const baseMapping = current?.mapping ?? LEADGEEKS_SHEET_MAPPING;
+  const baseMapping = current?.mapping ?? DEFAULT_SHEET_MAPPING;
   const mergedMapping = {
     ...baseMapping,
     ...partialMapping,
