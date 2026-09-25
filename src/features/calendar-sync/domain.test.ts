@@ -173,7 +173,7 @@ describe("Calendar Event Processing", () => {
     expect(suggestion!.hasOverlap).toBe(false);
   });
 
-  it("filters out explicit daily reminders from Today schedule", () => {
+  it("filters out explicit daily reminders and company routine reminders (at 8, 12, 18) from Today schedule", () => {
     const dailyReminder: RawCalendarEvent = {
       id: "rem-1",
       summary: "Daily Reminder: Submit Timesheet",
@@ -181,6 +181,33 @@ describe("Calendar Event Processing", () => {
       end: { dateTime: "2026-09-08T02:15:00.000Z" },
     };
     expect(processCalendarEvent(dailyReminder, existingDTOs, "Asia/Jakarta")).toBeNull();
+
+    // 08:00 morning routine / prayer reminder
+    const morningSip: RawCalendarEvent = {
+      id: "rem-morning-sip",
+      summary: "Prayer & Take A Sip to Start Your Day",
+      start: { dateTime: "2026-09-08T01:00:00.000Z" }, // 08:00 WIB
+      end: { dateTime: "2026-09-08T01:15:00.000Z" },
+    };
+    expect(processCalendarEvent(morningSip, existingDTOs, "Asia/Jakarta")).toBeNull();
+
+    // 12:00 lunch break reminder
+    const lunchBreak: RawCalendarEvent = {
+      id: "rem-lunch-break",
+      summary: "Take Your Lunch Break & Stay Hydrated",
+      start: { dateTime: "2026-09-08T05:00:00.000Z" }, // 12:00 WIB
+      end: { dateTime: "2026-09-08T05:15:00.000Z" },
+    };
+    expect(processCalendarEvent(lunchBreak, existingDTOs, "Asia/Jakarta")).toBeNull();
+
+    // 18:00 end of day attendance & prayer reminder
+    const attendanceReminder: RawCalendarEvent = {
+      id: "rem-attendance",
+      summary: "Daily Attendance, Stretching & Prayer Reminder",
+      start: { dateTime: "2026-09-08T11:00:00.000Z" }, // 18:00 WIB
+      end: { dateTime: "2026-09-08T11:15:00.000Z" },
+    };
+    expect(processCalendarEvent(attendanceReminder, existingDTOs, "Asia/Jakarta")).toBeNull();
   });
 
   it("retains offline events and site visits that do not have Google Meet links or guests", () => {

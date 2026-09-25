@@ -52,17 +52,27 @@ export function isMatchingImportedEntry(
 }
 
 /**
- * Detects whether an event is a daily reminder or explicit note
- * that should not clutter the active daily work schedule.
+ * Detects whether an event is a daily reminder or company routine note
+ * (such as morning prayer/hydration at 08:00, lunch breaks at 12:00, or daily attendance reminders at 18:00)
+ * that should not clutter the active daily work schedule or calendar imports.
  */
 export function isReminderOrNonWorkEvent(event: RawCalendarEvent): boolean {
   const summary = (event.summary || "").trim().toLowerCase();
 
-  // Explicit reminder patterns in summary
+  // Explicit reminder patterns in summary (e.g. "... Reminder", "Daily Reminder: ...")
+  if (/\breminder\b/i.test(summary)) {
+    return true;
+  }
+
+  // Company daily routine reminders (at 08:00, 12:00, 18:00):
+  // 1. "Prayer & Take A Sip to Start Your Day"
+  // 2. "Take Your Lunch Break & Stay Hydrated"
+  // 3. "Daily Attendance, Stretching & Prayer Reminder"
   if (
-    /^(daily\s+)?reminder\b/i.test(summary) ||
-    /:\s*reminder\b/i.test(summary) ||
-    /\b(daily\s+reminder)\b/i.test(summary)
+    /\b(prayer\s*&\s*take\s*a\s*sip|take\s*a\s*sip)\b/i.test(summary) ||
+    /\b(take\s*your\s*)?lunch\s*break\b/i.test(summary) ||
+    /\bstay\s*hydrated\b/i.test(summary) ||
+    /\bdaily\s+attendance\b/i.test(summary)
   ) {
     return true;
   }
