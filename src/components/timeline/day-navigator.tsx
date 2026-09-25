@@ -33,10 +33,11 @@ export function DayNavigator({
 }: DayNavigatorProps) {
   const today = todayKey(timeZone);
   const prevTarget = excludeWeekends ? previousWorkday(dayKey) : previousDay(dayKey);
-  const nextTarget = excludeWeekends ? nextWorkday(dayKey) : nextDay(dayKey);
-  const cannotNavigateNext = excludeWeekends
-    ? nextWorkday(dayKey) > today
-    : isToday(dayKey, timeZone) || dayKey >= today;
+  let nextTarget = excludeWeekends ? nextWorkday(dayKey) : nextDay(dayKey);
+  if (excludeWeekends && nextTarget > today && dayKey < today) {
+    nextTarget = today;
+  }
+  const cannotNavigateNext = dayKey >= today;
 
   return (
     <nav aria-label="Choose day" className="flex items-center gap-2">
