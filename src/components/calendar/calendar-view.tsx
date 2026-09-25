@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -96,6 +96,8 @@ export function CalendarView({ timezone = "Asia/Jakarta" }: CalendarViewProps) {
     }).format(d);
   }, [selectedDayKey, timezone]);
 
+  const hasSyncedInitialRef = useRef(false);
+
   // Load events on mount and when selectedDayKey changes
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +105,10 @@ export function CalendarView({ timezone = "Asia/Jakarta" }: CalendarViewProps) {
       try {
         const fromDate = addDaysISO(selectedDayKey, -35);
         const toDate = addDaysISO(selectedDayKey, 45);
-        const url = `/api/calendar/events?from=${fromDate}&to=${toDate}&mode=events`;
+        const shouldSync = !hasSyncedInitialRef.current;
+        const url = `/api/calendar/events?from=${fromDate}&to=${toDate}&mode=events${
+          shouldSync ? "&sync=true" : ""
+        }`;
 
         const res = await fetch(url);
         if (cancelled) return;
@@ -115,6 +120,7 @@ export function CalendarView({ timezone = "Asia/Jakarta" }: CalendarViewProps) {
         const data = await res.json();
         if (cancelled) return;
         setEvents(data.events || []);
+        hasSyncedInitialRef.current = true;
       } catch (err) {
         if (!cancelled) {
           console.error("Load calendar events error:", err);

@@ -173,7 +173,7 @@ describe("Calendar Event Processing", () => {
     expect(suggestion!.hasOverlap).toBe(false);
   });
 
-  it("filters out daily reminders and non-work transparent notes from Today schedule", () => {
+  it("filters out explicit daily reminders from Today schedule", () => {
     const dailyReminder: RawCalendarEvent = {
       id: "rem-1",
       summary: "Daily Reminder: Submit Timesheet",
@@ -181,15 +181,34 @@ describe("Calendar Event Processing", () => {
       end: { dateTime: "2026-09-08T02:15:00.000Z" },
     };
     expect(processCalendarEvent(dailyReminder, existingDTOs, "Asia/Jakarta")).toBeNull();
+  });
 
-    const transparentNote: RawCalendarEvent = {
-      id: "rem-2",
-      summary: "Review checklist note",
+  it("retains offline events and site visits that do not have Google Meet links or guests", () => {
+    const offlineMeeting: RawCalendarEvent = {
+      id: "offline-1",
+      summary: "Offline meeting w/ ITS: Tech Op",
       transparency: "transparent",
-      start: { dateTime: "2026-09-08T04:00:00.000Z" },
-      end: { dateTime: "2026-09-08T05:00:00.000Z" },
+      start: { dateTime: "2026-09-08T08:30:00.000Z" },
+      end: { dateTime: "2026-09-08T09:30:00.000Z" },
     };
-    expect(processCalendarEvent(transparentNote, existingDTOs, "Asia/Jakarta")).toBeNull();
+    const suggestion1 = processCalendarEvent(offlineMeeting, existingDTOs, "Asia/Jakarta");
+    expect(suggestion1).not.toBeNull();
+    expect(suggestion1!.title).toBe("Offline meeting w/ ITS: Tech Op");
+    expect(suggestion1!.suggestedCategoryKey).toBe("meeting");
+    expect(suggestion1!.meetUrl).toBeNull();
+
+    const offlineVisit: RawCalendarEvent = {
+      id: "offline-2",
+      summary: "Visitasi ke Retha",
+      transparency: "transparent",
+      start: { dateTime: "2026-09-08T10:00:00.000Z" },
+      end: { dateTime: "2026-09-08T11:30:00.000Z" },
+    };
+    const suggestion2 = processCalendarEvent(offlineVisit, existingDTOs, "Asia/Jakarta");
+    expect(suggestion2).not.toBeNull();
+    expect(suggestion2!.title).toBe("Visitasi ke Retha");
+    expect(suggestion2!.durationMinutes).toBe(90);
+    expect(suggestion2!.meetUrl).toBeNull();
   });
 
   it("detects already-imported calendar events and sets isImported without overlap conflict", () => {

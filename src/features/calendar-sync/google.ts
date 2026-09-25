@@ -177,20 +177,33 @@ export async function fetchCalendarEvents(options: {
   }
 
   try {
-    const listParams: calendar_v3.Params$Resource$Events$List & { conferenceDataVersion?: number } = {
-      calendarId: options.calendarId || "primary",
-      timeMin: options.timeMin.toISOString(),
-      timeMax: options.timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      timeZone: options.timeZone,
-      conferenceDataVersion: 1,
-    };
+    const allItems: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined = undefined;
+    const MAX_PAGES = 5; // Safety cap: up to 5 * 2500 = 12,500 events
+    let pageCount = 0;
 
-    const res = await client.events.list(listParams as calendar_v3.Params$Resource$Events$List);
+    do {
+      const listParams: calendar_v3.Params$Resource$Events$List & { conferenceDataVersion?: number } = {
+        calendarId: options.calendarId || "primary",
+        timeMin: options.timeMin.toISOString(),
+        timeMax: options.timeMax.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        timeZone: options.timeZone,
+        conferenceDataVersion: 1,
+        maxResults: 2500,
+        pageToken,
+      };
 
-    const items = res.data.items ?? [];
-    return items
+      const res = await client.events.list(listParams as calendar_v3.Params$Resource$Events$List);
+      if (res.data.items && res.data.items.length > 0) {
+        allItems.push(...res.data.items);
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+      pageCount++;
+    } while (pageToken && pageCount < MAX_PAGES);
+
+    return allItems
       .filter((item) => item.status !== "cancelled" && item.summary)
       .map((item) => {
         const meetUrl =

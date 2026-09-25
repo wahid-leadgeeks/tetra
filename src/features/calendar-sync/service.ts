@@ -413,7 +413,11 @@ export async function listCalendarEvents(
               })
               .where(eq(calendarEvents.id, existing[0].id));
           } else {
-            const matchedRule = matchCategory(raw.summary, raw.description, config.categoryRules);
+            const matchedRule = matchCategory(raw.summary, raw.description, {
+              customRules: config.categoryRules,
+              hasMeetUrl: !!raw.meetUrl,
+              guestCount: raw.guests?.length ?? 0,
+            });
             const categoryId = catMap.get(matchedRule.categoryKey) || null;
 
             await db.insert(calendarEvents).values({

@@ -52,7 +52,7 @@ export function isMatchingImportedEntry(
 }
 
 /**
- * Detects whether an event is a daily reminder, note, or non-work transparent item
+ * Detects whether an event is a daily reminder or explicit note
  * that should not clutter the active daily work schedule.
  */
 export function isReminderOrNonWorkEvent(event: RawCalendarEvent): boolean {
@@ -63,15 +63,6 @@ export function isReminderOrNonWorkEvent(event: RawCalendarEvent): boolean {
     /^(daily\s+)?reminder\b/i.test(summary) ||
     /:\s*reminder\b/i.test(summary) ||
     /\b(daily\s+reminder)\b/i.test(summary)
-  ) {
-    return true;
-  }
-
-  // Google Calendar Free / Transparent events that have no video conference or guests are reminders/notes
-  if (
-    event.transparency === "transparent" &&
-    !event.meetUrl &&
-    (!event.guests || event.guests.length === 0)
   ) {
     return true;
   }
