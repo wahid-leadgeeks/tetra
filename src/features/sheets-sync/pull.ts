@@ -41,7 +41,7 @@ export interface RawCategoryItem {
 export interface AllocatedEntry {
   categoryKey: CategoryKey;
   taskName: string;
-  notes: string;
+  notes: string | null;
   startMinutes: number;
   endMinutes: number;
 }
@@ -215,7 +215,7 @@ export function allocateTimelineEntries(params: {
       const parsed = parsedLines[i];
       let duration = lineDurations[i] ?? 0;
       const name = parsed?.text || defaultName;
-      const notes = parsed?.text || defaultName;
+      const notes: string | null = null;
 
 
       while (duration > 0) {
@@ -413,8 +413,33 @@ export async function pullDayFromSheet(
   let attendanceId: string;
   const now = new Date();
 
+  // Preserve any detailed notes entered in TETRA for this day
+  const existingNotesByTaskName = new Map<string, string>();
+
   if (existingAttendance) {
     attendanceId = existingAttendance.id;
+
+    const existingEntries = await db
+      .select({
+        taskName: tasks.name,
+        notes: timeEntries.notes,
+      })
+      .from(timeEntries)
+      .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          gte(timeEntries.startedAt, dayStartUtc),
+          lte(timeEntries.startedAt, dayEndUtc),
+        ),
+      );
+
+    for (const e of existingEntries) {
+      if (e.taskName && e.notes?.trim()) {
+        existingNotesByTaskName.set(e.taskName.trim().toLowerCase(), e.notes.trim());
+      }
+    }
+
     // Clear previous breaks and entries for this day
     await db.delete(breakEntries).where(eq(breakEntries.attendanceId, attendanceId));
     await db
@@ -505,6 +530,11 @@ export async function pullDayFromSheet(
         .where(eq(tasks.id, task.id));
     }
 
+    const preservedNotes =
+      item.notes ??
+      existingNotesByTaskName.get(item.taskName.trim().toLowerCase()) ??
+      null;
+
     await db.insert(timeEntries).values({
       userId,
       taskId: task.id,
@@ -512,7 +542,7 @@ export async function pullDayFromSheet(
       startedAt: entryStartedAt,
       endedAt: entryEndedAt,
       status: "completed",
-      notes: item.notes,
+      notes: preservedNotes,
       source: "manual",
     });
   }

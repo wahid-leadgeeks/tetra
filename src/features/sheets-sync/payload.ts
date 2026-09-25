@@ -146,9 +146,10 @@ export function buildSyncPayload(
 
 /**
  * Compiled per-category notes for the notes columns (I, K, M, O, Q, S, U, W):
- * the day's completed entries formatted as `<task/notes> (<duration>)` (e.g. "Task (1:45)"),
- * with durations accumulated for identical task descriptions, joined by newlines to
- * match the company spreadsheet format.
+ * the day's completed entries formatted as `<taskTitle> (<duration>)` (e.g. "Task (1:45)"),
+ * with durations accumulated for identical task titles, joined by newlines to
+ * match the company spreadsheet format. Task title (taskName) is the authoritative text
+ * synced to the spreadsheet's notes column; entry notes are kept in the database as details.
  */
 export function compileCategoryNotes(
   entries: readonly TimeEntryDTO[],
@@ -158,7 +159,7 @@ export function compileCategoryNotes(
     if (entry.status !== "completed") continue;
     const key = CATEGORY_KEYS.find((k) => k === entry.categoryKey);
     if (key === undefined) continue;
-    const rawText = entry.notes?.trim() || entry.taskName.trim();
+    const rawText = entry.taskName.trim() || entry.notes?.trim() || "";
     if (!rawText) continue;
 
     // Strip trailing duration in parentheses if already present to avoid duplicates

@@ -96,7 +96,7 @@ describe("allocateTimelineEntries", () => {
     expect(result[0]).toEqual({
       categoryKey: "meeting",
       taskName: "Team Sync",
-      notes: "Team Sync",
+      notes: null,
       startMinutes: 510,
       endMinutes: 570,
     });
@@ -123,14 +123,14 @@ describe("allocateTimelineEntries", () => {
     expect(result[0]).toEqual({
       categoryKey: "meeting",
       taskName: "Standup Meeting",
-      notes: "Standup Meeting",
+      notes: null,
       startMinutes: 540,
       endMinutes: 590, // 50 min
     });
     expect(result[1]).toEqual({
       categoryKey: "meeting",
       taskName: "Client Discussion",
-      notes: "Client Discussion",
+      notes: null,
       startMinutes: 590,
       endMinutes: 640, // 50 min
     });
@@ -159,14 +159,14 @@ describe("allocateTimelineEntries", () => {
     expect(result[0]).toEqual({
       categoryKey: "training",
       taskName: "Deep Learning Workshop",
-      notes: "Deep Learning Workshop",
+      notes: null,
       startMinutes: 690,
       endMinutes: 720,
     });
     expect(result[1]).toEqual({
       categoryKey: "training",
       taskName: "Deep Learning Workshop",
-      notes: "Deep Learning Workshop",
+      notes: null,
       startMinutes: 780,
       endMinutes: 870,
     });
@@ -191,7 +191,7 @@ describe("allocateTimelineEntries", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].taskName).toBe("Research");
-    expect(result[0].notes).toBe("Research");
+    expect(result[0].notes).toBeNull();
     expect(result[0].endMinutes - result[0].startMinutes).toBe(45);
   });
 
@@ -217,14 +217,14 @@ describe("allocateTimelineEntries", () => {
     expect(result[0]).toEqual({
       categoryKey: "meeting",
       taskName: "Infrastructure Management Training",
-      notes: "Infrastructure Management Training",
+      notes: null,
       startMinutes: 480,
       endMinutes: 600, // 120 min
     });
     expect(result[1]).toEqual({
       categoryKey: "meeting",
       taskName: "Training",
-      notes: "Training",
+      notes: null,
       startMinutes: 600,
       endMinutes: 660, // 60 min
     });

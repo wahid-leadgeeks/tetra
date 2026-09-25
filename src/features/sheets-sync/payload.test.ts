@@ -356,16 +356,16 @@ describe("computePayloadHash", () => {
 
 describe("compileCategoryNotes", () => {
   it("compiles one newline-joined block per category, deduplicated in order", () => {
-    // Given completed meeting entries with notes, one repeated
+    // Given completed meeting entries with taskName, one repeated
     const entries = [
-      makeEntry({ id: "e1", notes: "Daily standup" }),
-      makeEntry({ id: "e2", notes: "Sprint planning" }),
-      makeEntry({ id: "e3", notes: "Daily standup" }),
+      makeEntry({ id: "e1", taskName: "Daily standup" }),
+      makeEntry({ id: "e2", taskName: "Sprint planning" }),
+      makeEntry({ id: "e3", taskName: "Daily standup" }),
       makeEntry({
         id: "e4",
         categoryKey: "training",
         categoryName: "Training",
-        notes: "Security training",
+        taskName: "Security training",
       }),
     ];
     // When compiled
@@ -376,16 +376,32 @@ describe("compileCategoryNotes", () => {
     expect(notes.size).toBe(2);
   });
 
-  it("falls back to the task name and skips blank text", () => {
-    // Given entries without notes, one with whitespace-only notes
+  it("uses taskName for sheet notes even when notes contain detailed text", () => {
+    // Given an entry with taskName and detailed notes
     const entries = [
-      makeEntry({ id: "e1", notes: null }),
-      makeEntry({ id: "e2", notes: "   " }),
+      makeEntry({
+        id: "e1",
+        taskName: "Daily Standup",
+        notes: "Discussed blockers with backend team",
+        durationMinutes: 30,
+      }),
     ];
     // When compiled
     const notes = compileCategoryNotes(entries);
-    // Then the task name is used with formatted duration and the blank note produces nothing extra
-    expect(notes.get("meeting")).toBe("Team meeting (2:00)");
+    // Then the task title (taskName) is used in the sheet notes column, not the internal details
+    expect(notes.get("meeting")).toBe("Daily Standup (0:30)");
+  });
+
+  it("falls back to the notes if taskName is blank and skips blank text", () => {
+    // Given entries without taskName, one with whitespace-only notes
+    const entries = [
+      makeEntry({ id: "e1", taskName: "", notes: "Fallback note" }),
+      makeEntry({ id: "e2", taskName: "", notes: "   " }),
+    ];
+    // When compiled
+    const notes = compileCategoryNotes(entries);
+    // Then the fallback note is used with formatted duration and the blank note produces nothing extra
+    expect(notes.get("meeting")).toBe("Fallback note (1:00)");
   });
 
   it("formats task and duration as <task/notes> (<duration>) matching spreadsheet source", () => {
@@ -454,13 +470,12 @@ describe("buildSyncPayload notes cells", () => {
     // Given a reviewed day with meeting and training entries
     const summary = makeSummary({
       timeEntries: [
-        makeEntry({ id: "e1", notes: "Onboarding User" }),
+        makeEntry({ id: "e1", taskName: "Onboarding User" }),
         makeEntry({
           id: "e2",
           categoryKey: "training",
           categoryName: "Training",
           taskName: "Welcoming Message from CEO",
-          notes: "Welcoming Message from CEO",
         }),
       ],
     });
@@ -493,7 +508,7 @@ describe("buildSyncPayload notes cells", () => {
   it("emits no notes cell for a category without notes", () => {
     // Given a day whose only notes belong to meeting
     const summary = makeSummary({
-      timeEntries: [makeEntry({ id: "e1", notes: "Standup" })],
+      timeEntries: [makeEntry({ id: "e1", taskName: "Standup" })],
     });
     // When the payload is built
     const { cells } = buildSyncPayload(summary, NOTES_MAPPING, {
@@ -511,7 +526,7 @@ describe("buildSyncPayload notes cells", () => {
   it("omits every notes cell when includeNotes is false", () => {
     // Given a day with compiled notes
     const summary = makeSummary({
-      timeEntries: [makeEntry({ id: "e1", notes: "Standup" })],
+      timeEntries: [makeEntry({ id: "e1", taskName: "Standup" })],
     });
     // When the payload is built with notes excluded
     const { cells } = buildSyncPayload(summary, NOTES_MAPPING, {
@@ -527,7 +542,7 @@ describe("buildSyncPayload notes cells", () => {
   it("replaces compiled notes with the preview edits", () => {
     // Given compiled notes and a user edit for meeting
     const summary = makeSummary({
-      timeEntries: [makeEntry({ id: "e1", notes: "Standup" })],
+      timeEntries: [makeEntry({ id: "e1", taskName: "Standup" })],
     });
     // When the payload is built with a notes override
     const { cells } = buildSyncPayload(summary, NOTES_MAPPING, {
@@ -543,7 +558,7 @@ describe("buildSyncPayload notes cells", () => {
   it("skips an overridden note that was emptied", () => {
     // Given compiled notes and an emptied meeting override
     const summary = makeSummary({
-      timeEntries: [makeEntry({ id: "e1", notes: "Standup" })],
+      timeEntries: [makeEntry({ id: "e1", taskName: "Standup" })],
     });
     // When the payload is built with an empty override
     const { cells } = buildSyncPayload(summary, NOTES_MAPPING, {
