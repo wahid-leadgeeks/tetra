@@ -50,9 +50,13 @@ function initDb(): { client: TetraClient; db: TetraDatabase } {
   const isServerless = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
 
   if (isUsingPostgres()) {
+    const idleTimeout = Number(process.env.PGIDLE_TIMEOUT) || (isServerless ? 2 : 20);
+    const maxLifetime = Number(process.env.PGMAX_LIFETIME) || (isServerless ? 30 : null);
+
     const pgClient = postgres(dbUrl, {
       max: isServerless ? 1 : 10,
-      idle_timeout: 20,
+      idle_timeout: idleTimeout,
+      max_lifetime: maxLifetime,
       connect_timeout: 10,
     });
     const pgDb = drizzlePostgres(pgClient, { schema }) as unknown as TetraDatabase;
