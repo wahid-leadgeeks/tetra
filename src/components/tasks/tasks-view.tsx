@@ -441,7 +441,8 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
       </div>
 
       {/* Main Content: Kanban or List */}
-      {loading ? (
+      <div data-testid="tasks-list">
+        {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="Loading tasks">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-64 animate-pulse rounded-xl bg-muted/60" />
@@ -506,9 +507,11 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
                       No tasks in {column.title.toLowerCase()}
                     </div>
                   ) : (
-                    columnTasks.map((task) => {
+                    columnTasks.map((task, colTaskIndex) => {
                       const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
                       const theme = getCategoryTheme(categoryName);
+                      const taskIndex = tasks.findIndex((t) => t.id === task.id);
+                      const favoriteTestId = `favorite-toggle-${taskIndex >= 0 ? taskIndex : colTaskIndex}`;
 
                       return (
                         <div
@@ -532,6 +535,9 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
                                 onClick={() => void handleToggleFavorite(task)}
                                 className="p-1 rounded-md text-muted-foreground hover:text-amber-500 transition-colors"
                                 title="Toggle favorite"
+                                data-testid={favoriteTestId}
+                                aria-label={`Toggle favorite for ${task.name}`}
+                                aria-pressed={task.isFavorite}
                               >
                                 <Star
                                   className={cn(
@@ -655,10 +661,12 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
               </p>
             </Card>
           ) : (
-            filteredTasks.map((task) => {
+            filteredTasks.map((task, listIndex) => {
               const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
               const theme = getCategoryTheme(categoryName);
               const col = COLUMNS.find((c) => c.id === task.status) || COLUMNS[0];
+              const taskIndex = tasks.findIndex((t) => t.id === task.id);
+              const favoriteTestId = `favorite-toggle-${taskIndex >= 0 ? taskIndex : listIndex}`;
 
               return (
                 <Card
@@ -695,6 +703,9 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
                       size="icon"
                       onClick={() => void handleToggleFavorite(task)}
                       className="size-8 text-muted-foreground hover:text-amber-500"
+                      data-testid={favoriteTestId}
+                      aria-label={`Toggle favorite for ${task.name}`}
+                      aria-pressed={task.isFavorite}
                     >
                       <Star
                         className={cn(
@@ -733,6 +744,7 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
           )}
         </div>
       )}
+      </div>
 
       {/* Task Creation & Edit Modal Dialog */}
       <TaskModalDialog

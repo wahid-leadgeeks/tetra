@@ -13,6 +13,8 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
   // Global navigation keys 1–6.
   await page.keyboard.press("2");
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  await page.keyboard.press("6");
+  await expect(page).toHaveURL(/\/calendar/, { timeout: 15_000 });
   await page.keyboard.press("3");
   await expect(page).toHaveURL(/\/timeline/, { timeout: 15_000 });
   await page.keyboard.press("1");
@@ -29,7 +31,7 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
   });
 
   // Typing guard: digit keys typed into an input must not navigate.
-  await page.keyboard.press("6");
+  await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings/, { timeout: 15_000 });
   await page.getByTestId("settings-spreadsheet-id").click();
   await page.keyboard.type("123");

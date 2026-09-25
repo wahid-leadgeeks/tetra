@@ -9,6 +9,7 @@ import {
   Clock,
   LayoutDashboard,
   ListTodo,
+  Settings,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -113,7 +114,20 @@ export function SidebarNav() {
         );
       })}
 
-      <div className="mt-3 pt-3 border-t border-sidebar-border/60">
+      <div className="mt-3 pt-3 border-t border-sidebar-border/60 flex flex-col gap-1">
+        <Link
+          href="/settings"
+          data-testid="nav-settings"
+          className={cn(
+            "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-xs font-medium transition-colors cursor-pointer select-none",
+            isActive(pathname, "/settings")
+              ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
+              : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+          )}
+        >
+          <Settings aria-hidden className="size-4 shrink-0" />
+          <span>Settings</span>
+        </Link>
         <button
           type="button"
           onClick={openTour}
