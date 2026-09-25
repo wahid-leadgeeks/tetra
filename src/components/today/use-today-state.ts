@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { todayKey } from "@/lib/time";
+import { sendBrowserAlert } from "@/features/notifications/store";
 import type { AttendanceDTO, DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
 
 export type PendingAction =
@@ -169,6 +170,7 @@ export function useTodayState(timezone: string) {
       } else {
         toast.success("Work day started");
       }
+      sendBrowserAlert("Workday Started", "Clock-in recorded. Have a productive day!", "/timer");
       await settle();
       return true;
     }
@@ -208,6 +210,11 @@ export function useTodayState(timezone: string) {
       } else {
         toast.success("Work day ended");
       }
+      sendBrowserAlert(
+        "Workday Concluded",
+        "Shift finished. Don't forget to review and sync your day to Google Sheets.",
+        "/review",
+      );
       await settle();
       return true;
     }
@@ -221,6 +228,7 @@ export function useTodayState(timezone: string) {
     );
     if (attendance) {
       toast.success("On break");
+      sendBrowserAlert("Break Started", "Enjoy your break! Remember to resume when ready.", "/timer");
       await settle();
       return true;
     }
@@ -234,6 +242,7 @@ export function useTodayState(timezone: string) {
     );
     if (attendance) {
       toast.success("Back from break");
+      sendBrowserAlert("Work Resumed", "Break ended. Ready to continue tracking.", "/timer");
       await settle();
       const targetDay = summary?.workDate;
       if (targetDay) {
@@ -279,6 +288,7 @@ export function useTodayState(timezone: string) {
       );
       if (entry) {
         toast.success(`Started \u201C${input.taskName}\u201D`);
+        sendBrowserAlert("Task Started", `Now tracking \u201C${input.taskName}\u201D`, "/timer");
         await settle();
       }
       return entry;
@@ -290,6 +300,7 @@ export function useTodayState(timezone: string) {
     const entry = await post<TimeEntryDTO>("stop-task", "/api/time-entries/stop");
     if (entry) {
       toast.success("Task stopped");
+      sendBrowserAlert("Task Completed", "Task stopped and recorded to your daily timeline.", "/timeline");
       await settle();
       const targetDay = summary?.workDate;
       if (targetDay) {

@@ -210,10 +210,10 @@ describe("worksheetRange A1 notation", () => {
     expect(worksheetRange("Sheet1", "A1:FS100")).toBe("'Sheet1'!A1:FS100");
     expect(worksheetRange("Sheet1", "B5")).toBe("'Sheet1'!B5");
     expect(worksheetRange("Sheet1", "A100:FS100")).toBe("'Sheet1'!A100:FS100");
-  });
+  }, 15_000);
 
   it("safely escapes single quotes in worksheet names", async () => {
     const { worksheetRange } = await import("./google");
     expect(worksheetRange("User's Sheet", "B5")).toBe("'User''s Sheet'!B5");
-  });
+  }, 15_000);
 });

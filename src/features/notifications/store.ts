@@ -20,19 +20,54 @@ function cleanLegacySpam(list: TetraNotification[]): TetraNotification[] {
   );
 }
 
-export function sendBrowserAlert(title: string, body: string): void {
+export type NotificationPermissionState = NotificationPermission | "unsupported";
+
+function tryFallbackNotification(
+  title: string,
+  options: NotificationOptions,
+  href?: string,
+): void {
+  try {
+    const notif = new Notification(title, options);
+    if (href) {
+      notif.onclick = () => {
+        window.focus();
+        window.location.href = href;
+        notif.close();
+      };
+    }
+  } catch {
+    // Ignored if notification constructor is restricted
+  }
+}
+
+export function sendBrowserAlert(title: string, body: string, href?: string): void {
   if (typeof window === "undefined" || typeof Notification === "undefined") {
     return;
   }
   if (Notification.permission === "granted") {
-    try {
-      new Notification(`TETRA · ${title}`, {
-        body,
-        icon: "/icon.svg",
-      });
-    } catch {
-      // Ignored if service worker or notification constructor is restricted
+    const fullTitle = `TETRA · ${title}`;
+    const options: NotificationOptions = {
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: href || "/" },
+      tag: `tetra-alert-${Date.now()}`,
+    };
+
+    // If Service Worker is supported and registered, use showNotification for PWA compliance
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          return reg.showNotification(fullTitle, options);
+        })
+        .catch(() => {
+          tryFallbackNotification(fullTitle, options, href);
+        });
+      return;
     }
+
+    tryFallbackNotification(fullTitle, options, href);
   }
 }
 
@@ -243,6 +278,37 @@ export function unsuppressBannerToday(): void {
   }
 }
 
+// Permission state
+let memoryPermission: NotificationPermissionState | null = null;
+const permissionListeners = new Set<() => void>();
+
+function notifyPermissionSubscribers() {
+  for (const listener of permissionListeners) {
+    listener();
+  }
+}
+
+function getPermissionSnapshot(): NotificationPermissionState {
+  if (typeof window === "undefined" || typeof Notification === "undefined") {
+    return "unsupported";
+  }
+  if (memoryPermission !== null) {
+    return memoryPermission;
+  }
+  return Notification.permission;
+}
+
+function getServerPermissionSnapshot(): NotificationPermissionState {
+  return "unsupported";
+}
+
+function subscribeToPermission(callback: () => void) {
+  permissionListeners.add(callback);
+  return () => {
+    permissionListeners.delete(callback);
+  };
+}
+
 // Hydration helper
 function subscribeHydration() {
   return () => {};
@@ -267,8 +333,28 @@ export function emitNotification(
 
 export function syncCompanionAlerts(serverAlerts: TetraNotification[]): void {
   const current = cleanLegacySpam(getNotificationsSnapshot());
+  const existingIds = new Set(current.map((n) => n.id));
   const updated = mergeCompanionAlerts(current, serverAlerts);
   setStoredNotifications(updated);
+
+  // If user enabled browser alerts, notify about newly surfaced warnings or reminders
+  if (
+    typeof Notification !== "undefined" &&
+    Notification.permission === "granted" &&
+    typeof window !== "undefined" &&
+    localStorage.getItem(BROWSER_NOTIF_KEY) === "true"
+  ) {
+    const newAlerts = serverAlerts.filter(
+      (a) =>
+        !existingIds.has(a.id) &&
+        !a.read &&
+        (a.severity === "warning" || a.severity === "reminder"),
+    );
+    if (newAlerts.length > 0) {
+      const first = newAlerts[0];
+      sendBrowserAlert(first.title, first.message, first.href);
+    }
+  }
 }
 
 export function useNotifications() {
@@ -282,6 +368,12 @@ export function useNotifications() {
     subscribeToBrowserAlerts,
     getBrowserAlertsSnapshot,
     getServerBrowserAlertsSnapshot,
+  );
+
+  const permission = useSyncExternalStore(
+    subscribeToPermission,
+    getPermissionSnapshot,
+    getServerPermissionSnapshot,
   );
 
   const bannerSuppressedDate = useSyncExternalStore(
@@ -335,6 +427,44 @@ export function useNotifications() {
     }
   }, []);
 
+  const requestPermission = useCallback(async (): Promise<NotificationPermissionState> => {
+    if (typeof window === "undefined" || typeof Notification === "undefined") {
+      return "unsupported";
+    }
+
+    try {
+      const result = await Notification.requestPermission();
+      memoryPermission = result;
+      notifyPermissionSubscribers();
+
+      if (result === "granted") {
+        memoryBrowserAlerts = true;
+        localStorage.setItem(BROWSER_NOTIF_KEY, "true");
+        notifyAlertPrefSubscribers();
+        sendBrowserAlert(
+          "Notifications Active",
+          "You will receive timely alerts for shifts, breaks, and timers.",
+          "/settings",
+        );
+      } else {
+        memoryBrowserAlerts = false;
+        localStorage.setItem(BROWSER_NOTIF_KEY, "false");
+        notifyAlertPrefSubscribers();
+      }
+      return result;
+    } catch {
+      return "unsupported";
+    }
+  }, []);
+
+  const sendTestNotification = useCallback(() => {
+    sendBrowserAlert(
+      "Test Notification",
+      "Notifications and PWA alerts are configured and working properly!",
+      "/settings",
+    );
+  }, []);
+
   const toggleBrowserAlerts = useCallback(async (): Promise<boolean> => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
       return false;
@@ -345,6 +475,13 @@ export function useNotifications() {
       memoryBrowserAlerts = nextState;
       localStorage.setItem(BROWSER_NOTIF_KEY, String(nextState));
       notifyAlertPrefSubscribers();
+      if (nextState) {
+        sendBrowserAlert(
+          "Notifications Enabled",
+          "Desktop and companion alerts are now active for TETRA.",
+          "/settings",
+        );
+      }
       return nextState;
     }
 
@@ -352,13 +489,19 @@ export function useNotifications() {
       return false;
     }
 
-    const permission = await Notification.requestPermission();
-    const granted = permission === "granted";
+    const permissionResult = await Notification.requestPermission();
+    memoryPermission = permissionResult;
+    notifyPermissionSubscribers();
+    const granted = permissionResult === "granted";
     memoryBrowserAlerts = granted;
     localStorage.setItem(BROWSER_NOTIF_KEY, String(granted));
     notifyAlertPrefSubscribers();
     if (granted) {
-      sendBrowserAlert("Notifications Enabled", "Desktop alerts are now active for TETRA.");
+      sendBrowserAlert(
+        "Notifications Enabled",
+        "Desktop and companion alerts are now active for TETRA.",
+        "/settings",
+      );
     }
     return granted;
   }, []);
@@ -386,6 +529,9 @@ export function useNotifications() {
     clearAll,
     refreshAlerts,
     browserAlertsEnabled,
+    permission,
+    requestPermission,
+    sendTestNotification,
     toggleBrowserAlerts,
     bannerSuppressedDate,
     isBannerMutedToday,

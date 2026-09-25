@@ -36,6 +36,7 @@ import { useTodayShortcuts } from "@/components/today/use-today-shortcuts";
 import { useTodayState, type PendingAction } from "@/components/today/use-today-state";
 import { useTour } from "@/components/guide-tour/tour-provider";
 import { getCategoryTheme } from "@/lib/categories";
+import { sendBrowserAlert } from "@/features/notifications/store";
 import { cn } from "@/lib/utils";
 import { formatHuman, minutesBetween, zonedClock } from "@/lib/time";
 import type { AttendanceDTO, TimeEntryDTO } from "@/lib/types";
@@ -113,6 +114,43 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [activeEntry, isWorking]);
+
+  // Proactive desktop alerts for long running tasks (>90m) or extended breaks (>45m)
+  useEffect(() => {
+    if (!isWorking) return;
+
+    const interval = setInterval(() => {
+      // 1. Long running active task
+      if (activeEntry && activeEntry.status === "active") {
+        const startedMs = Date.parse(activeEntry.startedAt);
+        const elapsedMinutes = Math.floor(
+          (Date.now() - startedMs - activeEntry.pausedSeconds * 1000) / 60000,
+        );
+        if (elapsedMinutes === 90 || elapsedMinutes === 180) {
+          sendBrowserAlert(
+            "Task Milestone",
+            `"${activeEntry.taskName}" has been active for ${elapsedMinutes}m. Remember to stay hydrated and take a pause if needed!`,
+            "/timer",
+          );
+        }
+      }
+
+      // 2. Extended break
+      if (onBreak && attendance?.activeBreak?.startedAt) {
+        const breakStartedMs = Date.parse(attendance.activeBreak.startedAt);
+        const breakMinutes = Math.floor((Date.now() - breakStartedMs) / 60000);
+        if (breakMinutes === 45 || breakMinutes === 60) {
+          sendBrowserAlert(
+            "Break Reminder",
+            `You have been on break for ${breakMinutes}m. Ready to resume your tasks?`,
+            "/timer",
+          );
+        }
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [isWorking, onBreak, attendance, activeEntry]);
 
   const status: StatusTone = !isWorking
     ? "off"
