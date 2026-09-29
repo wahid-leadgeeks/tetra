@@ -8,8 +8,9 @@
 | `DESIGN.md` | UI/UX behavior |
 | `AGENTS.md` | AI coding-agent rules |
 | `README.md` | Run/develop the project |
+| `DOCUMENTATION.md` | Full application and feature summary |
 | `ROADMAP.md` | Product phases |
 | `TODO.md` | Sprint-level implementation work |
 
 Recommended order:
-PRD → ARCHITECTURE → ADRs → DESIGN → AGENTS → README → ROADMAP → TODO
+DOCUMENTATION → PRD → ARCHITECTURE → ADRs → DESIGN → AGENTS → README → ROADMAP → TODO

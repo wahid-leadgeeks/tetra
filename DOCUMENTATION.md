@@ -1,0 +1,441 @@
+# TETRA Companion App — Comprehensive System & Feature Documentation
+
+> **TETRA** is a lightweight employee task and time tracking companion application.  
+> Its core mission is to minimize the daily friction of tracking work, automatically compute durations and category allocations, and reliably synchronize reviewed results to the organization's official Google Sheet report without manual spreadsheet data entry.
+
+---
+
+## Table of Contents
+
+1. [Overview & Core Mission](#1-overview--core-mission)
+2. [System Architecture & Technology Stack](#2-system-architecture--technology-stack)
+3. [Domain Data Model & Database Schema](#3-domain-data-model--database-schema)
+4. [Standard Work Categories & Theming](#4-standard-work-categories--theming)
+5. [Complete Feature Catalog](#5-complete-feature-catalog)
+   - [5.1 Attendance Tracking & Workday Lifecycle](#51-attendance-tracking--workday-lifecycle)
+   - [5.2 Live Activity Timer & Fast Switching](#52-live-activity-timer--fast-switching)
+   - [5.3 Task Management & Kanban Board](#53-task-management--kanban-board)
+   - [5.4 Interactive Timeline, Gap Filling & Splitting](#54-interactive-timeline-gap-filling--splitting)
+   - [5.5 Daily Review & Verification Gate](#55-daily-review--verification-gate)
+   - [5.6 Google Sheets Synchronization Engine](#56-google-sheets-synchronization-engine)
+   - [5.7 Executive Dashboard & Target Tracking](#57-executive-dashboard--target-tracking)
+   - [5.8 Google Calendar Two-Way Integration](#58-google-calendar-two-way-integration)
+   - [5.9 Companion Alerts & Intelligent Notifications](#59-companion-alerts--intelligent-notifications)
+   - [5.10 Keyboard Shortcuts, PWA & Guided Tour](#510-keyboard-shortcuts-pwa--guided-tour)
+6. [API Architecture & Endpoint Reference](#6-api-architecture--endpoint-reference)
+7. [Environment Configuration & Database Runtime](#7-environment-configuration--database-runtime)
+8. [Testing, Verification & Quality Assurance](#8-testing-verification--quality-assurance)
+
+---
+
+## 1. Overview & Core Mission
+
+### Why TETRA Exists
+The official employee task and time tracking report is maintained in a centralized Google Spreadsheet. Manually reconstructing hours at the end of every working day—calculating exact `IN`, `BREAK`, and `OUT` times, splitting hours across eight separate categories, and formatting notes—is tedious, error-prone, and causes end-of-day administrative fatigue.
+
+**TETRA is an operational companion, never a spreadsheet replacement.**
+
+```mermaid
+flowchart LR
+    Employee([Employee]) -->|Fast 1-click capture| TETRA[TETRA Companion App]
+    TETRA -->|Auto-calculate & validate| PostgreSQL[(PostgreSQL / PGlite DB)]
+    TETRA -->|Review Gate| ReviewCheck{User Reviewed?}
+    ReviewCheck -->|Yes - Idempotent Sync| GoogleSheet[(Official Google Sheet)]
+    ReviewCheck -->|Offline Export| XLSXDownload[.xlsx / .csv Download]
+```
+
+### Core Product Principles
+1. **Google Sheet is the Official Record**: The spreadsheet remains the authoritative corporate artifact; TETRA serves as the streamlined data collector and calculation engine ([ADR 0001](file:///home/noah/project/tetra/docs/adr/0001-keep-google-sheet-official.md)).
+2. **PostgreSQL is the Local Source of Truth**: All raw activities, attendances, and logs are persisted in an ACID-compliant database ([ADR 0003](file:///home/noah/project/tetra/docs/adr/0003-app-db-source.md)).
+3. **Explicit Review Before Synchronization**: No data is silently pushed to the official sheet without an explicit user review step ([ADR 0004](file:///home/noah/project/tetra/docs/adr/0004-explicit-sync.md)).
+4. **Server-Side Truth for Time**: Timestamps are stored in UTC; durations and boundary checks are calculated strictly server-side ([ADR 0007](file:///home/noah/project/tetra/docs/adr/0007-utc-time.md)).
+5. **No Surveillance**: No background screen-recording, invasive activity monitoring, or silent time fabrication.
+6. **Zero-Friction Interactions**: Start, stop, and switch tasks in seconds via keyboard shortcuts or 1-tap touch actions.
+
+---
+
+## 2. System Architecture & Technology Stack
+
+TETRA is implemented as a **modular monolith** ([ADR 0002](file:///home/noah/project/tetra/docs/adr/0002-modular-monolith.md)) using Next.js 16 with the App Router, separating pure business logic domain services from React Server and Client Components.
+
+```mermaid
+graph TD
+    Client[Web Browser / Mobile PWA] -->|HTTPS / REST| NextApp[Next.js 16 App Router]
+
+    subgraph "Next.js Modular Monolith"
+        NextApp --> UI[UI / Client Components]
+        NextApp --> ServerActions[API Route Handlers]
+        ServerActions --> DomainServices[Feature Domain Services]
+
+        subgraph "Domain Features (src/features/*)"
+            DomainServices --> AttendanceService[attendance]
+            DomainServices --> ActivitiesService[activities]
+            DomainServices --> SummaryService[daily-summary / weekly / monthly]
+            DomainServices --> SheetsSyncService[sheets-sync]
+            DomainServices --> CalendarSyncService[calendar-sync]
+            DomainServices --> DashboardService[dashboard]
+            DomainServices --> NotificationService[notifications]
+        end
+
+        DomainServices --> DrizzleORM[Drizzle ORM v0.45]
+    end
+
+    subgraph "Data Storage"
+        DrizzleORM --> LocalPGlite[(Embedded PGlite Local / Test)]
+        DrizzleORM --> RemotePG[(PostgreSQL Production)]
+    end
+
+    subgraph "External Integrations"
+        SheetsSyncService --> GoogleSheetsAPI[Google Sheets API v4]
+        CalendarSyncService --> GoogleCalendarAPI[Google Calendar API v3]
+        NextApp --> NextAuth[NextAuth v5 Google OAuth]
+    end
+```
+
+### Stack Breakdown
+- **Frontend Framework**: [Next.js 16.3.4](file:///home/noah/project/tetra/package.json#L29) (App Router), [React 19.2.8](file:///home/noah/project/tetra/package.json#L34), React Compiler.
+- **Language**: [TypeScript 5](file:///home/noah/project/tetra/package.json#L54) (Strict mode enabled, no `any`).
+- **Styling & UI Kit**: [Tailwind CSS v4](file:///home/noah/project/tetra/package.json#L52), [shadcn/ui](file:///home/noah/project/tetra/package.json#L36), Radix UI primitives, Lucide Icons.
+- **Database & ORM**: [Drizzle ORM 0.45.2](file:///home/noah/project/tetra/package.json#L25) with a dual runtime:
+  - Local / Tests / Dev: Embedded [@electric-sql/pglite](file:///home/noah/project/tetra/src/server/db/index.ts#L3) (zero external database setup required, [ADR 0008](file:///home/noah/project/tetra/docs/adr/0008-embedded-pglite.md)).
+  - Production / Cloud: [Postgres.js](file:///home/noah/project/tetra/src/server/db/index.ts#L6) connection pooling.
+- **Authentication**: [NextAuth.js v5](file:///home/noah/project/tetra/src/server/auth.ts) supporting Google OAuth (with offline refresh tokens and scopes for Google Sheets and Google Calendar) plus a local developer mock credentials provider.
+- **Validation**: [Zod 4.5.4](file:///home/noah/project/tetra/package.json#L40) for all API payloads and environment variables ([`env.ts`](file:///home/noah/project/tetra/src/server/env.ts)).
+- **Spreadsheet & File Processing**: [Google APIs v178](file:///home/noah/project/tetra/package.json#L27) (`googleapis`), [ExcelJS 4.4.0](file:///home/noah/project/tetra/package.json#L26) for file-based `.xlsx` manipulation.
+- **Testing**: [Vitest 3.2.0](file:///home/noah/project/tetra/package.json#L55) for unit/integration/adversarial suites, [Playwright 1.55.0](file:///home/noah/project/tetra/package.json#L43) for end-to-end browser tests.
+
+---
+
+## 3. Domain Data Model & Database Schema
+
+The database schema is defined in [`src/server/db/schema.ts`](file:///home/noah/project/tetra/src/server/db/schema.ts).
+
+```mermaid
+erDiagram
+    users ||--o{ daily_attendance : "logs"
+    users ||--o{ break_entries : "takes"
+    users ||--o{ tasks : "creates"
+    users ||--o{ time_entries : "tracks"
+    users ||--o{ spreadsheet_configs : "configures"
+    users ||--o{ sync_logs : "records"
+    users ||--o{ calendar_configs : "manages"
+    users ||--o{ calendar_events : "synchronizes"
+
+    categories ||--o{ tasks : "categorizes"
+    categories ||--o{ time_entries : "groups"
+    categories ||--o{ calendar_events : "maps"
+
+    daily_attendance ||--o{ break_entries : "contains"
+    tasks ||--o{ time_entries : "executes"
+    spreadsheet_configs ||--o{ sync_logs : "generates"
+```
+
+### Primary Tables & Enums
+
+| Table / Enum | Key Fields | Purpose |
+|---|---|---|
+| [`users`](file:///home/noah/project/tetra/src/server/db/schema.ts#L38-L54) | `id`, `email`, `name`, `timezone`, `googleAccessToken`, `googleRefreshToken`, `googleTokenExpiresAt` | User account with OAuth credentials and default IANA timezone. |
+| [`categories`](file:///home/noah/project/tetra/src/server/db/schema.ts#L56-L61) | `id`, `key` (unique), `name`, `sortOrder` | System-wide official work category definitions. |
+| [`tasks`](file:///home/noah/project/tetra/src/server/db/schema.ts#L63-L83) | `id`, `userId`, `name`, `categoryId`, `status` (`todo`, `in_progress`, `done`), `isFavorite`, `lastUsedAt` | Task entities created or worked on by users. |
+| [`daily_attendance`](file:///home/noah/project/tetra/src/server/db/schema.ts#L85-L115) | `id`, `userId`, `workDate`, `clockInAt`, `clockOutAt`, `status` (`open`, `closed`), `reviewState` (`draft`, `ready`, `reviewed`, `synced`, `changed_after_sync`), `reviewedAt`, `lastSyncedAt` | Daily attendance record containing workday start/end times and verification status. |
+| [`break_entries`](file:///home/noah/project/tetra/src/server/db/schema.ts#L117-L132) | `id`, `userId`, `attendanceId`, `startedAt`, `endedAt` | Specific break spans taken during an open attendance. |
+| [`time_entries`](file:///home/noah/project/tetra/src/server/db/schema.ts#L134-L160) | `id`, `userId`, `taskId`, `categoryId`, `startedAt`, `endedAt`, `status` (`active`, `paused`, `completed`), `pausedSeconds`, `notes`, `source` (`timer`, `manual`) | Granular logged activity spans with notes and paused intervals. |
+| [`spreadsheet_configs`](file:///home/noah/project/tetra/src/server/db/schema.ts#L162-L179) | `id`, `userId`, `spreadsheetId`, `worksheetName`, `sheetGid`, `mapping` (JSONB), `timezone`, `active` | Coordinate mappings between TETRA fields and Google Sheet columns. |
+| [`sync_logs`](file:///home/noah/project/tetra/src/server/db/schema.ts#L181-L198) | `id`, `userId`, `workDate`, `spreadsheetConfigId`, `status` (`pending`, `success`, `failed`), `payloadHash`, `changedCells` (JSONB), `errorMessage` | Audit log of every synchronization attempt and exact cells modified. |
+| [`calendar_configs`](file:///home/noah/project/tetra/src/server/db/schema.ts#L200-L216) | `id`, `userId`, `calendarId`, `calendarName`, `syncEnabled`, `categoryRules` (JSONB), `lastSyncAt` | User settings for Google Calendar sync and auto-categorization rules. |
+| [`calendar_events`](file:///home/noah/project/tetra/src/server/db/schema.ts#L218-L251) | `id`, `userId`, `googleEventId`, `title`, `description`, `categoryId`, `startAt`, `endAt`, `allDay`, `meetUrl`, `guests` (JSONB), `sendUpdates` | Cached/synchronized Google Calendar events with category predictions. |
+
+---
+
+## 4. Standard Work Categories & Theming
+
+TETRA standardizes tracking across eight corporate categories defined in [`src/lib/categories.ts`](file:///home/noah/project/tetra/src/lib/categories.ts). Each category features an intentional color identity, badge tokens, border accents, and Lucide icons:
+
+| Category Key | Display Name | Short Label | Accent Color | Hex | Default Sheet Column |
+|---|---|---|---|---|---|
+| `website_management` | Website Management | Website | Emerald | `#10b981` | `EL` |
+| `cyber_security` | Cyber Security | Security | Rose | `#f43f5e` | `EN` |
+| `technology_innovation` | Technology Optimization & Innovation | Tech & Innovation | Violet | `#8b5cf6` | `EP` |
+| `infrastructure_management` | Infrastructure Management | Infrastructure | Blue | `#3b82f6` | `ER` |
+| `research` | Research | Research | Amber | `#f59e0b` | `FL` |
+| `meeting` | Meeting | Meeting | Sky | `#0ea5e9` | `FN` |
+| `training` | Training | Training | Orange | `#f97316` | `FP` |
+| `other_tasks` | Other Tasks | Other | Slate | `#94a3b8` | `FR` |
+
+---
+
+## 5. Complete Feature Catalog
+
+### 5.1 Attendance Tracking & Workday Lifecycle
+Implemented in [`src/features/attendance/`](file:///home/noah/project/tetra/src/features/attendance/) and presented via the [Today Screen](file:///home/noah/project/tetra/src/components/today/today-screen.tsx).
+
+- **Clock In / Clock Out**:
+  - `POST /api/attendance/start`: Opens daily attendance with a UTC timestamp.
+  - `POST /api/attendance/stop`: Closes attendance; automatically stops any currently running activity timer and active break.
+- **Break Management**:
+  - `POST /api/breaks/start`: Pauses work and opens a break span.
+  - `POST /api/breaks/stop`: Ends the active break.
+- **Auto Clock-In on Task Launch**: If an employee starts a timer or logs an activity before clocking in, TETRA automatically creates and clocks into attendance at the task's start time, eliminating manual pre-steps.
+- **End Break & Resume**: One-click action on the break card that simultaneously ends the active break and resumes the previously paused task timer.
+- **Boundary Auto-Expansion**: If a user logs a manual time entry or imports a calendar event that starts before `clockInAt` or ends after `clockOutAt`, the system automatically adjusts the attendance boundaries to encompass the work.
+
+---
+
+### 5.2 Live Activity Timer & Fast Switching
+Implemented in [`src/features/activities/`](file:///home/noah/project/tetra/src/features/activities/) and [`src/components/today/`](file:///home/noah/project/tetra/src/components/today/).
+
+- **Precision Stopwatch**: Real-time ticker with `HH:MM:SS` display based on server timestamps; immune to client tab throttling.
+- **Pause & Resume**: Pause a running task with accumulated duration tracked in `pausedSeconds`.
+- **1-Tap Task Switcher**: Switcher dialog (`SwitchTaskDialog`) accessible directly from the active timer card to seamlessly stop the current task and launch a new one without losing context.
+- **Quick-Start Favorites**: Pin favorite tasks with star badges for immediate one-click timer starts.
+- **Sticky Task Bar**: Floating bottom controller (`StickyTaskBar`) on mobile or during deep page scrolling with live elapsed time, pause/resume, and stop actions.
+- **Daily Target Progress Card**:
+  - Displays daily target progress against an 8-hour workday (480 minutes).
+  - Calculates and displays real-time **Projected Wrap-Up Time** based on current pace, remaining minutes, and logged breaks.
+
+---
+
+### 5.3 Task Management & Kanban Board
+Located at route [`/tasks`](file:///home/noah/project/tetra/src/app/(app)/tasks/page.tsx) and implemented in [`src/components/tasks/tasks-view.tsx`](file:///home/noah/project/tetra/src/components/tasks/tasks-view.tsx).
+
+- **Dual View Modes**:
+  - **Kanban Board**: Drag-and-drop task cards across columns: `To Do`, `In Progress`, and `Done`.
+  - **List View**: Dense tabular listing with sortable headers.
+- **Direct Timer Trigger**: Play button on every task card to immediately start tracking that task.
+- **Favorites & Search**: Real-time text search and category filter pills with dedicated favorites toggle.
+- **Task Modals**: Create, edit, and delete tasks with custom descriptions and category assignments.
+
+---
+
+### 5.4 Interactive Timeline, Gap Filling & Splitting
+Located at route [`/timeline`](file:///home/noah/project/tetra/src/app/(app)/timeline/page.tsx) and implemented in [`src/components/timeline/timeline-view.tsx`](file:///home/noah/project/tetra/src/components/timeline/timeline-view.tsx).
+
+- **Chronological Feed**: Unified chronological stream interleaving completed time entries and break spans.
+- **Inline "Fill Gap" Action**: Automatically calculates gaps between consecutive items exceeding 5 minutes; provides an inline `+ Fill gap (XXm)` button that opens the entry dialog pre-populated with exact start and end times.
+- **Entry Split Dialog (`SplitEntryDialog`)**: Retroactively split an uninterrupted time block into two distinct tasks with a visual time slider or timestamp inputs.
+- **Granular Entry Editing & ±15m Nudges**: Edit dialog (`EntryDialog`) with quick adjustment buttons (`-15m`, `+15m`) for rapid boundary tweaking.
+- **Day Navigator**: Seamless date travel with Previous/Next day buttons, interactive date picker, and quick "Today" reset.
+- **Inline Sheet Actions**: "Pull from Sheet", "Sync to Sheet", and "Auto-sync on Edit" toggle available directly within the timeline header.
+
+---
+
+### 5.5 Daily Review & Verification Gate
+Located at route [`/reports`](file:///home/noah/project/tetra/src/app/(app)/reports/page.tsx) and implemented in [`src/components/reports/review-view.tsx`](file:///home/noah/project/tetra/src/components/reports/review-view.tsx).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft : Tracking in progress
+    Draft --> Ready : Workday ended / Gaps resolved
+    Ready --> Reviewed : User clicks "Mark as Reviewed"
+    Reviewed --> Synced : Synchronized to Google Sheet / File
+    Synced --> ChangedAfterSync : Entry modified post-sync
+    ChangedAfterSync --> Reviewed : Re-reviewed
+    Synced --> [*]
+```
+
+- **Daily Aggregate Totals**: Automatic summation of Total Attendance, Total Break, Total Work, and individual category minutes.
+- **Discrepancy & Gap Warnings**: Contextual alert banners for overlapping time entries, open attendance records, and large unlogged spans.
+- **Review State Machine**: Strictly enforces human review before initiating synchronization. Modifying an entry on a synced day flags it as `Changed after sync`.
+- **Periodic Summaries**: Tabs for Weekly Summary and Monthly Summary aggregating category distributions over broader time horizons.
+
+---
+
+### 5.6 Google Sheets Synchronization Engine
+Implemented in [`src/features/sheets-sync/`](file:///home/noah/project/tetra/src/features/sheets-sync/).
+
+- **Narrow Cell Writes**: Only modifies explicitly mapped cells (e.g. `B14` for Clock In, `EL14` for Website Management). Never touches unrelated rows, formulas, or formatting.
+- **Compiled Category Notes**:
+  - Aggregates notes from all time entries within each category into bulleted summaries.
+  - Writes compiled notes to designated sheet note columns (columns `I`, `K`, `M`, `O`, `Q`, `S`, `U`, `W`).
+- **Sync Preview Dialog (`SyncPreviewDialog`)**: Shows the exact A1 cell coordinates and preview values before writing. Includes an editable text area to adjust compiled notes prior to submission.
+- **Idempotency & SHA-256 Hashing**: Generates a deterministic hash of target cell values. If the sheet already contains matching values, the write is safely skipped and recorded as idempotent.
+- **Auto Sheet Inspection (`/api/sheets/inspect`)**: Automatically reads target Google Sheets to detect available tab names, header rows, and column positions.
+- **Sync History & Retries**: Full audit log in `sync_logs` tracking timestamp, status (`pending`, `success`, `failed`), modified cells, and error messages with 1-click retry.
+- **File-Based Offline Sync (`FileSyncDialog`)**: Upload an `.xlsx` or `.csv` workbook file; TETRA applies the day's calculations and returns the updated file for download without requiring Google OAuth credentials.
+- **Reverse Sheet Pull (`pullDayFromSheet`)**: Reconstructs TETRA attendance and time entries from an existing Google Sheet date row using intelligent proportional duration allocation.
+
+---
+
+### 5.7 Executive Dashboard & Target Tracking
+Located at route [`/dashboard`](file:///home/noah/project/tetra/src/app/(app)/dashboard/page.tsx) and implemented in [`src/components/dashboard/dashboard-view.tsx`](file:///home/noah/project/tetra/src/components/dashboard/dashboard-view.tsx).
+
+- **Multi-Horizon KPI Cards**: High-level progress cards for Daily (8h target), Weekly (40h target), and Monthly work hours.
+- **Faithful Personal Weekly Report Table**:
+  - Accurately mirrors rows 44–55 of the official corporate Google Sheet.
+  - Slices the selected month into calendar weeks (Week 1 through Week 5).
+  - Displays workdays count, target hours, logged hours, diff badges (e.g., `+1h 15m` Ahead, `-45m` Behind), and progress percentages.
+- **Category Pie Charts**: Visual distribution breakdown for the current period using official category themes.
+
+---
+
+### 5.8 Google Calendar Two-Way Integration
+Located at route [`/calendar`](file:///home/noah/project/tetra/src/app/(app)/calendar/page.tsx) and implemented in [`src/features/calendar-sync/`](file:///home/noah/project/tetra/src/features/calendar-sync/).
+
+- **Two-Way Synchronization**: Fetches events from Google Calendar (primary or secondary calendars) and persists events created within TETRA back to Google Calendar.
+- **Day and Week Calendar Views**: Responsive scheduling views with quick Google Meet video launch buttons and attendee status.
+- **Full Event CRUD with Meet & Guests**: Create and edit events with Google Meet generation, guest email invitations, and customizable update notification options (`sendUpdates: "all" | "none"`).
+- **Rule-Based Auto-Categorization**: Automatically maps incoming events to TETRA categories using customizable regex rules against titles and descriptions, presence of Google Meet links, and guest counts.
+- **1-Click Import to Time Entries**: Convert scheduled calendar meetings into completed TETRA time entries with pre-filled category and duration.
+
+---
+
+### 5.9 Companion Alerts & Intelligent Notifications
+Implemented in [`src/features/notifications/`](file:///home/noah/project/tetra/src/features/notifications/) and [`src/components/notifications/`](file:///home/noah/project/tetra/src/components/notifications/).
+
+TETRA evaluates companion alerts across six operational rules:
+1. **Forgotten Active Timer**: Alerts when a task timer runs longer than 3 hours or continues running past clock-out.
+2. **Extended Break Alert**: Warns when an active break exceeds 90 minutes.
+3. **Unlogged Calendar Meetings**: Detects completed Google Calendar events that have not been logged as time entries.
+4. **Timeline Gap Warning**: Flags untracked spans exceeding 15 minutes between consecutive tasks.
+5. **Weekly Target Deficit**: Warns on Thursdays and Fridays when cumulative work hours fall significantly behind the 40-hour weekly target.
+6. **Unsynced Previous Day**: Reminds the user each morning if the previous workday's review has not been synchronized to Google Sheets.
+
+Alerts are delivered via the Header Notification Bell dropdown (`NotificationMenu`), toast overlays (`NotificationBannerOverlay`), browser desktop notifications, and optional audio chimes.
+
+---
+
+### 5.10 Keyboard Shortcuts, PWA & Guided Tour
+- **Keyboard Navigation**: Press <kbd>?</kbd> anywhere to open the Shortcuts Cheat Sheet (`ShortcutsDialog`). Supported hotkeys:
+  - <kbd>c</kbd>: Clock In / Clock Out
+  - <kbd>b</kbd>: Start / Stop Break
+  - <kbd>t</kbd>: Open Start Task Dialog
+  - <kbd>p</kbd>: Pause / Resume Active Task
+  - <kbd>s</kbd>: Stop Active Task
+  - <kbd>w</kbd>: Open Switch Task Dialog
+  - <kbd>g</kbd> then <kbd>t</kbd>: Navigate to Today Screen
+  - <kbd>g</kbd> then <kbd>l</kbd>: Navigate to Timeline
+  - <kbd>g</kbd> then <kbd>k</kbd>: Navigate to Tasks
+  - <kbd>g</kbd> then <kbd>d</kbd>: Navigate to Dashboard
+  - <kbd>g</kbd> then <kbd>c</kbd>: Navigate to Calendar
+  - <kbd>g</kbd> then <kbd>r</kbd>: Navigate to Reports
+  - <kbd>g</kbd> then <kbd>s</kbd>: Navigate to Settings
+- **Progressive Web App (PWA)**: Manifest configured at [`src/app/manifest.ts`](file:///home/noah/project/tetra/src/app/manifest.ts) with offline detection badge (`NetworkStatus`).
+- **Interactive Guided Tour**: Built-in visual walkthrough (`GuideTourSpotlight` & `GuideTourDialog`) guiding new users through clock-in, active task controls, timeline gap resolution, and daily review synchronization.
+
+---
+
+## 6. API Architecture & Endpoint Reference
+
+All mutation endpoints are validated using Zod schemas and require an authenticated session.
+
+### Attendance & Breaks
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/attendance/start` | Clock in for the current workday. |
+| `POST` | `/api/attendance/stop` | Clock out, stopping any running task and open break. |
+| `POST` | `/api/breaks/start` | Start a break span. |
+| `POST` | `/api/breaks/stop` | End the current active break. |
+| `POST` | `/api/breaks` | Create a manual historical break span. |
+| `PATCH` | `/api/breaks/:id` | Update break boundaries. |
+| `DELETE` | `/api/breaks/:id` | Delete a break entry. |
+
+### Time Entries & Tasks
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/time-entries/start` | Start an active task timer (auto-clocks-in if needed). |
+| `POST` | `/api/time-entries/pause` | Pause the running task timer. |
+| `POST` | `/api/time-entries/resume` | Resume the paused task timer. |
+| `POST` | `/api/time-entries/stop` | Stop the active task timer. |
+| `POST` | `/api/time-entries` | Create a completed manual time entry. |
+| `PATCH` | `/api/time-entries/:id` | Update time entry timestamps, task, category, or notes. |
+| `DELETE` | `/api/time-entries/:id` | Delete a time entry. |
+| `POST` | `/api/time-entries/:id/split` | Split a time entry into two adjacent blocks. |
+| `GET` | `/api/tasks` | List all tasks with status and favorites. |
+| `POST` | `/api/tasks` | Create a new task entity. |
+| `PATCH` | `/api/tasks/:id` | Update task details or status. |
+| `POST` | `/api/tasks/:id/favorite` | Toggle favorite/star status. |
+| `GET` | `/api/tasks/recent` | List recently used tasks for autocomplete. |
+
+### Days, Review & Sheets Sync
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/days/:date` | Fetch complete day summary, entries, breaks, and warnings. |
+| `POST` | `/api/days/:date/review` | Update the review state (`reviewed`, `ready`, `draft`). |
+| `POST` | `/api/days/:date/sync` | Execute narrow cell writes to Google Sheet (idempotent). |
+| `POST` | `/api/days/:date/pull` | Reconstruct day entries and attendance from Google Sheet. |
+| `POST` | `/api/days/:date/attendance` | Adjust attendance `clockInAt` and `clockOutAt` boundaries. |
+| `GET` | `/api/sync-config` | Fetch Google Sheets spreadsheet ID and column mappings. |
+| `PUT` | `/api/sync-config` | Save or update Google Sheets column mappings. |
+| `POST` | `/api/sheets/inspect` | Test connection and inspect spreadsheet tabs and headers. |
+| `POST` | `/api/sync-file` | Perform file-based sync with `.xlsx` or `.csv` upload/download. |
+| `GET` | `/api/sync-logs` | Retrieve historical synchronization audit logs. |
+
+### Calendar & Notifications
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/calendar/events` | List synchronized calendar events. |
+| `POST` | `/api/calendar/events` | Create a calendar event (with Google Meet & guests). |
+| `PATCH` | `/api/calendar/events/:id` | Update a calendar event. |
+| `DELETE` | `/api/calendar/events/:id` | Delete a calendar event. |
+| `GET` | `/api/calendar/config` | Get calendar sync settings and auto-categorization rules. |
+| `PUT` | `/api/calendar/config` | Update calendar settings and rules. |
+| `POST` | `/api/calendar/import` | Batch-import calendar events into completed time entries. |
+| `GET` | `/api/notifications` | Fetch active companion alerts and system notifications. |
+
+---
+
+## 7. Environment Configuration & Database Runtime
+
+All environment variables are validated at startup via [`src/server/env.ts`](file:///home/noah/project/tetra/src/server/env.ts):
+
+| Variable | Required | Description | Default |
+|---|---|---|---|
+| `DATABASE_URL` | Optional | PostgreSQL connection string or `file:.data/tetra-pglite` | `file:.data/tetra-pglite` |
+| `NEXTAUTH_SECRET` | Required | Cryptographic secret for signing session JWTs | - |
+| `NEXTAUTH_URL` | Optional | Canonical URL of the application | `http://localhost:3000` |
+| `GOOGLE_CLIENT_ID` | Optional | Google OAuth 2.0 Client ID for Sheets/Calendar APIs | - |
+| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth 2.0 Client Secret | - |
+| `ALLOW_DEV_LOGIN` | Optional | Enable local passwordless mock authentication | `true` in development |
+| `DEFAULT_TIMEZONE` | Optional | Fallback IANA timezone | `Asia/Jakarta` |
+
+### Dual Database Setup
+- **Local Embedded PGlite**: If `DATABASE_URL` starts with `file:` or is omitted, TETRA initializes an embedded WebAssembly-based PostgreSQL database inside the Node.js process writing to `.data/tetra-pglite`. No Docker or external PostgreSQL service is required for local development or testing.
+- **Production PostgreSQL**: Pointing `DATABASE_URL` to a valid `postgres://` URI automatically activates Postgres.js connection pooling with production keep-alive settings.
+
+---
+
+## 8. Testing, Verification & Quality Assurance
+
+In accordance with [`AGENTS.md`](file:///home/noah/project/tetra/AGENTS.md), TETRA maintains strict verification gates:
+
+```bash
+# Run ESLint validation
+pnpm lint
+
+# Run TypeScript strict typecheck
+pnpm typecheck
+
+# Run Vitest test suite (unit, domain, integration, and challenge tests)
+pnpm test
+
+# Build production bundle
+pnpm build
+
+# Run Playwright End-to-End workflow tests
+pnpm test:e2e
+```
+
+### Critical End-to-End Golden Flow
+Playwright verifies the complete lifecycle:
+```text
+Login
+  ↓
+Start Work (Clock In)
+  ↓
+Start Task Timer
+  ↓
+Stop Task Timer
+  ↓
+Take Break
+  ↓
+End Break & Resume
+  ↓
+Stop Work (Clock Out)
+  ↓
+Daily Review Verification
+  ↓
+Idempotent Sync to Google Sheet
+```
+
+---
+*Documentation maintained by the TETRA Engineering Team. Updated September 2026.*
