@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlignJustify,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
   Kanban,
   List,
   Loader2,
@@ -10,10 +16,12 @@ import {
   Pencil,
   Play,
   Plus,
+  Rows,
   Search,
   Star,
   Trash2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +40,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/components/timeline/api";
 import { getCategoryTheme } from "@/lib/categories";
@@ -41,6 +56,11 @@ import { cn } from "@/lib/utils";
 interface TasksViewProps {
   timeZone: string;
 }
+
+const DEFAULT_PAGE_SIZE = 15;
+
+type SortOption = "favorites" | "recent" | "name" | "created";
+type CardDensity = "comfortable" | "compact";
 
 const COLUMNS: Array<{
   id: TaskStatus;
@@ -80,13 +100,33 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters & display
+  // Filters & display preferences
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [hideDone, setHideDone] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>("favorites");
+  const [cardDensity, setCardDensity] = useState<CardDensity>("comfortable");
 
-  // Task actions
+  // Kanban column pagination limits
+  const [visibleLimits, setVisibleLimits] = useState<Record<TaskStatus, number>>({
+    todo: DEFAULT_PAGE_SIZE,
+    in_progress: DEFAULT_PAGE_SIZE,
+    done: DEFAULT_PAGE_SIZE,
+  });
+
+  // Kanban column collapsed state
+  const [collapsedColumns, setCollapsedColumns] = useState<Record<TaskStatus, boolean>>({
+    todo: false,
+    in_progress: false,
+    done: false,
+  });
+
+  // Mobile segmented column tab
+  const [mobileTab, setMobileTab] = useState<TaskStatus | "all">("all");
+
+  // Task actions state
   const [startingId, setStartingId] = useState<string | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
@@ -154,6 +194,7 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (onlyFavorites && !t.isFavorite) return false;
+      if (hideDone && t.status === "done") return false;
       if (selectedCategory !== "all" && t.categoryId !== selectedCategory) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -165,7 +206,36 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
       }
       return true;
     });
-  }, [tasks, onlyFavorites, selectedCategory, searchQuery, categoryNames]);
+  }, [tasks, onlyFavorites, hideDone, selectedCategory, searchQuery, categoryNames]);
+
+  // Sorted and filtered tasks
+  const sortedTasks = useMemo(() => {
+    return [...filteredTasks].sort((a, b) => {
+      if (sortBy === "favorites") {
+        if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+        const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+        const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+        if (aTime !== bTime) return bTime - aTime;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === "recent") {
+        const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+        const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+        if (aTime !== bTime) return bTime - aTime;
+        if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === "name") {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === "created") {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      }
+      return 0;
+    });
+  }, [filteredTasks, sortBy]);
 
   // Tasks grouped by Kanban column
   const tasksByColumn = useMemo(() => {
@@ -174,7 +244,7 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
       in_progress: [],
       done: [],
     };
-    for (const t of filteredTasks) {
+    for (const t of sortedTasks) {
       const status = t.status || "todo";
       if (map[status]) {
         map[status].push(t);
@@ -183,7 +253,49 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
       }
     }
     return map;
-  }, [filteredTasks]);
+  }, [sortedTasks]);
+
+  // Statistics for headers
+  const stats = useMemo(() => {
+    let todo = 0;
+    let inProgress = 0;
+    let done = 0;
+    for (const t of tasks) {
+      if (t.status === "in_progress") inProgress += 1;
+      else if (t.status === "done") done += 1;
+      else todo += 1;
+    }
+    return { total: tasks.length, todo, inProgress, done };
+  }, [tasks]);
+
+  // Column pagination helpers
+  function handleLoadMore(columnId: TaskStatus) {
+    setVisibleLimits((prev) => ({
+      ...prev,
+      [columnId]: (prev[columnId] || DEFAULT_PAGE_SIZE) + DEFAULT_PAGE_SIZE,
+    }));
+  }
+
+  function handleShowAll(columnId: TaskStatus, total: number) {
+    setVisibleLimits((prev) => ({
+      ...prev,
+      [columnId]: total,
+    }));
+  }
+
+  function handleCollapseLimit(columnId: TaskStatus) {
+    setVisibleLimits((prev) => ({
+      ...prev,
+      [columnId]: DEFAULT_PAGE_SIZE,
+    }));
+  }
+
+  function toggleColumnCollapse(columnId: TaskStatus) {
+    setCollapsedColumns((prev) => ({
+      ...prev,
+      [columnId]: !prev[columnId],
+    }));
+  }
 
   // One-tap start timer
   async function handleStart(task: TaskDTO) {
@@ -315,25 +427,66 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Tasks Kanban</h1>
             {!loading && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/30 px-2.5 py-0.5 text-xs font-semibold text-foreground">
-                {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
-              </span>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border/80 bg-muted/40 px-2.5 py-0.5 font-semibold text-foreground">
+                  {stats.total} total
+                </span>
+                <span className="hidden sm:inline opacity-40">•</span>
+                <span className="hidden sm:inline text-[11px]">
+                  {stats.todo} to do, {stats.inProgress} doing, {stats.done} done
+                </span>
+              </div>
             )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage your workflow across To Do, In Progress, and Done.
+            Manage your task workflow across To Do, In Progress, and Done.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* View Mode Toggle */}
+          {/* Card Density Toggle */}
+          <div
+            className="inline-flex rounded-lg border border-border/70 p-0.5 bg-muted/40"
+            title="Card Density"
+          >
+            <button
+              type="button"
+              onClick={() => setCardDensity("comfortable")}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                cardDensity === "comfortable"
+                  ? "bg-background text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title="Comfortable card view"
+              aria-label="Comfortable card density"
+            >
+              <Rows className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCardDensity("compact")}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                cardDensity === "compact"
+                  ? "bg-background text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title="Compact card view (fits more cards)"
+              aria-label="Compact card density"
+            >
+              <AlignJustify className="size-3.5" />
+            </button>
+          </div>
+
+          {/* View Mode Toggle (Kanban / List) */}
           <div className="inline-flex rounded-lg border border-border/70 p-0.5 bg-muted/40">
             <button
               type="button"
@@ -375,19 +528,45 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 flex-1 max-w-md">
-          <div className="relative flex-1">
+      {/* Filter and Control Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap flex-1">
+          {/* Search Input */}
+          <div className="relative w-full sm:w-64 max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 text-xs h-9"
+              className="pl-8 pr-7 text-xs h-9"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+                title="Clear search"
+              >
+                <X className="size-3" />
+              </button>
+            )}
           </div>
 
+          {/* Sort Selector */}
+          <Select value={sortBy} onValueChange={(val: SortOption) => setSortBy(val)}>
+            <SelectTrigger className="w-[150px] h-9 text-xs">
+              <ArrowUpDown className="size-3 mr-1 text-muted-foreground" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="favorites">Favorites First</SelectItem>
+              <SelectItem value="recent">Recently Used</SelectItem>
+              <SelectItem value="name">Alphabetical (A–Z)</SelectItem>
+              <SelectItem value="created">Newest Created</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Favorites Filter */}
           <button
             type="button"
             onClick={() => setOnlyFavorites(!onlyFavorites)}
@@ -406,10 +585,26 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
             />
             <span>Favorites</span>
           </button>
+
+          {/* Hide Done Toggle */}
+          <button
+            type="button"
+            onClick={() => setHideDone(!hideDone)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 h-9 rounded-lg border text-xs font-medium transition-all select-none cursor-pointer",
+              hideDone
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-semibold"
+                : "border-border/70 hover:border-border text-muted-foreground hover:text-foreground bg-card/60",
+            )}
+            title="Hide completed tasks"
+          >
+            {hideDone ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            <span>{hideDone ? "Done Hidden" : "Hide Done"}</span>
+          </button>
         </div>
 
         {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
           <button
             type="button"
             onClick={() => setSelectedCategory("all")}
@@ -443,307 +638,538 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
       {/* Main Content: Kanban or List */}
       <div data-testid="tasks-list">
         {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="Loading tasks">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-64 animate-pulse rounded-xl bg-muted/60" />
-          ))}
-        </div>
-      ) : error ? (
-        <Card className="items-start gap-3 p-6" data-testid="tasks-error">
-          <div className="flex items-center gap-2 text-destructive">
-            <TriangleAlert className="size-4" />
-            <p className="text-sm font-medium">{error}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="Loading tasks">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-64 animate-pulse rounded-xl bg-muted/60" />
+            ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => loadData()} className="mt-2 text-xs">
-            Try again
-          </Button>
-        </Card>
-      ) : viewMode === "kanban" ? (
-        /* Kanban Board View */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 items-start">
-          {COLUMNS.map((column) => {
-            const columnTasks = tasksByColumn[column.id] || [];
-            const isDragOver = dragOverColumn === column.id;
-
-            return (
-              <div
-                key={column.id}
-                onDragOver={(e) => handleDragOver(e, column.id)}
-                onDrop={(e) => handleDrop(e, column.id)}
+        ) : error ? (
+          <Card className="items-start gap-3 p-6" data-testid="tasks-error">
+            <div className="flex items-center gap-2 text-destructive">
+              <TriangleAlert className="size-4" />
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => loadData()} className="mt-2 text-xs">
+              Try again
+            </Button>
+          </Card>
+        ) : viewMode === "kanban" ? (
+          <div className="space-y-3">
+            {/* Mobile Column Switcher (Visible only on < md screens) */}
+            <div className="flex md:hidden items-center rounded-lg border border-border/70 p-1 bg-muted/40">
+              <button
+                type="button"
+                onClick={() => setMobileTab("all")}
                 className={cn(
-                  "flex flex-col rounded-2xl border bg-card/40 backdrop-blur-xs p-3.5 transition-all min-h-[480px]",
-                  column.borderClass,
-                  isDragOver && "ring-2 ring-primary bg-primary/[0.03] border-primary",
+                  "flex-1 py-1 text-xs font-medium rounded-md text-center transition-colors",
+                  mobileTab === "all"
+                    ? "bg-background text-foreground shadow-2xs font-semibold"
+                    : "text-muted-foreground",
                 )}
               >
-                {/* Column Header */}
-                <div className="flex items-center justify-between pb-3 border-b border-border/50 mb-3 px-1">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("size-2.5 rounded-full", column.dotColor)} />
-                    <h3 className="text-sm font-bold tracking-tight text-foreground">
-                      {column.title}
-                    </h3>
-                    <Badge variant="outline" className={cn("text-[11px] font-mono px-2 py-0", column.badgeClass)}>
-                      {columnTasks.length}
-                    </Badge>
-                  </div>
-
-                  <Button
+                All Columns
+              </button>
+              {COLUMNS.map((col) => {
+                const count = tasksByColumn[col.id]?.length || 0;
+                return (
+                  <button
+                    key={col.id}
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleOpenCreate(column.id)}
-                    className="size-7 text-muted-foreground hover:text-foreground rounded-lg"
-                    title={`Add task to ${column.title}`}
+                    onClick={() => setMobileTab(col.id)}
+                    className={cn(
+                      "flex-1 py-1 text-xs font-medium rounded-md text-center transition-colors",
+                      mobileTab === col.id
+                        ? "bg-background text-foreground shadow-2xs font-semibold"
+                        : "text-muted-foreground",
+                    )}
                   >
-                    <Plus className="size-3.5" />
-                  </Button>
-                </div>
+                    {col.title} ({count})
+                  </button>
+                );
+              })}
+            </div>
 
-                {/* Cards Container */}
-                <div className="space-y-2.5 flex-1 overflow-y-auto">
-                  {columnTasks.length === 0 ? (
-                    <div className="border border-dashed border-border/70 rounded-xl p-6 text-center text-xs text-muted-foreground/70 my-2">
-                      No tasks in {column.title.toLowerCase()}
+            {/* Kanban Columns Layout */}
+            <div className="flex flex-col md:flex-row gap-4 sm:gap-5 items-stretch">
+              {COLUMNS.map((column) => {
+                // If hideDone is active and column is done, skip rendering unless dragged over
+                if (hideDone && column.id === "done" && dragOverColumn !== "done") {
+                  return null;
+                }
+
+                // Mobile tab filter check
+                if (mobileTab !== "all" && mobileTab !== column.id) {
+                  return null;
+                }
+
+                const allColumnTasks = tasksByColumn[column.id] || [];
+                const isDragOver = dragOverColumn === column.id;
+                const isCollapsed = collapsedColumns[column.id];
+                const limit = visibleLimits[column.id] ?? DEFAULT_PAGE_SIZE;
+                const visibleTasks = allColumnTasks.slice(0, limit);
+                const hasMore = allColumnTasks.length > limit;
+
+                // If column is collapsed, render a sleek vertical ribbon
+                if (isCollapsed) {
+                  return (
+                    <div
+                      key={column.id}
+                      onDragOver={(e) => handleDragOver(e, column.id)}
+                      onDrop={(e) => handleDrop(e, column.id)}
+                      onClick={() => toggleColumnCollapse(column.id)}
+                      className={cn(
+                        "flex flex-col items-center justify-between rounded-2xl border bg-card/40 hover:bg-card/70 backdrop-blur-xs p-3 transition-all cursor-pointer select-none",
+                        "w-full md:w-16 h-20 md:h-[calc(100vh-235px)] md:min-h-[500px] md:max-h-[820px]",
+                        column.borderClass,
+                        isDragOver && "ring-2 ring-primary bg-primary/[0.08] border-primary",
+                      )}
+                      title={`Expand ${column.title} column (${allColumnTasks.length} tasks)`}
+                    >
+                      <div className="flex md:flex-col items-center gap-2">
+                        <span className={cn("size-2.5 rounded-full shrink-0", column.dotColor)} />
+                        <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-mono", column.badgeClass)}>
+                          {allColumnTasks.length}
+                        </Badge>
+                      </div>
+
+                      <div className="flex md:flex-col items-center gap-1.5">
+                        <span className="text-xs font-bold text-foreground tracking-wide md:[writing-mode:vertical-rl] md:rotate-180">
+                          {column.title}
+                        </span>
+                      </div>
+
+                      <ChevronRight className="size-4 text-muted-foreground hidden md:block" />
                     </div>
-                  ) : (
-                    columnTasks.map((task, colTaskIndex) => {
-                      const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
-                      const theme = getCategoryTheme(categoryName);
-                      const taskIndex = tasks.findIndex((t) => t.id === task.id);
-                      const favoriteTestId = `favorite-toggle-${taskIndex >= 0 ? taskIndex : colTaskIndex}`;
+                  );
+                }
 
-                      return (
-                        <div
-                          key={task.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, task.id)}
-                          className={cn(
-                            "group rounded-xl border border-border/70 bg-card p-3.5 shadow-2xs hover:shadow-xs hover:border-border transition-all cursor-grab active:cursor-grabbing select-none relative space-y-2.5",
-                            theme.borderClass,
-                            "border-l-4",
-                            task.isFavorite && "bg-amber-500/[0.015]",
-                          )}
+                return (
+                  <div
+                    key={column.id}
+                    onDragOver={(e) => handleDragOver(e, column.id)}
+                    onDrop={(e) => handleDrop(e, column.id)}
+                    className={cn(
+                      "flex flex-col rounded-2xl border bg-card/40 backdrop-blur-xs transition-all",
+                      "flex-1 min-w-[280px] w-full",
+                      // Viewport-bounded scroll height on desktop:
+                      "h-auto md:h-[calc(100vh-235px)] md:min-h-[500px] md:max-h-[820px]",
+                      column.borderClass,
+                      isDragOver && "ring-2 ring-primary bg-primary/[0.03] border-primary",
+                    )}
+                  >
+                    {/* Pinned Column Header */}
+                    <div className="flex items-center justify-between p-3.5 pb-3 border-b border-border/50 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("size-2.5 rounded-full shrink-0", column.dotColor)} />
+                        <h3 className="text-sm font-bold tracking-tight text-foreground">
+                          {column.title}
+                        </h3>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[11px] font-mono px-2 py-0", column.badgeClass)}
                         >
-                          {/* Card Top: Category & Favorite */}
-                          <div className="flex items-center justify-between gap-1.5">
-                            <CategoryBadge categoryName={categoryName} size="sm" showIcon={false} />
+                          {allColumnTasks.length}
+                        </Badge>
+                      </div>
 
-                            <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleColumnCollapse(column.id)}
+                          className="size-7 text-muted-foreground hover:text-foreground rounded-lg"
+                          title={`Collapse ${column.title} column`}
+                        >
+                          <ChevronDown className="size-3.5 hidden md:block" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenCreate(column.id)}
+                          className="size-7 text-muted-foreground hover:text-foreground rounded-lg"
+                          title={`Add task to ${column.title}`}
+                        >
+                          <Plus className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Independent Scrollable Cards Container */}
+                    <div className="flex-1 overflow-y-auto p-3.5 pt-3 space-y-2.5 scrollbar-thin">
+                      {allColumnTasks.length === 0 ? (
+                        <div className="border border-dashed border-border/70 rounded-xl p-6 text-center text-xs text-muted-foreground/70 my-2">
+                          No tasks in {column.title.toLowerCase()}
+                        </div>
+                      ) : (
+                        <>
+                          {visibleTasks.map((task, colTaskIndex) => {
+                            const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
+                            const theme = getCategoryTheme(categoryName);
+                            const taskIndex = tasks.findIndex((t) => t.id === task.id);
+                            const favoriteTestId = `favorite-toggle-${taskIndex >= 0 ? taskIndex : colTaskIndex}`;
+
+                            // Compact Mode
+                            if (cardDensity === "compact") {
+                              return (
+                                <div
+                                  key={task.id}
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, task.id)}
+                                  className={cn(
+                                    "group flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-2 shadow-2xs hover:shadow-xs hover:border-border transition-all cursor-grab active:cursor-grabbing select-none relative",
+                                    theme.borderClass,
+                                    "border-l-4",
+                                    task.isFavorite && "bg-amber-500/[0.02]",
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span
+                                      className={cn("size-2 rounded-full shrink-0", theme.dotClass)}
+                                      title={categoryName}
+                                    />
+                                    <h4 className="text-xs font-medium text-foreground truncate" title={task.name}>
+                                      {task.name}
+                                    </h4>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleToggleFavorite(task)}
+                                      className="p-1 rounded-md text-muted-foreground hover:text-amber-500 transition-colors"
+                                      title="Toggle favorite"
+                                      data-testid={favoriteTestId}
+                                      aria-label={`Toggle favorite for ${task.name}`}
+                                      aria-pressed={task.isFavorite}
+                                    >
+                                      <Star
+                                        className={cn(
+                                          "size-3.5 transition-colors",
+                                          task.isFavorite
+                                            ? "fill-amber-500 text-amber-500"
+                                            : "text-muted-foreground hover:text-amber-500",
+                                        )}
+                                      />
+                                    </button>
+
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => void handleStart(task)}
+                                      disabled={startingId !== null}
+                                      className="size-6 text-primary hover:text-primary hover:bg-primary/10 rounded-md"
+                                      title="Start timer"
+                                    >
+                                      <Play className="size-2.5 fill-primary text-primary" />
+                                    </Button>
+
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                          <MoreVertical className="size-3.5" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent side="bottom" align="end" className="w-36 p-1 text-xs">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEdit(task)}
+                                          className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-muted transition-colors text-foreground"
+                                        >
+                                          <Pencil className="size-3 text-muted-foreground" />
+                                          <span>Edit Task</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleDeleteTask(task.id)}
+                                          className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-destructive/10 text-destructive transition-colors"
+                                        >
+                                          <Trash2 className="size-3 text-destructive" />
+                                          <span>Delete</span>
+                                        </button>
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Comfortable Mode (Default)
+                            return (
+                              <div
+                                key={task.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, task.id)}
+                                className={cn(
+                                  "group rounded-xl border border-border/70 bg-card p-3.5 shadow-2xs hover:shadow-xs hover:border-border transition-all cursor-grab active:cursor-grabbing select-none relative space-y-2.5",
+                                  theme.borderClass,
+                                  "border-l-4",
+                                  task.isFavorite && "bg-amber-500/[0.015]",
+                                )}
+                              >
+                                {/* Card Top: Category & Options */}
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <CategoryBadge categoryName={categoryName} size="sm" showIcon={false} />
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleToggleFavorite(task)}
+                                      className="p-1 rounded-md text-muted-foreground hover:text-amber-500 transition-colors"
+                                      title="Toggle favorite"
+                                      data-testid={favoriteTestId}
+                                      aria-label={`Toggle favorite for ${task.name}`}
+                                      aria-pressed={task.isFavorite}
+                                    >
+                                      <Star
+                                        className={cn(
+                                          "size-3.5 transition-colors",
+                                          task.isFavorite
+                                            ? "fill-amber-500 text-amber-500"
+                                            : "text-muted-foreground hover:text-amber-500",
+                                        )}
+                                      />
+                                    </button>
+
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                          <MoreVertical className="size-3.5" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent side="bottom" align="end" className="w-36 p-1 text-xs">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEdit(task)}
+                                          className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-muted transition-colors text-foreground"
+                                        >
+                                          <Pencil className="size-3 text-muted-foreground" />
+                                          <span>Edit Task</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleDeleteTask(task.id)}
+                                          className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-destructive/10 text-destructive transition-colors"
+                                        >
+                                          <Trash2 className="size-3 text-destructive" />
+                                          <span>Delete</span>
+                                        </button>
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+                                </div>
+
+                                {/* Card Title & Description */}
+                                <div>
+                                  <h4 className="text-sm font-semibold text-foreground leading-snug">
+                                    {task.name}
+                                  </h4>
+                                  {task.description && (
+                                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                      {task.description}
+                                    </p>
+                                  )}
+                                </div>
+
+                                {/* Card Footer: Start & Quick Move Controls */}
+                                <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-1.5">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void handleStart(task)}
+                                    disabled={startingId !== null}
+                                    className="h-7 text-xs px-2.5 gap-1 text-primary hover:text-primary font-medium border-primary/30 hover:bg-primary/10"
+                                  >
+                                    <Play className="size-3 fill-primary text-primary" />
+                                    {startingId === task.id ? "Starting…" : "Start"}
+                                  </Button>
+
+                                  <div className="flex items-center gap-1">
+                                    {column.id !== "todo" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleMoveStatus(task.id, "todo")}
+                                        className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                        title="Move to To Do"
+                                      >
+                                        To Do
+                                      </button>
+                                    )}
+                                    {column.id !== "in_progress" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleMoveStatus(task.id, "in_progress")}
+                                        className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                        title="Move to In Progress"
+                                      >
+                                        Doing
+                                      </button>
+                                    )}
+                                    {column.id !== "done" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleMoveStatus(task.id, "done")}
+                                        className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                                        title="Mark Done"
+                                      >
+                                        Done
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Progressive Disclosure Load More / Show All */}
+                          {hasMore ? (
+                            <div className="pt-2 pb-1 text-center border-t border-border/40 mt-3 space-y-1.5">
+                              <p className="text-[11px] text-muted-foreground font-medium">
+                                Showing {visibleTasks.length} of {allColumnTasks.length} tasks
+                              </p>
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleLoadMore(column.id)}
+                                  className="h-7 text-xs px-2.5 font-medium"
+                                >
+                                  + Load {DEFAULT_PAGE_SIZE} more
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleShowAll(column.id, allColumnTasks.length)}
+                                  className="h-7 text-xs px-2.5 text-muted-foreground hover:text-foreground"
+                                >
+                                  Show all ({allColumnTasks.length})
+                                </Button>
+                              </div>
+                            </div>
+                          ) : allColumnTasks.length > DEFAULT_PAGE_SIZE ? (
+                            <div className="pt-2 pb-1 text-center border-t border-border/30 mt-2">
                               <button
                                 type="button"
-                                onClick={() => void handleToggleFavorite(task)}
-                                className="p-1 rounded-md text-muted-foreground hover:text-amber-500 transition-colors"
-                                title="Toggle favorite"
-                                data-testid={favoriteTestId}
-                                aria-label={`Toggle favorite for ${task.name}`}
-                                aria-pressed={task.isFavorite}
+                                onClick={() => handleCollapseLimit(column.id)}
+                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                               >
-                                <Star
-                                  className={cn(
-                                    "size-3.5 transition-colors",
-                                    task.isFavorite
-                                      ? "fill-amber-500 text-amber-500"
-                                      : "text-muted-foreground hover:text-amber-500",
-                                  )}
-                                />
+                                Show less ({DEFAULT_PAGE_SIZE})
                               </button>
-
-                              {/* Card Options Popover */}
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                                  >
-                                    <MoreVertical className="size-3.5" />
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent side="bottom" align="end" className="w-36 p-1 text-xs">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenEdit(task)}
-                                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-muted transition-colors text-foreground"
-                                  >
-                                    <Pencil className="size-3 text-muted-foreground" />
-                                    <span>Edit Task</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleDeleteTask(task.id)}
-                                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-destructive/10 text-destructive transition-colors"
-                                  >
-                                    <Trash2 className="size-3 text-destructive" />
-                                    <span>Delete</span>
-                                  </button>
-                                </PopoverContent>
-                              </Popover>
                             </div>
-                          </div>
-
-                          {/* Card Title & Description */}
-                          <div>
-                            <h4 className="text-sm font-semibold text-foreground leading-snug">
-                              {task.name}
-                            </h4>
-                            {task.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                {task.description}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Card Footer: Start & Quick Move Controls */}
-                          <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-1.5">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void handleStart(task)}
-                              disabled={startingId !== null}
-                              className="h-7 text-xs px-2.5 gap-1 text-primary hover:text-primary font-medium border-primary/30 hover:bg-primary/10"
-                            >
-                              <Play className="size-3 fill-primary text-primary" />
-                              {startingId === task.id ? "Starting…" : "Start"}
-                            </Button>
-
-                            {/* Move Status Buttons */}
-                            <div className="flex items-center gap-1">
-                              {column.id !== "todo" && (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleMoveStatus(task.id, "todo")}
-                                  className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                  title="Move to To Do"
-                                >
-                                  To Do
-                                </button>
-                              )}
-                              {column.id !== "in_progress" && (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleMoveStatus(task.id, "in_progress")}
-                                  className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
-                                  title="Move to In Progress"
-                                >
-                                  Doing
-                                </button>
-                              )}
-                              {column.id !== "done" && (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleMoveStatus(task.id, "done")}
-                                  className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors"
-                                  title="Mark Done"
-                                >
-                                  Done
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        /* List View */
-        <div className="space-y-3">
-          {filteredTasks.length === 0 ? (
-            <Card className="p-8 text-center sm:p-10">
-              <p className="font-heading text-base font-medium">No tasks found</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create a task to start tracking your work.
-              </p>
-            </Card>
-          ) : (
-            filteredTasks.map((task, listIndex) => {
-              const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
-              const theme = getCategoryTheme(categoryName);
-              const col = COLUMNS.find((c) => c.id === task.status) || COLUMNS[0];
-              const taskIndex = tasks.findIndex((t) => t.id === task.id);
-              const favoriteTestId = `favorite-toggle-${taskIndex >= 0 ? taskIndex : listIndex}`;
-
-              return (
-                <Card
-                  key={task.id}
-                  size="sm"
-                  className={cn(
-                    "flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 border-l-4 shadow-2xs hover:shadow-xs transition-colors",
-                    theme.borderClass,
-                    task.isFavorite && "border-amber-500/30 bg-amber-500/[0.015]",
-                  )}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <CategoryBadge categoryName={categoryName} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm text-foreground truncate">
-                        {task.name}
-                      </p>
-                      {task.description && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {task.description}
-                        </p>
+                          ) : null}
+                        </>
                       )}
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* List View */
+          <div className="space-y-2.5">
+            {sortedTasks.length === 0 ? (
+              <Card className="p-8 text-center sm:p-10">
+                <p className="font-heading text-base font-medium">No tasks found</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create a task to start tracking your work.
+                </p>
+              </Card>
+            ) : (
+              sortedTasks.map((task, listIndex) => {
+                const categoryName = categoryNames[task.categoryId] ?? "Uncategorized";
+                const theme = getCategoryTheme(categoryName);
+                const col = COLUMNS.find((c) => c.id === task.status) || COLUMNS[0];
+                const taskIndex = tasks.findIndex((t) => t.id === task.id);
+                const favoriteTestId = `favorite-toggle-${taskIndex >= 0 ? taskIndex : listIndex}`;
 
-                  <div className="flex items-center gap-2 justify-between sm:justify-end">
-                    <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5", col.badgeClass)}>
-                      {col.title}
-                    </Badge>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => void handleToggleFavorite(task)}
-                      className="size-8 text-muted-foreground hover:text-amber-500"
-                      data-testid={favoriteTestId}
-                      aria-label={`Toggle favorite for ${task.name}`}
-                      aria-pressed={task.isFavorite}
-                    >
-                      <Star
-                        className={cn(
-                          "size-4",
-                          task.isFavorite
-                            ? "fill-amber-500 text-amber-500"
-                            : "text-muted-foreground hover:text-amber-500",
+                return (
+                  <Card
+                    key={task.id}
+                    size="sm"
+                    className={cn(
+                      "flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-3 border-l-4 shadow-2xs hover:shadow-xs transition-colors",
+                      theme.borderClass,
+                      task.isFavorite && "border-amber-500/30 bg-amber-500/[0.015]",
+                    )}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <CategoryBadge categoryName={categoryName} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm text-foreground truncate">
+                          {task.name}
+                        </p>
+                        {task.description && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {task.description}
+                          </p>
                         )}
-                      />
-                    </Button>
+                      </div>
+                    </div>
 
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void handleStart(task)}
-                      disabled={startingId !== null}
-                      className="h-8 px-3 text-xs gap-1 font-medium shadow-xs"
-                    >
-                      <Play className="size-3" />
-                      {startingId === task.id ? "Starting…" : "Start"}
-                    </Button>
+                    <div className="flex items-center gap-2 justify-between sm:justify-end">
+                      <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5", col.badgeClass)}>
+                        {col.title}
+                      </Badge>
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenEdit(task)}
-                      className="h-8 px-2 text-xs"
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })
-          )}
-        </div>
-      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void handleToggleFavorite(task)}
+                        className="size-8 text-muted-foreground hover:text-amber-500"
+                        data-testid={favoriteTestId}
+                        aria-label={`Toggle favorite for ${task.name}`}
+                        aria-pressed={task.isFavorite}
+                      >
+                        <Star
+                          className={cn(
+                            "size-4",
+                            task.isFavorite
+                              ? "fill-amber-500 text-amber-500"
+                              : "text-muted-foreground hover:text-amber-500",
+                          )}
+                        />
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleStart(task)}
+                        disabled={startingId !== null}
+                        className="h-8 px-3 text-xs gap-1 font-medium shadow-xs"
+                      >
+                        <Play className="size-3" />
+                        {startingId === task.id ? "Starting…" : "Start"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEdit(task)}
+                        className="h-8 px-2 text-xs"
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {/* Task Creation & Edit Modal Dialog */}
@@ -753,6 +1179,7 @@ export function TasksView({ timeZone: _timeZone }: TasksViewProps) {
         task={editingTask}
         defaultColumn={defaultColumnForNew}
         categories={categories}
+        existingTasks={tasks}
         onSaved={(savedTask) => {
           setTasks((prev) => {
             const exists = prev.some((t) => t.id === savedTask.id);
@@ -776,6 +1203,7 @@ interface TaskModalDialogProps {
   task: TaskDTO | null;
   defaultColumn: TaskStatus;
   categories: CategoryDTO[];
+  existingTasks: TaskDTO[];
   onSaved: (task: TaskDTO) => void;
   onDeleted: (taskId: string) => void;
 }
@@ -786,6 +1214,7 @@ function TaskModalDialog({
   task,
   defaultColumn,
   categories,
+  existingTasks,
   onSaved,
   onDeleted,
 }: TaskModalDialogProps) {
@@ -798,6 +1227,7 @@ function TaskModalDialog({
         task={task}
         defaultColumn={defaultColumn}
         categories={categories}
+        existingTasks={existingTasks}
         onOpenChange={onOpenChange}
         onSaved={onSaved}
         onDeleted={onDeleted}
@@ -810,6 +1240,7 @@ function TaskModalInner({
   task,
   defaultColumn,
   categories,
+  existingTasks,
   onOpenChange,
   onSaved,
   onDeleted,
@@ -817,6 +1248,7 @@ function TaskModalInner({
   task: TaskDTO | null;
   defaultColumn: TaskStatus;
   categories: CategoryDTO[];
+  existingTasks: TaskDTO[];
   onOpenChange: (open: boolean) => void;
   onSaved: (task: TaskDTO) => void;
   onDeleted: (taskId: string) => void;
@@ -834,6 +1266,15 @@ function TaskModalInner({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Suggest existing similar tasks when creating a new task to prevent accidental duplication
+  const similarTasks = useMemo(() => {
+    const q = name.trim().toLowerCase();
+    if (isEditing || q.length < 2) return [];
+    return existingTasks
+      .filter((t) => t.name.toLowerCase().includes(q))
+      .slice(0, 3);
+  }, [name, existingTasks, isEditing]);
 
   async function handleSave() {
     if (!name.trim()) {
@@ -937,6 +1378,32 @@ function TaskModalInner({
             autoFocus
             className="text-sm font-medium"
           />
+
+          {/* Autocomplete / Duplication warning for similar tasks */}
+          {similarTasks.length > 0 && (
+            <div className="rounded-lg bg-muted/60 border border-border/80 p-2.5 text-xs text-muted-foreground space-y-1 mt-1.5">
+              <span className="font-semibold text-foreground text-[11px]">
+                Existing task with similar name:
+              </span>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {similarTasks.map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => {
+                      setName(st.name);
+                      setCategoryId(st.categoryId);
+                      if (st.status) setStatus(st.status);
+                    }}
+                    className="px-2 py-0.5 rounded bg-background hover:bg-muted border border-border text-[11px] font-medium text-foreground transition-colors cursor-pointer"
+                    title="Click to use this existing task name"
+                  >
+                    {st.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Status */}
