@@ -26,11 +26,12 @@ export function CategoryBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors select-none",
-        size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-xs",
+        "inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors select-none min-w-0 max-w-full overflow-hidden",
+        size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs",
         theme.badgeClass,
         className,
       )}
+      title={displayName}
       {...props}
     >
       {showDot && (
@@ -44,7 +45,7 @@ export function CategoryBadge({
         />
       )}
       {showIcon && <Icon aria-hidden className="size-3 shrink-0" />}
-      <span className="truncate">{displayName}</span>
+      <span className="truncate min-w-0 flex-1">{displayName}</span>
     </span>
   );
 }

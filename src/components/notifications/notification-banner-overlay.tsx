@@ -170,12 +170,12 @@ export function NotificationBannerOverlay({ timezone }: NotificationBannerOverla
       role="region"
       aria-label="Startup notifications banner"
       data-testid="notification-banner-overlay"
-      className="sticky top-14 z-20 w-full px-4 sm:px-6 md:px-8 pt-2.5 pb-1 pointer-events-none transition-all duration-300"
+      className="w-full px-4 sm:px-6 md:px-8 pt-3 pb-1 transition-all duration-300"
     >
-      <div className="pointer-events-auto mx-auto max-w-5xl lg:max-w-6xl xl:max-w-7xl">
+      <div className="mx-auto max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]">
         <div
           className={cn(
-            "relative flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5 shadow-md backdrop-blur-md transition-all animate-in fade-in slide-in-from-top-2",
+            "relative flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5 shadow-xs transition-all animate-in fade-in slide-in-from-top-2",
             visuals.containerClass,
           )}
         >

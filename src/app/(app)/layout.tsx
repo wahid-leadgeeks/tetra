@@ -85,7 +85,7 @@ export default async function AppLayout({
         <NetworkStatusBanner />
         <HeaderNav email={email} name={name} image={image} timezone={timezone} hasGoogleAuth={hasGoogleAuth} />
         <NotificationBannerOverlay timezone={timezone} />
-        <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl flex-1">
+        <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] flex-1">
           {children}
         </main>
       </div>

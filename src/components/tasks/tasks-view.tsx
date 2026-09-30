@@ -845,7 +845,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
             </div>
 
             {/* Kanban Columns Layout (5 core workflow columns) */}
-            <div className="flex flex-col lg:flex-row gap-3.5 items-stretch overflow-x-auto pb-2">
+            <div className="flex flex-col lg:flex-row gap-2.5 xl:gap-3 items-stretch overflow-x-auto pb-2 min-w-0">
               {COLUMNS.map((column) => {
                 // If hideDone is active and column is done, skip rendering unless dragged over
                 if (hideDone && column.id === "done" && dragOverColumn !== "done") {
@@ -873,8 +873,8 @@ export function TasksView({ timeZone }: TasksViewProps) {
                       onDrop={(e) => handleDrop(e, column.id)}
                       onClick={() => toggleColumnCollapse(column.id)}
                       className={cn(
-                        "flex flex-col items-center justify-between rounded-2xl border bg-card/40 hover:bg-card/70 backdrop-blur-xs p-3 transition-all cursor-pointer select-none",
-                        "w-full lg:w-14 h-16 lg:h-[calc(100vh-235px)] lg:min-h-[500px] lg:max-h-[820px]",
+                        "flex flex-col items-center justify-between rounded-2xl border bg-card/40 hover:bg-card/70 backdrop-blur-xs p-3 transition-all cursor-pointer select-none shrink-0",
+                        "w-full lg:w-12 h-16 lg:h-[calc(100vh-235px)] lg:min-h-[500px] lg:max-h-[820px]",
                         column.borderClass,
                         isDragOver && "ring-2 ring-primary bg-primary/[0.08] border-primary",
                       )}
@@ -905,7 +905,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
                     onDrop={(e) => handleDrop(e, column.id)}
                     className={cn(
                       "flex flex-col rounded-2xl border bg-card/40 backdrop-blur-xs transition-all",
-                      "flex-1 min-w-[240px] w-full",
+                      "flex-1 min-w-[185px] w-full",
                       // Viewport-bounded scroll height on desktop:
                       "h-auto lg:h-[calc(100vh-235px)] lg:min-h-[500px] lg:max-h-[820px]",
                       column.borderClass,
@@ -1075,32 +1075,37 @@ export function TasksView({ timeZone }: TasksViewProps) {
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, task.id)}
                                 className={cn(
-                                  "group rounded-xl border border-border/70 bg-card p-3 shadow-2xs hover:shadow-xs hover:border-border transition-all cursor-grab active:cursor-grabbing select-none relative space-y-2",
+                                  "group rounded-xl border border-border/70 bg-card p-3 shadow-2xs hover:shadow-xs hover:border-border transition-all cursor-grab active:cursor-grabbing select-none relative space-y-2 min-w-0",
                                   theme.borderClass,
                                   "border-l-4",
                                   task.isFavorite && "bg-amber-500/[0.015]",
                                 )}
                               >
                                 {/* Card Top: Category, Priority, Star, Menu */}
-                                <div className="flex items-center justify-between gap-1">
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <CategoryBadge categoryName={categoryName} size="sm" showIcon={false} />
+                                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                                    <CategoryBadge
+                                      categoryName={categoryName}
+                                      size="sm"
+                                      showIcon={false}
+                                      className="max-w-[115px] sm:max-w-[130px] truncate text-[10px] px-2 py-0.5"
+                                    />
                                     {task.priority && task.priority !== "medium" && (
                                       <Badge
                                         variant="outline"
-                                        className={cn("text-[9px] px-1 py-0", priorityInfo.badgeClass)}
+                                        className={cn("text-[9px] px-1 py-0 shrink-0", priorityInfo.badgeClass)}
                                       >
-                                        {task.priority === "urgent" && <Flame className="size-2.5 mr-0.5 inline" />}
-                                        {priorityInfo.label}
+                                        {task.priority === "urgent" && <Flame className="size-2.5 mr-0.5 inline shrink-0" />}
+                                        <span className="truncate">{priorityInfo.label}</span>
                                       </Badge>
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-0.5 shrink-0">
+                                  <div className="flex items-center gap-0.5 shrink-0 ml-1">
                                     <button
                                       type="button"
                                       onClick={() => void handleToggleFavorite(task)}
-                                      className="p-1 rounded-md text-muted-foreground hover:text-amber-500 transition-colors"
+                                      className="p-1 rounded-md text-muted-foreground hover:text-amber-500 transition-colors shrink-0"
                                       title="Toggle favorite"
                                       data-testid={favoriteTestId}
                                       aria-label={`Toggle favorite for ${task.name}`}
@@ -1120,7 +1125,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
                                       <PopoverTrigger asChild>
                                         <button
                                           type="button"
-                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors shrink-0"
                                         >
                                           <MoreVertical className="size-3" />
                                         </button>
@@ -1131,7 +1136,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
                                           onClick={() => handleOpenEdit(task)}
                                           className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-muted transition-colors text-foreground"
                                         >
-                                          <Pencil className="size-3 text-muted-foreground" />
+                                          <Pencil className="size-3 text-muted-foreground shrink-0" />
                                           <span>Edit Task</span>
                                         </button>
                                         <button
@@ -1139,7 +1144,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
                                           onClick={() => void handleDeleteTask(task.id)}
                                           className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-destructive/10 text-destructive transition-colors"
                                         >
-                                          <Trash2 className="size-3 text-destructive" />
+                                          <Trash2 className="size-3 text-destructive shrink-0" />
                                           <span>Delete</span>
                                         </button>
                                       </PopoverContent>
@@ -1148,12 +1153,12 @@ export function TasksView({ timeZone }: TasksViewProps) {
                                 </div>
 
                                 {/* Card Title & Description */}
-                                <div>
-                                  <h4 className="text-xs font-semibold text-foreground leading-snug">
+                                <div className="min-w-0">
+                                  <h4 className="text-xs font-semibold text-foreground leading-snug break-words" title={task.name}>
                                     {task.name}
                                   </h4>
                                   {task.description && (
-                                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
+                                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1 leading-relaxed break-words">
                                       {task.description}
                                     </p>
                                   )}
@@ -1161,80 +1166,110 @@ export function TasksView({ timeZone }: TasksViewProps) {
 
                                 {/* Due Date / Overdue Indicator */}
                                 {task.dueAt && (
-                                  <div className="flex items-center gap-1 text-[10px]">
+                                  <div className="flex items-center gap-1 text-[10px] min-w-0">
                                     {isOverdue ? (
-                                      <span className="flex items-center gap-1 text-destructive font-medium">
-                                        <AlertTriangle className="size-2.5" />
-                                        Overdue ({task.dueAt.slice(5, 10)})
+                                      <span className="flex items-center gap-1 text-destructive font-medium truncate">
+                                        <AlertTriangle className="size-2.5 shrink-0" />
+                                        <span>Overdue ({task.dueAt.slice(5, 10)})</span>
                                       </span>
                                     ) : isDueToday ? (
-                                      <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
-                                        <Calendar className="size-2.5" />
-                                        Due today
+                                      <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium truncate">
+                                        <Calendar className="size-2.5 shrink-0" />
+                                        <span>Due today</span>
                                       </span>
                                     ) : (
-                                      <span className="flex items-center gap-1 text-muted-foreground">
-                                        <Calendar className="size-2.5" />
-                                        Due {task.dueAt.slice(5, 10)}
+                                      <span className="flex items-center gap-1 text-muted-foreground truncate">
+                                        <Calendar className="size-2.5 shrink-0" />
+                                        <span>Due {task.dueAt.slice(5, 10)}</span>
                                       </span>
                                     )}
                                   </div>
                                 )}
 
                                 {/* Card Footer: Start & Quick Move Controls */}
-                                <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-1">
+                                <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-1 min-w-0">
                                   <Button
                                     type="button"
                                     size="sm"
                                     variant="outline"
                                     onClick={() => void handleStart(task)}
                                     disabled={startingId !== null}
-                                    className="h-6 text-[11px] px-2 gap-1 text-primary hover:text-primary font-medium border-primary/30 hover:bg-primary/10"
+                                    className="h-6 text-[11px] px-2 gap-1 text-primary hover:text-primary font-medium border-primary/30 hover:bg-primary/10 shrink-0"
                                   >
                                     <Play className="size-2.5 fill-primary text-primary" />
                                     {startingId === task.id ? "…" : "Start"}
                                   </Button>
 
                                   {/* Quick Status Mover Pills */}
-                                  <div className="flex items-center gap-1">
-                                    {column.id !== "todo" && column.id !== "backlog" && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {column.id === "backlog" && (
                                       <button
                                         type="button"
                                         onClick={() => void handleMoveStatus(task.id, "todo")}
-                                        className="text-[9px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                        className="text-[9px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
                                         title="Move to To Do"
                                       >
                                         To Do
                                       </button>
                                     )}
-                                    {column.id !== "in_progress" && (
+                                    {column.id !== "in_progress" && column.id !== "done" && (
                                       <button
                                         type="button"
                                         onClick={() => void handleMoveStatus(task.id, "in_progress")}
-                                        className="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                        className="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors shrink-0"
                                         title="Move to In Progress"
                                       >
                                         Doing
                                       </button>
                                     )}
-                                    {column.id !== "blocked" && column.id === "in_progress" && (
+                                    {column.id === "in_progress" && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleMoveStatus(task.id, "blocked")}
+                                          className="text-[9px] px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 transition-colors shrink-0"
+                                          title="Mark Blocked"
+                                        >
+                                          Block
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleMoveStatus(task.id, "done")}
+                                          className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors shrink-0"
+                                          title="Mark Done"
+                                        >
+                                          Done
+                                        </button>
+                                      </>
+                                    )}
+                                    {column.id === "blocked" && (
                                       <button
                                         type="button"
-                                        onClick={() => void handleMoveStatus(task.id, "blocked")}
-                                        className="text-[9px] px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 transition-colors"
-                                        title="Mark Blocked"
+                                        onClick={() => void handleMoveStatus(task.id, "in_progress")}
+                                        className="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors shrink-0"
+                                        title="Resume task"
                                       >
-                                        Block
+                                        Resume
                                       </button>
                                     )}
-                                    {column.id !== "done" && (
+                                    {column.id === "todo" && (
                                       <button
                                         type="button"
                                         onClick={() => void handleMoveStatus(task.id, "done")}
-                                        className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                                        className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors shrink-0"
                                         title="Mark Done"
                                       >
                                         Done
+                                      </button>
+                                    )}
+                                    {column.id === "done" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleMoveStatus(task.id, "todo")}
+                                        className="text-[9px] px-1.5 py-0.5 rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                        title="Reopen task"
+                                      >
+                                        Reopen
                                       </button>
                                     )}
                                   </div>
@@ -1319,7 +1354,7 @@ export function TasksView({ timeZone }: TasksViewProps) {
                     )}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <CategoryBadge categoryName={categoryName} size="sm" />
+                      <CategoryBadge categoryName={categoryName} size="sm" className="max-w-[130px] sm:max-w-[160px] truncate shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-sm text-foreground truncate">
