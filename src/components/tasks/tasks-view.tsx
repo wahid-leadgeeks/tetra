@@ -1158,9 +1158,9 @@ export function TasksView({ timeZone }: TasksViewProps) {
                                     {task.name}
                                   </h4>
                                   {task.description && (
-                                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1 leading-relaxed break-words">
+                                    <div className="mt-2 rounded-md bg-muted/40 border border-border/40 px-2 py-1.5 text-[11px] text-foreground/85 leading-relaxed font-normal break-words line-clamp-3">
                                       {task.description}
-                                    </p>
+                                    </div>
                                   )}
                                 </div>
 
@@ -1370,9 +1370,9 @@ export function TasksView({ timeZone }: TasksViewProps) {
                           )}
                         </div>
                         {task.description && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <div className="mt-1.5 rounded-md bg-muted/40 border border-border/30 px-2.5 py-1 text-xs text-foreground/85 leading-relaxed break-words line-clamp-2">
                             {task.description}
-                          </p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1612,25 +1612,27 @@ function TaskModalInner({
   }
 
   return (
-    <DialogContent className="sm:max-w-md">
-      <DialogHeader>
-        <DialogTitle className="text-lg font-semibold tracking-tight">
-          {isEditing ? "Edit Task" : "Create New Task"}
-        </DialogTitle>
-        <DialogDescription>
-          {isEditing
-            ? "Modify task name, status, priority, and workflow details."
-            : "Add a new task directly into your active workflow."}
-        </DialogDescription>
-      </DialogHeader>
+    <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 overflow-hidden">
+      <div className="px-6 pt-5 pb-3 shrink-0 border-b border-border/40">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold tracking-tight">
+            {isEditing ? "Edit Task" : "Create New Task"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? "Modify task name, status, priority, and workflow details."
+              : "Add a new task directly into your active workflow."}
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
       {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive flex items-center gap-2">
+        <div className="mx-6 mt-3 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive flex items-center gap-2 shrink-0">
           <span>{error}</span>
         </div>
       )}
 
-      <div className="space-y-3.5 py-1">
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
         {/* Name */}
         <div className="space-y-1">
           <Label htmlFor="task-name" className="text-xs font-semibold text-foreground/80">
@@ -1766,18 +1768,18 @@ function TaskModalInner({
         </div>
 
         {/* Description */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <Label htmlFor="task-description" className="text-xs font-semibold text-foreground/80">
             Description / Notes
           </Label>
           <Textarea
             id="task-description"
-            placeholder="Add context, specifications, or subtasks..."
+            placeholder="Add context, specifications, links, or subtasks..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={saving || deleting}
-            rows={2}
-            className="text-xs resize-none"
+            rows={3}
+            className="text-xs min-h-[76px] max-h-[160px] resize-y leading-relaxed"
           />
         </div>
 
@@ -1796,7 +1798,7 @@ function TaskModalInner({
         </label>
       </div>
 
-      <DialogFooter className="flex flex-row items-center justify-between gap-2 pt-3 border-t border-border/60">
+      <DialogFooter className="flex flex-row items-center justify-between gap-2 px-6 py-3.5 border-t border-border/60 bg-muted/20 mt-auto shrink-0">
         <div>
           {isEditing && (
             <Button

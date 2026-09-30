@@ -88,7 +88,7 @@ export function EntryDialog({
 }: EntryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col p-0 overflow-hidden">
         {open && (
           <EntryForm
             key={`${mode}-${entry?.id ?? breakItem?.id ?? "new"}-${initialKind ?? "entry"}-${prefill?.start ?? ""}`}
@@ -257,30 +257,33 @@ function EntryForm({
   }
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          {isEditingBreak
-            ? "Edit break"
-            : mode === "create"
-              ? entryKind === "break"
-                ? "Add break"
-                : "Add missing entry"
-              : "Edit entry"}
-        </DialogTitle>
-        <DialogDescription>
-          {isEditingBreak
-            ? "Correct the time span for this break."
-            : mode === "create"
-              ? entryKind === "break"
-                ? "Record a break time for this day."
-                : "Record an activity you forgot to track."
-              : "Correct the details of this activity."}
-        </DialogDescription>
-      </DialogHeader>
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="px-6 pt-5 pb-3 shrink-0 border-b border-border/40">
+        <DialogHeader>
+          <DialogTitle>
+            {isEditingBreak
+              ? "Edit break"
+              : mode === "create"
+                ? entryKind === "break"
+                  ? "Add break"
+                  : "Add missing entry"
+                : "Edit entry"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditingBreak
+              ? "Correct the time span for this break."
+              : mode === "create"
+                ? entryKind === "break"
+                  ? "Record a break time for this day."
+                  : "Record an activity you forgot to track."
+                : "Correct the details of this activity."}
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
-      <form onSubmit={handleSubmit} className="grid gap-4">
-        {mode === "create" && (
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
+          {mode === "create" && (
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/70 p-1 border border-border/50">
             <button
               type="button"
@@ -456,13 +459,16 @@ function EntryForm({
 
         {entryKind === "entry" && (
           <div className="grid gap-2">
-            <Label htmlFor="entry-notes">Notes (optional)</Label>
+            <Label htmlFor="entry-notes" className="text-xs font-semibold text-foreground/80">
+              Notes / Details <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
             <Textarea
               id="entry-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Anything worth remembering about this activity"
-              rows={2}
+              placeholder="Anything worth remembering about this activity (links, PRD, notes, etc.)"
+              rows={3}
+              className="text-xs sm:text-sm min-h-[76px] max-h-[160px] resize-y leading-relaxed"
             />
           </div>
         )}
@@ -472,17 +478,18 @@ function EntryForm({
             {fieldError}
           </p>
         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-3.5 border-t border-border/60 bg-muted/20 mt-auto shrink-0 flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
-            className="h-11 px-4"
+            className="h-10 px-4 text-xs"
             onClick={onDone}
           >
             Cancel
           </Button>
-          <Button type="submit" className="h-11 px-5" disabled={submitting}>
+          <Button type="submit" className="h-10 px-5 text-xs" disabled={submitting}>
             {submitting
               ? "Saving…"
               : mode === "create"
@@ -495,6 +502,6 @@ function EntryForm({
           </Button>
         </DialogFooter>
       </form>
-    </>
+    </div>
   );
 }

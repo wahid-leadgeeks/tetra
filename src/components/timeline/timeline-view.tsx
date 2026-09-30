@@ -13,9 +13,12 @@ import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ChevronDown,
+  ChevronUp,
   CloudUpload,
   Coffee,
   Download,
+  FileText,
   Loader2,
   LogOut,
   Pencil,
@@ -147,6 +150,47 @@ function StatusBadge({ status }: { status: TimeEntryDTO["status"] }) {
     );
   }
   return null;
+}
+
+function TimelineEntryNotes({ notes }: { notes: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = notes.length > 160 || (notes.match(/\n/g) || []).length >= 2;
+
+  return (
+    <div className="mt-2.5 rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/20 px-3.5 py-2.5 text-xs sm:text-sm transition-colors">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground/85 mb-1 select-none">
+        <FileText className="size-3 text-muted-foreground/70 shrink-0" aria-hidden />
+        <span>Notes & Details</span>
+      </div>
+      <p
+        className={cn(
+          "text-foreground/90 leading-relaxed font-normal whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+          !expanded && isLong && "line-clamp-3",
+        )}
+      >
+        {notes}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer select-none"
+        >
+          {expanded ? (
+            <>
+              <span>Show less</span>
+              <ChevronUp className="size-3" />
+            </>
+          ) : (
+            <>
+              <span>Show full notes</span>
+              <ChevronDown className="size-3" />
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function TimelineSkeleton() {
@@ -626,9 +670,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
                               {item.entry.taskName}
                             </p>
                             {item.entry.notes && (
-                              <p className="mt-0.5 text-sm text-muted-foreground break-words line-clamp-3 [overflow-wrap:anywhere]">
-                                {item.entry.notes}
-                              </p>
+                              <TimelineEntryNotes notes={item.entry.notes} />
                             )}
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-0.5">

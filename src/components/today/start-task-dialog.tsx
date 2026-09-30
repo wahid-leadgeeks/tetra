@@ -119,15 +119,17 @@ export function StartTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Start a task</DialogTitle>
-          <DialogDescription>
-            Pick a category and name what you&apos;re working on.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <div className="px-6 pt-5 pb-3 shrink-0 border-b border-border/40">
+          <DialogHeader>
+            <DialogTitle>Start a task</DialogTitle>
+            <DialogDescription>
+              Pick a category and name what you&apos;re working on.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0 flex flex-col">
           <div className="flex flex-col gap-2">
             <Label htmlFor="start-task-category">Category</Label>
             <div className="flex items-center gap-2">
@@ -229,8 +231,8 @@ export function StartTaskDialog({
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="start-task-notes">
-              Notes{" "}
+            <Label htmlFor="start-task-notes" className="text-xs font-semibold text-foreground/80">
+              Notes / Details{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
               </span>
@@ -238,19 +240,20 @@ export function StartTaskDialog({
             <Textarea
               id="start-task-notes"
               rows={3}
-              placeholder="Anything worth remembering later"
+              placeholder="Anything worth remembering later..."
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               disabled={submitting}
+              className="text-xs sm:text-sm min-h-[72px] max-h-[140px] resize-y leading-relaxed"
             />
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-3.5 border-t border-border/60 bg-muted/20 mt-auto shrink-0 flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
-            className="h-11"
+            className="h-10 px-4 text-xs"
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
@@ -258,7 +261,7 @@ export function StartTaskDialog({
           </Button>
           <Button
             type="button"
-            className="h-11"
+            className="h-10 px-5 text-xs"
             data-testid="start-task"
             disabled={!canSubmit}
             onClick={() => void handleStart()}

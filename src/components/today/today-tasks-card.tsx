@@ -460,16 +460,18 @@ export function TodayTasksCard({
 
       {/* Add Task for Today Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={(e) => void handleCreateTask(e)}>
-            <DialogHeader>
-              <DialogTitle>Add Task for Today</DialogTitle>
-              <DialogDescription>
-                Create a task scheduled with today&apos;s due date to keep your day focused.
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <form onSubmit={(e) => void handleCreateTask(e)} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-3 shrink-0 border-b border-border/40">
+              <DialogHeader>
+                <DialogTitle>Add Task for Today</DialogTitle>
+                <DialogDescription>
+                  Create a task scheduled with today&apos;s due date to keep your day focused.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
 
-            <div className="grid gap-4 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="task-name">Task Name</Label>
                 <Input
@@ -520,10 +522,11 @@ export function TodayTasksCard({
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="px-6 py-3.5 border-t border-border/60 bg-muted/20 mt-auto shrink-0 flex items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
+                className="h-10 px-4 text-xs"
                 onClick={() => setAddDialogOpen(false)}
                 disabled={creating}
               >
@@ -531,6 +534,7 @@ export function TodayTasksCard({
               </Button>
               <Button
                 type="submit"
+                className="h-10 px-5 text-xs"
                 disabled={creating || !newTaskName.trim() || !newCategoryId}
               >
                 {creating ? (
