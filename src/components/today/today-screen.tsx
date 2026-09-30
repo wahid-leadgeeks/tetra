@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StartTaskDialog } from "@/components/today/start-task-dialog";
+import { TodayTasksCard } from "@/components/today/today-tasks-card";
 import { CalendarScheduleCard } from "@/components/today/calendar-schedule-card";
 import { QuickStart } from "@/components/today/quick-start";
 import { StickyTaskBar } from "@/components/today/sticky-task-bar";
@@ -354,6 +355,12 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
                   ) : null}
                 </div>
               </div>
+
+              {/* Today's Focus: Tasks relevant to today */}
+              <TodayTasksCard
+                timezone={timezone}
+                onRefreshToday={() => void refresh()}
+              />
 
               {/* Google Calendar Today's Schedule */}
               <CalendarScheduleCard

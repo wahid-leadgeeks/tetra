@@ -439,6 +439,9 @@ async function main() {
           .limit(1)
       )[0];
 
+      const startedAt = toUtc(day.date, entry.start);
+      const endedAt = toUtc(day.date, entry.end);
+
       if (!task) {
         const [createdTask] = await db
           .insert(tasks)
@@ -446,20 +449,25 @@ async function main() {
             userId: user.id,
             name: entry.taskName,
             categoryId,
-            lastUsedAt: toUtc(day.date, entry.end),
+            status: "done",
+            startedAt,
+            completedAt: endedAt,
+            lastUsedAt: endedAt,
           })
           .returning();
         task = createdTask;
       } else {
         await db
           .update(tasks)
-          .set({ lastUsedAt: toUtc(day.date, entry.end) })
+          .set({
+            status: "done",
+            completedAt: endedAt,
+            lastUsedAt: endedAt,
+          })
           .where(eq(tasks.id, task.id));
       }
 
       // Create completed time entry
-      const startedAt = toUtc(day.date, entry.start);
-      const endedAt = toUtc(day.date, entry.end);
 
       await db.insert(timeEntries).values({
         userId: user.id,

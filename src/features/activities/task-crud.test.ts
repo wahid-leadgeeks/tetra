@@ -31,6 +31,10 @@ function makeRow(overrides: Partial<TaskRow> = {}): TaskRow {
     name: "Build Kanban Board",
     categoryId: "cat-1",
     status: "todo",
+    priority: "medium",
+    dueAt: null,
+    startedAt: null,
+    completedAt: null,
     description: "Implement 3-column kanban board with drag and drop",
     isFavorite: false,
     lastUsedAt: new Date("2026-09-14T10:00:00Z"),
@@ -144,6 +148,82 @@ describe("updateTask", () => {
     });
 
     expect(result.status).toBe("in_progress");
+  });
+
+  it("sets completedAt when transitioning from todo to done", async () => {
+    selectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([makeRow({ status: "todo", completedAt: null })]),
+        }),
+      }),
+    });
+
+    const completedTime = new Date("2026-09-30T12:00:00Z");
+    const updatedRow = makeRow({ status: "done", completedAt: completedTime });
+    updateMock.mockReturnValueOnce({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([updatedRow]),
+        }),
+      }),
+    });
+
+    selectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([
+            { key: "ENG", name: "Engineering" },
+          ]),
+        }),
+      }),
+    });
+
+    const result = await updateTask("user-1", "task-1", {
+      status: "done",
+      completedAt: completedTime,
+    });
+
+    expect(result.status).toBe("done");
+    expect(result.completedAt).toBe(completedTime.toISOString());
+  });
+
+  it("clears completedAt when transitioning from done back to todo", async () => {
+    selectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([
+            makeRow({ status: "done", completedAt: new Date("2026-09-29T10:00:00Z") }),
+          ]),
+        }),
+      }),
+    });
+
+    const updatedRow = makeRow({ status: "todo", completedAt: null });
+    updateMock.mockReturnValueOnce({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([updatedRow]),
+        }),
+      }),
+    });
+
+    selectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([
+            { key: "ENG", name: "Engineering" },
+          ]),
+        }),
+      }),
+    });
+
+    const result = await updateTask("user-1", "task-1", {
+      status: "todo",
+    });
+
+    expect(result.status).toBe("todo");
+    expect(result.completedAt).toBeNull();
   });
 
   it("throws if task not found", async () => {

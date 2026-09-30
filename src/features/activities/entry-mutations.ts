@@ -6,7 +6,7 @@
 import { and, eq } from "drizzle-orm";
 import { expandAttendanceBounds } from "@/features/attendance/service";
 import { todayKey, zonedDayKey } from "@/lib/time";
-import type { TaskDTO, TaskStatus, TimeEntryDTO } from "@/lib/types";
+import type { TaskDTO, TaskPriority, TaskStatus, TimeEntryDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { categories, tasks, timeEntries } from "@/server/db/schema";
 import { validateNoOverlap } from "./domain";
@@ -238,16 +238,24 @@ export interface CreateTaskInput {
   name: string;
   categoryId: string;
   status?: TaskStatus;
+  priority?: TaskPriority;
   description?: string | null;
   isFavorite?: boolean;
+  dueAt?: Date | null;
+  startedAt?: Date | null;
+  completedAt?: Date | null;
 }
 
 export interface UpdateTaskInput {
   name?: string;
   categoryId?: string;
   status?: TaskStatus;
+  priority?: TaskPriority;
   description?: string | null;
   isFavorite?: boolean;
+  dueAt?: Date | null;
+  startedAt?: Date | null;
+  completedAt?: Date | null;
 }
 
 /** Create a new task directly (e.g. from Kanban). */
@@ -259,16 +267,35 @@ export async function createTask(
   const trimmed = input.name.trim();
   if (!trimmed) throw new Error("Task name cannot be empty");
 
+  const now = new Date();
+  const status = input.status ?? "todo";
+  const startedAt =
+    input.startedAt !== undefined
+      ? input.startedAt
+      : status === "in_progress"
+        ? now
+        : null;
+  const completedAt =
+    input.completedAt !== undefined
+      ? input.completedAt
+      : status === "done"
+        ? now
+        : null;
+
   const [created] = await db
     .insert(tasks)
     .values({
       userId,
       name: trimmed,
       categoryId: input.categoryId,
-      status: input.status ?? "todo",
+      status,
+      priority: input.priority ?? "medium",
       description: input.description ?? null,
       isFavorite: input.isFavorite ?? false,
-      lastUsedAt: new Date(),
+      dueAt: input.dueAt ?? null,
+      startedAt,
+      completedAt,
+      lastUsedAt: now,
     })
     .returning();
 
@@ -285,14 +312,18 @@ export async function createTask(
     categoryKey: cat?.key,
     categoryName: cat?.name,
     status: (created.status as TaskStatus) || "todo",
+    priority: (created.priority as TaskPriority) || "medium",
     description: created.description ?? null,
     isFavorite: created.isFavorite,
+    dueAt: created.dueAt ? created.dueAt.toISOString() : null,
+    startedAt: created.startedAt ? created.startedAt.toISOString() : null,
+    completedAt: created.completedAt ? created.completedAt.toISOString() : null,
     lastUsedAt: created.lastUsedAt ? created.lastUsedAt.toISOString() : null,
     createdAt: created.createdAt.toISOString(),
   };
 }
 
-/** Update an existing task's name, category, status, or favorite state. */
+/** Update an existing task's name, category, status, priority, or dates. */
 export async function updateTask(
   userId: string,
   taskId: string,
@@ -311,15 +342,38 @@ export async function updateTask(
     await assertCategoryExists(db, input.categoryId);
   }
 
+  const now = new Date();
+  let completedAt = existing.completedAt;
+  if (input.status !== undefined) {
+    if (input.status === "done" && existing.status !== "done") {
+      completedAt = input.completedAt ?? now;
+    } else if (input.status !== "done" && existing.status === "done") {
+      completedAt = input.completedAt ?? null;
+    }
+  } else if (input.completedAt !== undefined) {
+    completedAt = input.completedAt;
+  }
+
+  let startedAt = existing.startedAt;
+  if (input.status === "in_progress" && !existing.startedAt) {
+    startedAt = input.startedAt ?? now;
+  } else if (input.startedAt !== undefined) {
+    startedAt = input.startedAt;
+  }
+
   const [updated] = await db
     .update(tasks)
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite } : {}),
-      lastUsedAt: new Date(),
+      ...(input.dueAt !== undefined ? { dueAt: input.dueAt } : {}),
+      startedAt,
+      completedAt,
+      lastUsedAt: now,
     })
     .where(eq(tasks.id, taskId))
     .returning();
@@ -337,8 +391,12 @@ export async function updateTask(
     categoryKey: cat?.key,
     categoryName: cat?.name,
     status: (updated.status as TaskStatus) || "todo",
+    priority: (updated.priority as TaskPriority) || "medium",
     description: updated.description ?? null,
     isFavorite: updated.isFavorite,
+    dueAt: updated.dueAt ? updated.dueAt.toISOString() : null,
+    startedAt: updated.startedAt ? updated.startedAt.toISOString() : null,
+    completedAt: updated.completedAt ? updated.completedAt.toISOString() : null,
     lastUsedAt: updated.lastUsedAt ? updated.lastUsedAt.toISOString() : null,
     createdAt: updated.createdAt.toISOString(),
   };

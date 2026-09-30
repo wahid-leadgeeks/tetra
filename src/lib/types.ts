@@ -20,7 +20,16 @@ export interface CategoryDTO {
   sortOrder: number;
 }
 
-export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskStatus =
+  | "backlog"
+  | "todo"
+  | "in_progress"
+  | "blocked"
+  | "review"
+  | "done"
+  | "cancelled";
+
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export interface TaskDTO {
   id: string;
@@ -29,8 +38,12 @@ export interface TaskDTO {
   categoryKey?: string;
   categoryName?: string;
   status: TaskStatus;
+  priority?: TaskPriority;
   description?: string | null;
   isFavorite: boolean;
+  dueAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   lastUsedAt: string | null;
   createdAt?: string;
 }

@@ -72,8 +72,12 @@ export const tasks = pgTable(
       .notNull()
       .references(() => categories.id),
     status: text("status").notNull().default("todo"),
+    priority: text("priority").notNull().default("medium"),
     description: text("description"),
     isFavorite: boolean("is_favorite").notNull().default(false),
+    dueAt: timestamp("due_at", { withTimezone: true, mode: "date" }),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()

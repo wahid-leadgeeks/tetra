@@ -2,7 +2,7 @@
  * Shared internal helpers for the activities service modules.
  * Not part of the public service API (re-exported nowhere).
  */
-import { and, eq, gt, isNull, lt, ne, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { TimeEntryDTO } from "@/lib/types";
 import type { TimeEntryCore } from "./domain";
 import { toTimeEntryDTO } from "./domain";
@@ -71,10 +71,22 @@ export async function upsertTask(
 ) {
   const rows = await tx
     .insert(tasks)
-    .values({ userId, name: taskName, categoryId, lastUsedAt: now })
+    .values({
+      userId,
+      name: taskName,
+      categoryId,
+      status: "in_progress",
+      startedAt: now,
+      lastUsedAt: now,
+    })
     .onConflictDoUpdate({
       target: [tasks.userId, tasks.name],
-      set: { categoryId, lastUsedAt: now },
+      set: {
+        categoryId,
+        status: sql`CASE WHEN ${tasks.status} IN ('todo', 'backlog') THEN 'in_progress' ELSE ${tasks.status} END`,
+        startedAt: sql`COALESCE(${tasks.startedAt}, ${now})`,
+        lastUsedAt: now,
+      },
     })
     .returning();
   const task = rows[0];

@@ -4,7 +4,7 @@
  */
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { zonedDayEnd, zonedDayStart } from "@/lib/time";
-import type { CategoryDTO, TaskDTO, TaskStatus, TimeEntryDTO } from "@/lib/types";
+import type { CategoryDTO, TaskDTO, TaskPriority, TaskStatus, TimeEntryDTO } from "@/lib/types";
 import { db } from "@/server/db";
 import { categories, tasks, timeEntries } from "@/server/db/schema";
 import { toTimeEntryDTO } from "./domain";
@@ -34,8 +34,12 @@ export async function listAllTasks(userId: string): Promise<TaskDTO[]> {
       categoryKey: categories.key,
       categoryName: categories.name,
       status: tasks.status,
+      priority: tasks.priority,
       description: tasks.description,
       isFavorite: tasks.isFavorite,
+      dueAt: tasks.dueAt,
+      startedAt: tasks.startedAt,
+      completedAt: tasks.completedAt,
       lastUsedAt: tasks.lastUsedAt,
       createdAt: tasks.createdAt,
     })
@@ -55,8 +59,12 @@ export async function listAllTasks(userId: string): Promise<TaskDTO[]> {
     categoryKey: row.categoryKey ?? undefined,
     categoryName: row.categoryName ?? undefined,
     status: (row.status as TaskStatus) || "todo",
+    priority: (row.priority as TaskPriority) || "medium",
     description: row.description ?? null,
     isFavorite: row.isFavorite,
+    dueAt: row.dueAt ? row.dueAt.toISOString() : null,
+    startedAt: row.startedAt ? row.startedAt.toISOString() : null,
+    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
     createdAt: row.createdAt ? row.createdAt.toISOString() : undefined,
   }));
@@ -75,8 +83,12 @@ export async function listRecentTasks(
       categoryKey: categories.key,
       categoryName: categories.name,
       status: tasks.status,
+      priority: tasks.priority,
       description: tasks.description,
       isFavorite: tasks.isFavorite,
+      dueAt: tasks.dueAt,
+      startedAt: tasks.startedAt,
+      completedAt: tasks.completedAt,
       lastUsedAt: tasks.lastUsedAt,
     })
     .from(tasks)
@@ -96,8 +108,12 @@ export async function listRecentTasks(
     categoryKey: row.categoryKey ?? undefined,
     categoryName: row.categoryName ?? undefined,
     status: (row.status as TaskStatus) || "todo",
+    priority: (row.priority as TaskPriority) || "medium",
     description: row.description ?? null,
     isFavorite: row.isFavorite,
+    dueAt: row.dueAt ? row.dueAt.toISOString() : null,
+    startedAt: row.startedAt ? row.startedAt.toISOString() : null,
+    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     lastUsedAt: row.lastUsedAt === null ? null : row.lastUsedAt.toISOString(),
   }));
 }

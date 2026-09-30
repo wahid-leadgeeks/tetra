@@ -519,6 +519,9 @@ export async function pullDayFromSheet(
           userId,
           name: item.taskName,
           categoryId: cat.id,
+          status: "done",
+          startedAt: entryStartedAt,
+          completedAt: entryEndedAt,
           lastUsedAt: entryEndedAt,
         })
         .returning();
@@ -526,7 +529,9 @@ export async function pullDayFromSheet(
     } else {
       await db
         .update(tasks)
-        .set({ lastUsedAt: entryEndedAt })
+        .set({
+          lastUsedAt: entryEndedAt,
+        })
         .where(eq(tasks.id, task.id));
     }
 

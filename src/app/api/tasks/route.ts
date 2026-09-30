@@ -11,9 +11,25 @@ import { createTask, listAllTasks } from "@/features/activities/service";
 const createTaskSchema = z.object({
   name: z.string().trim().min(1, "Task name is required").max(300),
   categoryId: z.string().uuid("Invalid category ID"),
-  status: z.enum(["todo", "in_progress", "done"]).optional(),
+  status: z
+    .enum([
+      "backlog",
+      "todo",
+      "in_progress",
+      "blocked",
+      "review",
+      "done",
+      "cancelled",
+    ])
+    .optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   description: z.string().nullable().optional(),
   isFavorite: z.boolean().optional(),
+  dueAt: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((val) => (val ? new Date(val) : null)),
 });
 
 /** GET /api/tasks — returns all tasks for user. */
