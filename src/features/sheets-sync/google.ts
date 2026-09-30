@@ -261,14 +261,14 @@ export async function testReadSpreadsheet(options: {
       })) ?? [];
 
     // 2. Locate target worksheet (by name or GID fallback)
-    const normalizedTarget = worksheetName.trim().toLowerCase();
+    const normalizedTarget = (worksheetName ?? "").trim().toLowerCase();
     const targetTab = sheetTabs.find(
       (s) =>
-        s.title.toLowerCase() === normalizedTarget ||
+        (normalizedTarget && s.title.toLowerCase() === normalizedTarget) ||
         (sheetGid && String(s.id) === sheetGid.trim()),
     );
 
-    const actualSheetName = targetTab ? targetTab.title : worksheetName;
+    const actualSheetName = targetTab ? targetTab.title : (worksheetName || "Sheet1");
 
     if (!targetTab) {
       return {
@@ -276,11 +276,11 @@ export async function testReadSpreadsheet(options: {
         spreadsheetId,
         spreadsheetTitle,
         sheets: sheetTabs,
-        targetSheetName: worksheetName,
+        targetSheetName: actualSheetName,
         targetSheetGid: sheetGid ?? null,
         targetSheetFound: false,
         authMethod,
-        error: `Worksheet tab "${worksheetName}" not found in spreadsheet "${spreadsheetTitle}". Available tabs: ${sheetTabs.map((s) => `"${s.title}"`).join(", ")}.`,
+        error: `Worksheet tab "${worksheetName || sheetGid || "unknown"}" not found in spreadsheet "${spreadsheetTitle}". Available tabs: ${sheetTabs.map((s) => `"${s.title}"`).join(", ")}.`,
       };
     }
 
