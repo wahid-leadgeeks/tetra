@@ -84,7 +84,7 @@ export async function upsertTask(
       set: {
         categoryId,
         status: sql`CASE WHEN ${tasks.status} IN ('todo', 'backlog') THEN 'in_progress' ELSE ${tasks.status} END`,
-        startedAt: sql`COALESCE(${tasks.startedAt}, ${now})`,
+        startedAt: sql`COALESCE(${tasks.startedAt}, excluded.started_at)`,
         lastUsedAt: now,
       },
     })

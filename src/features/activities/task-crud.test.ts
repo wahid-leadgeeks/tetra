@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { tasks } from "@/server/db/schema";
+import { type Tx, upsertTask } from "./entry-helpers";
 import { createTask, deleteTask, updateTask } from "./entry-mutations";
 
 const { insertMock, updateMock, selectMock, deleteMock } = vi.hoisted(() => ({
@@ -266,5 +267,41 @@ describe("deleteTask", () => {
 
     const success = await deleteTask("user-1", "missing");
     expect(success).toBe(false);
+  });
+});
+
+describe("upsertTask", () => {
+  it("calls insert on conflict do update with excluded.started_at", async () => {
+    const returningMock = vi.fn().mockResolvedValue([makeRow()]);
+    const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+    const insertFn = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const tx = { insert: insertFn } as unknown as Tx;
+    const now = new Date("2026-09-30T15:00:00Z");
+
+    const task = await upsertTask(tx, "user-1", "create mvp", "cat-1", now);
+
+    expect(insertFn).toHaveBeenCalledWith(tasks);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        name: "create mvp",
+        categoryId: "cat-1",
+        status: "in_progress",
+        startedAt: now,
+        lastUsedAt: now,
+      }),
+    );
+    expect(onConflictDoUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: [tasks.userId, tasks.name],
+        set: expect.objectContaining({
+          categoryId: "cat-1",
+          lastUsedAt: now,
+        }),
+      }),
+    );
+    expect(task.id).toBe("task-1");
   });
 });
