@@ -6,6 +6,7 @@
  * plus the account card. PUT is validated again server-side.
  */
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import {
@@ -120,6 +121,9 @@ interface SyncConfigResponse {
 
 interface SettingsViewProps {
   email: string | null;
+  name?: string | null;
+  image?: string | null;
+  hasGoogleAuth?: boolean;
   userTimezone: string;
 }
 
@@ -165,7 +169,13 @@ function ColumnInput({
   );
 }
 
-export function SettingsView({ email, userTimezone }: SettingsViewProps) {
+export function SettingsView({
+  email,
+  name,
+  image,
+  hasGoogleAuth = false,
+  userTimezone,
+}: SettingsViewProps) {
   const [form, setForm] = useState<SyncConfigForm>({
     spreadsheetId: "",
     worksheetName: "",
@@ -816,14 +826,53 @@ export function SettingsView({ email, userTimezone }: SettingsViewProps) {
           <CardHeader>
             <CardTitle>Account</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-muted-foreground">Email</p>
-              <p className="font-medium">{email ?? "Not signed in"}</p>
+          <CardContent className="grid gap-4">
+            <div className="flex items-center gap-3.5 pb-2 border-b border-border/60">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-full overflow-hidden border border-border/80 text-sm font-semibold text-primary bg-primary/10">
+                {image ? (
+                  <Image
+                    src={image}
+                    alt={name || email || "User"}
+                    width={48}
+                    height={48}
+                    unoptimized
+                    referrerPolicy="no-referrer"
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <span>
+                    {(name || email || "U").slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-foreground truncate">
+                  {name || "User"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">{email ?? "Not signed in"}</p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  {hasGoogleAuth ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">
+                      Google Account Connected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+                      Development Account
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-muted-foreground">Timezone</p>
-              <p className="font-medium">{userTimezone}</p>
+
+            <div className="grid gap-2 text-xs">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-muted-foreground">Email</p>
+                <p className="font-medium text-foreground">{email ?? "Not signed in"}</p>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-muted-foreground">Timezone</p>
+                <p className="font-medium text-foreground">{userTimezone}</p>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { MobileNav, SidebarNav } from "@/components/app-nav/app-nav";
@@ -31,7 +32,16 @@ export default async function AppLayout({
 
   const email = session?.user?.email ?? "";
   const name = session?.user?.name ?? email.split("@")[0] ?? "User";
+  const image = session?.user?.image ?? null;
   const timezone = session?.user?.timezone ?? "Asia/Jakarta";
+  const hasGoogleAuth = session?.hasGoogleAuth ?? false;
+
+  const initials = (name || email || "U")
+    .split(" ")
+    .map((s) => s[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <TourProvider>
@@ -41,20 +51,39 @@ export default async function AppLayout({
           <Wordmark />
         </div>
         <SidebarNav />
-        <div className="mt-auto flex flex-col gap-1 border-t border-sidebar-border p-3">
-          <p
-            className="truncate px-3 pb-1 text-xs text-muted-foreground"
-            title={email}
-          >
-            {email}
-          </p>
+        <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border p-3">
+          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg bg-sidebar-accent/30">
+            {image ? (
+              <Image
+                src={image}
+                alt={name}
+                width={32}
+                height={32}
+                unoptimized
+                referrerPolicy="no-referrer"
+                className="size-8 rounded-full object-cover shrink-0 border border-sidebar-border"
+              />
+            ) : (
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+                {initials}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-sidebar-foreground" title={name}>
+                {name}
+              </p>
+              <p className="truncate text-[11px] text-muted-foreground" title={email}>
+                {email}
+              </p>
+            </div>
+          </div>
           <SignOutButton />
         </div>
       </aside>
 
       <div className="md:pl-64 min-w-0 flex flex-col flex-1">
         <NetworkStatusBanner />
-        <HeaderNav email={email} name={name} timezone={timezone} />
+        <HeaderNav email={email} name={name} image={image} timezone={timezone} hasGoogleAuth={hasGoogleAuth} />
         <NotificationBannerOverlay timezone={timezone} />
         <main className="mx-auto w-full max-w-5xl min-w-0 px-4 pt-6 pb-28 sm:px-6 md:px-8 md:pt-8 md:pb-16 lg:max-w-6xl xl:max-w-7xl flex-1">
           {children}

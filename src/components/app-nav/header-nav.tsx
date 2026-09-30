@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Settings, Sparkles } from "lucide-react";
@@ -15,10 +16,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 interface HeaderNavProps {
   email: string;
   name: string;
+  image?: string | null;
   timezone: string;
+  hasGoogleAuth?: boolean;
 }
 
-export function HeaderNav({ email, name, timezone }: HeaderNavProps) {
+export function HeaderNav({
+  email,
+  name,
+  image,
+  timezone,
+  hasGoogleAuth = false,
+}: HeaderNavProps) {
   const pathname = usePathname();
   const { openTour } = useTour();
 
@@ -104,23 +113,54 @@ export function HeaderNav({ email, name, timezone }: HeaderNavProps) {
             <button
               type="button"
               data-testid="header-user-avatar"
-              className="flex size-8 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary select-none cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all"
+              className="flex size-8 items-center justify-center rounded-full overflow-hidden border border-border/80 text-xs font-semibold text-primary select-none cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all bg-primary/10"
               aria-label="User Profile"
             >
-              {initials}
+              {image ? (
+                <Image
+                  src={image}
+                  alt={name}
+                  width={32}
+                  height={32}
+                  unoptimized
+                  referrerPolicy="no-referrer"
+                  className="size-full object-cover"
+                />
+              ) : (
+                <span>{initials}</span>
+              )}
             </button>
           </PopoverTrigger>
-          <PopoverContent side="bottom" align="end" className="w-64 p-3 shadow-lg border-border/80">
+          <PopoverContent side="bottom" align="end" className="w-68 p-3 shadow-lg border-border/80">
             <div className="flex items-center gap-3 pb-3 border-b border-border/60">
-              <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
-                {initials}
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full overflow-hidden border border-border/80 text-sm font-semibold text-primary bg-primary/10">
+                {image ? (
+                  <Image
+                    src={image}
+                    alt={name}
+                    width={40}
+                    height={40}
+                    unoptimized
+                    referrerPolicy="no-referrer"
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <span>{initials}</span>
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-xs text-foreground truncate">{name}</p>
                 <p className="text-[11px] text-muted-foreground truncate">{email}</p>
-                <span className="inline-block mt-1 text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">
-                  {timezone}
-                </span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">
+                    {timezone}
+                  </span>
+                  {hasGoogleAuth ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-medium">
+                      Google
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
 

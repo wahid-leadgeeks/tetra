@@ -17,7 +17,13 @@ async function upsertUser(input: {
   googleAccessToken?: string | null;
   googleRefreshToken?: string | null;
   googleTokenExpiresAt?: Date | null;
-}): Promise<{ id: string; timezone: string }> {
+}): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  timezone: string;
+}> {
   const existing = await db
     .select()
     .from(users)
@@ -27,7 +33,7 @@ async function upsertUser(input: {
     const u = existing[0];
     const updates: Partial<{
       googleId: string;
-      image: string;
+      image: string | null;
       name: string;
       googleAccessToken: string | null;
       googleRefreshToken: string | null;
@@ -36,14 +42,10 @@ async function upsertUser(input: {
     if (input.googleId && u.googleId !== input.googleId) {
       updates.googleId = input.googleId;
     }
-    if (input.image && u.image !== input.image) {
+    if (input.image !== undefined && u.image !== input.image) {
       updates.image = input.image;
     }
-    if (
-      input.name &&
-      u.name !== input.name &&
-      u.name === input.email.split("@")[0]
-    ) {
+    if (input.name && u.name !== input.name) {
       updates.name = input.name;
     }
     if (input.googleAccessToken !== undefined) {
@@ -58,7 +60,13 @@ async function upsertUser(input: {
     if (Object.keys(updates).length > 0) {
       await db.update(users).set(updates).where(eq(users.id, u.id));
     }
-    return { id: u.id, timezone: u.timezone };
+    return {
+      id: u.id,
+      name: updates.name ?? u.name,
+      email: u.email,
+      image: updates.image !== undefined ? updates.image : u.image,
+      timezone: u.timezone,
+    };
   }
   const created = await db
     .insert(users)
@@ -73,7 +81,13 @@ async function upsertUser(input: {
       timezone: env.DEFAULT_TIMEZONE,
     })
     .returning();
-  return { id: created[0].id, timezone: created[0].timezone };
+  return {
+    id: created[0].id,
+    name: created[0].name,
+    email: created[0].email,
+    image: created[0].image,
+    timezone: created[0].timezone,
+  };
 }
 
 const providers: NextAuthConfig["providers"] = [];
@@ -245,6 +259,8 @@ const nextAuth = NextAuth({
           });
           token.userId = u.id;
           token.timezone = u.timezone;
+          token.name = u.name;
+          token.picture = u.image ?? undefined;
         }
         return token;
       }
@@ -264,9 +280,37 @@ const nextAuth = NextAuth({
       session.user.id = (token.userId as string | undefined) ?? "";
       session.user.timezone =
         (token.timezone as string | undefined) ?? env.DEFAULT_TIMEZONE;
+      if (token.name) {
+        session.user.name = token.name as string;
+      }
+      if (token.picture) {
+        session.user.image = token.picture as string;
+      }
       session.accessToken = token.accessToken as string | undefined;
       session.hasGoogleAuth = !!token.accessToken;
       session.error = token.error as string | undefined;
+
+      // Fallback: if name or picture is not yet in token, read from DB
+      if ((!session.user.image || !session.user.name) && token.userId) {
+        try {
+          const userRow = await db
+            .select({ name: users.name, image: users.image })
+            .from(users)
+            .where(eq(users.id, token.userId as string))
+            .limit(1);
+          if (userRow[0]) {
+            if (userRow[0].name && !session.user.name) {
+              session.user.name = userRow[0].name;
+            }
+            if (userRow[0].image && !session.user.image) {
+              session.user.image = userRow[0].image;
+            }
+          }
+        } catch {
+          // ignore DB error in session callback
+        }
+      }
+
       return session;
     },
     async redirect({ url, baseUrl }) {
