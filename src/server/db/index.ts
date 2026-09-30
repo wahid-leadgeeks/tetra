@@ -21,11 +21,7 @@ const globalForDb = globalThis as unknown as {
 
 export function isUsingPostgres(): boolean {
   const dbUrl = process.env.DATABASE_URL || "";
-  return (
-    (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) &&
-    !dbUrl.includes("localhost:5432") &&
-    !dbUrl.includes("tetra_dev")
-  );
+  return dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://");
 }
 
 export function getPglitePath(): string {
