@@ -68,8 +68,9 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
  * - Totals and every category cell: H:MM via formatHMM; unmapped categories
  *   write "0:00".
  * - Category notes cells (mapping.categoryNotes): one cell per category with
- *   compiled notes — see compileCategoryNotes. A category with no compiled
- *   notes gets NO cell, so an empty sync can never blank a manual note.
+ *   compiled notes — see compileCategoryNotes. When a category has no entries,
+ *   it emits an empty string ("") so stale notes from moved tasks are cleared
+ *   on resync while already-empty sheet cells remain untouched.
  */
 export function buildSyncPayload(
   summary: DaySummaryDTO,
@@ -189,9 +190,10 @@ export function compileCategoryNotes(
 }
 
 /**
- * Notes cells are emitted only when the mapping configures notes columns,
- * notes are included, and the final value is non-empty — an empty value never
- * produces a cell, so sync never blanks a manual note in the sheet.
+ * Notes cells are emitted for all mapped category notes columns when notes are included.
+ * Categories with completed entries emit their compiled task names and durations (e.g. "Task (1:00)").
+ * Categories with no entries emit an empty string ("") so that stale notes from moved or deleted
+ * tasks are cleared in the spreadsheet, keeping notes in sync with the category duration.
  */
 function notesCells(
   summary: DaySummaryDTO,
@@ -203,11 +205,12 @@ function notesCells(
   const compiled = compileCategoryNotes(summary.timeEntries);
   const cells: SyncCellDTO[] = [];
   for (const key of CATEGORY_KEYS) {
+    const column = mapping.categoryNotes[key];
+    if (!column) continue;
     const value = notesOverrides?.[key] ?? compiled.get(key) ?? "";
-    if (value.trim().length === 0) continue;
     cells.push({
-      a1: `${mapping.categoryNotes[key]}${rowNumber}`,
-      value,
+      a1: `${column}${rowNumber}`,
+      value: value.trim(),
       columnLabel: `${CATEGORY_LABELS[key]} Notes`,
       cellType: "notes",
       categoryKey: key,

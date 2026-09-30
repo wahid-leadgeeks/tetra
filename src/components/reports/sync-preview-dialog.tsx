@@ -113,7 +113,13 @@ function SyncPreviewBody({
   const valueCells: SyncCellDTO[] =
     preview?.cells.filter((cell) => cell.cellType !== "notes") ?? [];
   const notesCells: SyncCellDTO[] =
-    preview?.cells.filter((cell) => cell.cellType === "notes") ?? [];
+    preview?.cells.filter(
+      (cell) =>
+        cell.cellType === "notes" &&
+        ((cell.value && cell.value.trim().length > 0) ||
+          (noteValues[cell.categoryKey ?? ""] &&
+            noteValues[cell.categoryKey ?? ""].trim().length > 0)),
+    ) ?? [];
   const canSync = preview !== null && preview.rowNumber !== null;
 
   async function handleSync() {
@@ -248,8 +254,7 @@ function SyncPreviewBody({
                   <div className="grid gap-3">
                     <p className="text-sm text-muted-foreground">
                       Each block is written to its notes column. Edit the text
-                      before syncing — an emptied block is skipped, so manual
-                      notes in the sheet are never blanked.
+                      before syncing.
                     </p>
                     {notesCells.map((cell) => (
                       <div key={cell.a1} className="grid gap-1.5">

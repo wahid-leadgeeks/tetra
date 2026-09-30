@@ -485,9 +485,9 @@ describe("buildSyncPayload notes cells", () => {
       rowNumber: ROW,
       timezone: TZ,
     });
-    // Then exactly two notes cells are appended with their columns and rows
-    const notesCells = cells.filter((c) => c.cellType === "notes");
-    expect(notesCells).toEqual([
+    // Then notes cells are appended for mapped categories, with compiled notes for active categories
+    const activeNotes = cells.filter((c) => c.cellType === "notes" && c.value !== "");
+    expect(activeNotes).toEqual([
       {
         a1: "S5",
         value: "Onboarding Employee (1:00)",
@@ -505,7 +505,7 @@ describe("buildSyncPayload notes cells", () => {
     ]);
   });
 
-  it("emits no notes cell for a category without notes", () => {
+  it("emits empty string notes cells for categories without notes to clear stale sheet entries", () => {
     // Given a day whose only notes belong to meeting
     const summary = makeSummary({
       timeEntries: [makeEntry({ id: "e1", taskName: "Standup" })],
@@ -516,11 +516,12 @@ describe("buildSyncPayload notes cells", () => {
       rowNumber: ROW,
       timezone: TZ,
     });
-    // Then no other notes column appears — empty notes never blank a cell
-    const notesA1s = cells
-      .filter((c) => c.cellType === "notes")
-      .map((c) => c.a1);
-    expect(notesA1s).toEqual(["S5"]);
+    // Then meeting has its note, and other categories (like website_management) have empty string to clear stale notes
+    const meetingNote = cells.find((c) => c.a1 === "S5");
+    expect(meetingNote?.value).toBe("Standup (1:00)");
+
+    const websiteNote = cells.find((c) => c.a1 === "I5");
+    expect(websiteNote?.value).toBe("");
   });
 
   it("omits every notes cell when includeNotes is false", () => {
@@ -555,7 +556,7 @@ describe("buildSyncPayload notes cells", () => {
     expect(cells.find((c) => c.a1 === "S5")?.value).toBe("Standup + retro");
   });
 
-  it("skips an overridden note that was emptied", () => {
+  it("blanks an overridden note that was emptied so it gets cleared in the sheet", () => {
     // Given compiled notes and an emptied meeting override
     const summary = makeSummary({
       timeEntries: [makeEntry({ id: "e1", taskName: "Standup" })],
@@ -567,8 +568,44 @@ describe("buildSyncPayload notes cells", () => {
       timezone: TZ,
       notesOverrides: { meeting: "   " },
     });
-    // Then the meeting notes cell is dropped, not blanked
-    expect(cells.find((c) => c.a1 === "S5")).toBeUndefined();
+    // Then the meeting notes cell has value "" so it gets cleared in the sheet
+    expect(cells.find((c) => c.a1 === "S5")?.value).toBe("");
+  });
+
+  it("clears old category notes cell when task is moved to a different category", () => {
+    // Given a task moved from website_management to meeting
+    const summary = makeSummary({
+      byCategory: [
+        { categoryId: "c1", key: "meeting", name: "Meeting", minutes: 60 },
+        { categoryId: "c2", key: "website_management", name: "Website Management", minutes: 0 },
+      ],
+      timeEntries: [
+        makeEntry({
+          id: "e1",
+          taskName: "Build Landing Page",
+          categoryKey: "meeting",
+          categoryName: "Meeting",
+          durationMinutes: 60,
+        }),
+      ],
+    });
+    const { cells } = buildSyncPayload(summary, NOTES_MAPPING, {
+      dateValueFormat: "iso",
+      rowNumber: ROW,
+      timezone: TZ,
+    });
+
+    // Meeting notes cell has the task
+    const meetingNotes = cells.find((c) => c.a1 === "S5");
+    expect(meetingNotes?.value).toBe("Build Landing Page (1:00)");
+
+    // Website management notes cell is emitted as empty string so spreadsheet clears old task
+    const websiteNotes = cells.find((c) => c.a1 === "I5");
+    expect(websiteNotes?.value).toBe("");
+
+    // Website management duration is 0:00
+    const websiteDuration = cells.find((c) => c.a1 === "H5");
+    expect(websiteDuration?.value).toBe("0:00");
   });
 });
 
