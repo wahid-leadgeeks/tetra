@@ -17,7 +17,6 @@ Before changing code, read:
 3. `DESIGN.md`
 4. relevant `docs/adr/*`
 5. `ROADMAP.md`
-6. `TODO.md`
 
 ## Stack
 

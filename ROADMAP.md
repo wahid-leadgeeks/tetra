@@ -1,7 +1,9 @@
 # TETRA Roadmap
 
-MVP (Phases 0–4) is complete and verified: lint/typecheck/build green, 81 unit
-tests, critical E2E flow passing.
+MVP (Phases 0–4) is complete and verified: lint/typecheck/build green, unit and
+service-level tests passing (`pnpm test`), Playwright E2E suites passing in CI.
+Remaining Phase 4 work needs real Google credentials; see
+`docs/sheets-production-verification.md`.
 
 ## Phase 0 — Foundation
 - [x] Initialize Next.js.
@@ -61,7 +63,7 @@ tests, critical E2E flow passing.
 - [x] Favorites.
 - [x] Keyboard shortcuts.
 - [x] Mobile polish.
-- [ ] Notifications.
+- [x] Notifications (in-app center, actionable warnings, PWA push).
 - [x] Weekly summary.
 - [x] Monthly summary.
 
@@ -74,9 +76,14 @@ tests, critical E2E flow passing.
 - [x] ±15m time nudges in the entry edit dialog.
 - [x] Category notes compiled into the sheet notes columns (I, K, M, O, Q, S, U, W) with preview toggle and editable preview.
 
+## Phase 5.6 — Shipped beyond the original plan
+- [x] Installable PWA (manifest, service worker, offline page).
+- [x] Tasks kanban with workflow states and Today focus checklist.
+- [x] Dashboard analytics.
+
 ## Phase 6 — Integrations
-- [ ] Google Calendar.
-- [ ] Meeting suggestions.
+- [x] Google Calendar (event management, Meet links, guest sync).
+- [x] Meeting suggestions (calendar events imported with rule-based categories).
 - [ ] n8n API/webhook integration.
 - [ ] Scheduled reminders.
 

@@ -9,8 +9,8 @@
 | `AGENTS.md` | AI coding-agent rules |
 | `README.md` | Run/develop the project |
 | `DOCUMENTATION.md` | Full application and feature summary |
-| `ROADMAP.md` | Product phases |
-| `TODO.md` | Sprint-level implementation work |
+| `ROADMAP.md` | Product phases and remaining work |
+| `docs/sheets-production-verification.md` | Checklist for verifying sync against the production workbook |
 
 Recommended order:
-DOCUMENTATION → PRD → ARCHITECTURE → ADRs → DESIGN → AGENTS → README → ROADMAP → TODO
+DOCUMENTATION → PRD → ARCHITECTURE → ADRs → DESIGN → AGENTS → README → ROADMAP
