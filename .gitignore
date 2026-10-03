@@ -55,3 +55,6 @@ next-env.d.ts
 .codex/
 .agents/
 graphify-out/
+
+# generated e2e visual gallery (tests/e2e/visual-helper.ts)
+/tests/e2e/visual-results/
