@@ -61,6 +61,10 @@ pnpm build
 pnpm test:e2e
 ```
 
+Locally, `pnpm test:e2e` starts its own dev server on a fresh embedded PGlite
+database (`.data/e2e-pglite`), ignoring `DATABASE_URL` in `.env.local`. Stop
+any running `pnpm dev` first: port 3000 must be free.
+
 ## Suggested scripts
 
 ```json
@@ -133,7 +137,6 @@ DESIGN.md
 PRD.md
 README.md
 ROADMAP.md
-TODO.md
 ```
 
 ## Production sync safety
