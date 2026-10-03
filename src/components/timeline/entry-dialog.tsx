@@ -34,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/components/timeline/api";
 import { isoToTime, timeToISO } from "@/components/timeline/time";
 import { getCategoryTheme } from "@/lib/categories";
-import { formatHMM, formatHuman } from "@/lib/time";
+import { formatHuman } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { BreakDTO, CategoryDTO, TimeEntryDTO } from "@/lib/types";
 
@@ -452,7 +452,7 @@ function EntryForm({
           <p className="text-xs text-muted-foreground text-right font-medium">
             Duration:{" "}
             <span className="font-semibold text-foreground">
-              {formatHMM(minutesOf(endTime) - minutesOf(startTime))} ({formatHuman(minutesOf(endTime) - minutesOf(startTime))})
+              {formatHuman(minutesOf(endTime) - minutesOf(startTime))}
             </span>
           </p>
         )}

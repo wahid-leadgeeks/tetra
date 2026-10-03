@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BellOff,
   Calendar,
@@ -26,7 +27,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatRelativeTime } from "@/features/notifications/domain";
+import {
+  collapseMissingDayAlerts,
+  formatRelativeTime,
+} from "@/features/notifications/domain";
 import { useNotifications } from "@/features/notifications/store";
 import type { TetraNotification } from "@/features/notifications/types";
 import { todayKey } from "@/lib/time";
@@ -115,8 +119,13 @@ function getAlertVisuals(notification: TetraNotification) {
  * - Direct "Don't show again today" option that suppresses the banner for the rest of today
  * - Session dismissal ("Dismiss for now")
  * - Carousel navigation when multiple unread notifications are pending
+ * - Missing-day alerts collapse into a single "Backfill N days" entry
+ *
+ * Rendered only on Today (`/`) and Reports (`/reports*`); compact one-line
+ * layout below the `sm` breakpoint.
  */
 export function NotificationBannerOverlay({ timezone }: NotificationBannerOverlayProps) {
+  const pathname = usePathname();
   const {
     notifications,
     isBannerMutedToday,
@@ -136,18 +145,23 @@ export function NotificationBannerOverlay({ timezone }: NotificationBannerOverla
     void refreshAlerts();
   }, [refreshAlerts]);
 
-  const unreadAlerts = useMemo(() => {
-    return notifications.filter((n) => !n.read);
+  const entries = useMemo(() => {
+    return collapseMissingDayAlerts(notifications.filter((n) => !n.read));
   }, [notifications]);
 
   // Adjust pagination index if list shortens
-  const safeIndex = Math.min(currentIndex, Math.max(0, unreadAlerts.length - 1));
-  const activeAlert = unreadAlerts[safeIndex];
+  const safeIndex = Math.min(currentIndex, Math.max(0, entries.length - 1));
+  const activeEntry = entries[safeIndex];
 
-  if (sessionDismissed || isMutedToday || unreadAlerts.length === 0 || !activeAlert) {
+  // The banner belongs on Today and Reports only; the header bell keeps
+  // surfacing alerts everywhere else.
+  const isBannerRoute = pathname === "/" || (pathname?.startsWith("/reports") ?? false);
+
+  if (!isBannerRoute || sessionDismissed || isMutedToday || !activeEntry) {
     return null;
   }
 
+  const activeAlert = activeEntry.alert;
   const visuals = getAlertVisuals(activeAlert);
 
   const handleMuteToday = () => {
@@ -162,7 +176,9 @@ export function NotificationBannerOverlay({ timezone }: NotificationBannerOverla
   };
 
   const handleAction = () => {
-    markAsRead(activeAlert.id);
+    for (const id of activeEntry.ids) {
+      markAsRead(id);
+    }
   };
 
   return (
@@ -175,61 +191,65 @@ export function NotificationBannerOverlay({ timezone }: NotificationBannerOverla
       <div className="mx-auto max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]">
         <div
           className={cn(
-            "relative flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5 shadow-xs transition-all animate-in fade-in slide-in-from-top-2",
+            "relative flex flex-row items-center gap-2 rounded-xl border p-2 shadow-xs transition-all animate-in fade-in slide-in-from-top-2",
+            "sm:flex-col sm:items-stretch sm:justify-between sm:gap-3 sm:p-3.5 md:flex-row md:items-center",
             visuals.containerClass,
           )}
         >
           {/* Left section: Icon, Badge, Content */}
-          <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className="mt-0.5 rounded-lg border border-border/60 bg-background/80 p-2 shadow-2xs shrink-0">
+          <div className="flex items-center sm:items-start gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="sm:mt-0.5 rounded-lg border border-border/60 bg-background/80 p-1.5 sm:p-2 shadow-2xs shrink-0">
               {visuals.icon}
             </div>
 
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1 sm:space-y-1">
+              <div className="flex items-center gap-2 min-w-0 sm:flex-wrap">
                 <Badge
                   variant="outline"
-                  className={cn("text-[10px] uppercase font-semibold tracking-wider", visuals.badgeClass)}
+                  className={cn(
+                    "hidden sm:inline-flex text-[10px] uppercase font-semibold tracking-wider",
+                    visuals.badgeClass,
+                  )}
                 >
                   {visuals.badgeText}
                 </Badge>
 
-                <span className="text-xs font-semibold text-foreground truncate">
+                <span className="min-w-0 text-xs font-semibold text-foreground truncate">
                   {activeAlert.title}
                 </span>
 
-                <span className="text-[11px] font-mono text-muted-foreground/70 shrink-0">
+                <span className="hidden sm:inline text-[11px] font-mono text-muted-foreground/70 shrink-0">
                   {formatRelativeTime(activeAlert.timestamp)}
                 </span>
               </div>
 
-              <p className="text-xs text-muted-foreground leading-relaxed">
+              <p className="hidden sm:block text-xs text-muted-foreground leading-relaxed">
                 {activeAlert.message}
               </p>
             </div>
           </div>
 
           {/* Right section: Pager, Actions, Don't show today, Dismiss */}
-          <div className="flex flex-wrap items-center justify-between md:justify-end gap-2 shrink-0 pt-1 md:pt-0 border-t md:border-t-0 border-border/40">
-            {unreadAlerts.length > 1 && (
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0 sm:flex-wrap sm:justify-between md:justify-end sm:pt-1 md:pt-0 sm:border-t md:border-t-0 border-border/40">
+            {entries.length > 1 && (
               <div
-                className="flex items-center gap-1 rounded-lg border border-border/60 bg-background/80 px-2 py-1 text-xs text-muted-foreground shadow-2xs"
+                className="hidden sm:flex items-center gap-1 rounded-lg border border-border/60 bg-background/80 px-2 py-1 text-xs text-muted-foreground shadow-2xs"
                 data-testid="banner-pager"
               >
                 <button
                   type="button"
-                  onClick={() => setCurrentIndex((i) => (i > 0 ? i - 1 : unreadAlerts.length - 1))}
+                  onClick={() => setCurrentIndex((i) => (i > 0 ? i - 1 : entries.length - 1))}
                   className="rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                   aria-label="Previous notification"
                 >
                   <ChevronLeft className="size-3.5" />
                 </button>
                 <span className="px-1 text-[11px] font-mono font-medium text-foreground">
-                  {safeIndex + 1} of {unreadAlerts.length}
+                  {safeIndex + 1} of {entries.length}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setCurrentIndex((i) => (i < unreadAlerts.length - 1 ? i + 1 : 0))}
+                  onClick={() => setCurrentIndex((i) => (i < entries.length - 1 ? i + 1 : 0))}
                   className="rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                   aria-label="Next notification"
                 >
@@ -238,18 +258,18 @@ export function NotificationBannerOverlay({ timezone }: NotificationBannerOverla
               </div>
             )}
 
-            <div className="flex items-center gap-1.5 ml-auto md:ml-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 sm:ml-auto md:ml-0">
               {activeAlert.actionLabel && activeAlert.href && (
                 <Button
                   size="sm"
-                  className="h-8 text-xs font-medium gap-1.5 shadow-xs cursor-pointer"
+                  className="h-8 px-2.5 sm:px-3 text-xs font-medium gap-1.5 shadow-xs cursor-pointer"
                   asChild
                   onClick={handleAction}
                   data-testid="banner-action-button"
                 >
                   <Link href={activeAlert.href}>
                     <span>{activeAlert.actionLabel}</span>
-                    <ExternalLink className="size-3 shrink-0" />
+                    <ExternalLink className="hidden sm:block size-3 shrink-0" />
                   </Link>
                 </Button>
               )}
@@ -258,13 +278,13 @@ export function NotificationBannerOverlay({ timezone }: NotificationBannerOverla
                 variant="outline"
                 size="sm"
                 onClick={handleMuteToday}
-                className="h-8 text-xs font-medium text-muted-foreground hover:text-foreground gap-1.5 border-border/70 hover:bg-background/80 cursor-pointer"
+                className="size-8 p-0 sm:size-auto sm:h-8 sm:px-3 text-xs font-medium text-muted-foreground hover:text-foreground gap-1.5 border-border/70 hover:bg-background/80 cursor-pointer"
                 title="Don't show this notification banner again today"
+                aria-label="Don't show again today"
                 data-testid="banner-dont-show-today-button"
               >
                 <BellOff className="size-3.5 shrink-0" />
                 <span className="hidden sm:inline">Don&apos;t show again today</span>
-                <span className="sm:hidden">Mute today</span>
               </Button>
 
               <Tooltip>

@@ -218,7 +218,7 @@ export function generateCompanionAlerts(context: CompanionAlertContext): TetraNo
             message: `No work or attendance recorded for ${dayName} (${day.workDate}). Review and backfill before weekly submission.`,
             timestamp: now.toISOString(),
             read: false,
-            href: `/days/${day.workDate}`,
+            href: `/reports?date=${day.workDate}`,
             actionLabel: "Review Day",
           });
         }
@@ -309,12 +309,98 @@ export function generateCompanionAlerts(context: CompanionAlertContext): TetraNo
       message: `Yesterday's daily summary (${context.yesterdayKey}) has not been synced to the official Google Sheet.`,
       timestamp: now.toISOString(),
       read: false,
-      href: `/days/${context.yesterdayKey}`,
+      href: `/reports?date=${context.yesterdayKey}`,
       actionLabel: "Review & Sync",
     });
   }
 
   return alerts;
+}
+
+/** Pins the id format produced by `generateCompanionAlerts` for missing days. */
+export const MISSING_DAY_ALERT_ID_PATTERN = /^alert-missing-day-(\d{4}-\d{2}-\d{2})$/;
+
+const SHORT_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const SHORT_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function formatMissingDayLabel(dayKey: string): string {
+  const d = new Date(`${dayKey}T12:00:00Z`);
+  return `${SHORT_WEEKDAYS[d.getUTCDay()]} ${SHORT_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+/** One banner slot: a single alert, or several alerts collapsed into one. */
+export interface BannerEntry {
+  ids: string[];
+  alert: TetraNotification;
+}
+
+/**
+ * Collapses every `missing_day` alert into one "Backfill N days" entry that
+ * links to `/reports?date=<oldest>&backfill=<d1,d2,...>` (days sorted
+ * ascending). The collapsed entry takes the position of the first missing-day
+ * alert; all other alerts pass through unchanged as single-id entries.
+ */
+export function collapseMissingDayAlerts(
+  alerts: readonly TetraNotification[],
+): BannerEntry[] {
+  const missing: Array<{ id: string; day: string; alert: TetraNotification }> = [];
+  for (const alert of alerts) {
+    const match = alert.type === "missing_day" ? MISSING_DAY_ALERT_ID_PATTERN.exec(alert.id) : null;
+    if (match) missing.push({ id: alert.id, day: match[1], alert });
+  }
+
+  if (missing.length === 0) {
+    return alerts.map((alert) => ({ ids: [alert.id], alert }));
+  }
+
+  const days = [...new Set(missing.map((m) => m.day))].sort();
+  const count = days.length;
+  const noun = count === 1 ? "day" : "days";
+  const label = `Backfill ${count} ${noun}`;
+  const first = missing[0].alert;
+  const collapsed: BannerEntry = {
+    ids: missing.map((m) => m.id),
+    alert: {
+      ...first,
+      id: `alert-missing-days-${days.join(",")}`,
+      title: label,
+      message: `${days.map(formatMissingDayLabel).join(", ")} ${count === 1 ? "has" : "have"} no work or attendance recorded.`,
+      timestamp: missing.reduce(
+        (latest, m) => (m.alert.timestamp > latest ? m.alert.timestamp : latest),
+        first.timestamp,
+      ),
+      actionLabel: label,
+      href: `/reports?date=${days[0]}&backfill=${days.join(",")}`,
+    },
+  };
+
+  const missingIds = new Set(collapsed.ids);
+  const entries: BannerEntry[] = [];
+  let inserted = false;
+  for (const alert of alerts) {
+    if (missingIds.has(alert.id)) {
+      if (!inserted) {
+        entries.push(collapsed);
+        inserted = true;
+      }
+      continue;
+    }
+    entries.push({ ids: [alert.id], alert });
+  }
+  return entries;
 }
 
 /**

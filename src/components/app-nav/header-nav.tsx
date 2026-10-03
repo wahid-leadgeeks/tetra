@@ -3,13 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, Sparkles } from "lucide-react";
+import { Settings } from "lucide-react";
 
-import { useTour } from "@/components/guide-tour/tour-provider";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { Wordmark } from "@/components/app-nav/wordmark";
 import { NAV_ITEMS } from "@/components/app-nav/app-nav";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -29,7 +27,6 @@ export function HeaderNav({
   hasGoogleAuth = false,
 }: HeaderNavProps) {
   const pathname = usePathname();
-  const { openTour } = useTour();
 
   const currentItem =
     NAV_ITEMS.find((item) =>
@@ -74,21 +71,6 @@ export function HeaderNav({
 
       {/* Right side: Actions, Settings, Notifications & Profile */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={openTour}
-              className="hidden sm:inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
-            >
-              <Sparkles className="size-3.5 text-primary" />
-              <span>Tour</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Interactive app tour</TooltipContent>
-        </Tooltip>
-
         {/* Header Settings Link */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -172,14 +154,6 @@ export function HeaderNav({
                 <Settings className="size-4 text-muted-foreground" />
                 <span>Settings</span>
               </Link>
-              <button
-                type="button"
-                onClick={openTour}
-                className="flex w-full items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors text-left"
-              >
-                <Sparkles className="size-4 text-primary" />
-                <span>Guide Tour</span>
-              </button>
             </div>
           </PopoverContent>
         </Popover>

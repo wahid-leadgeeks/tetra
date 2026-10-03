@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 export interface SpotlightStep {
@@ -28,6 +29,8 @@ export interface SpotlightStep {
   icon: React.ComponentType<{ className?: string }>;
   description: string;
   tips: string[];
+  /** Target only exists on desktop (e.g. the sidebar); skipped on mobile. */
+  desktopOnly?: boolean;
 }
 
 export const SPOTLIGHT_STEPS: SpotlightStep[] = [
@@ -119,12 +122,13 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
     route: "/",
     selector: '[data-tour="sidebar-nav"]',
     icon: Keyboard,
+    desktopOnly: true,
     description:
-      "Track all day without ever reaching for your mouse! Keys 1–5 switch pages instantly, 's' starts or switches tasks, Space pauses/resumes, 'b' takes breaks, and '?' opens help.",
+      "Track all day without ever reaching for your mouse! Each page in the sidebar has a number key — hover or tab to a link to see it. Keys 1–6 switch pages instantly, 's' starts or switches tasks, Space pauses/resumes, 'b' takes breaks, and '?' opens help.",
     tips: [
-      "Keys 1–5 for instant tabs",
+      "Keys 1–6 for instant pages (hover a link to see its key)",
       "Space to pause, 'b' to break",
-      "Press '?' anywhere for shortcut help",
+      "Press '?' anywhere for the full shortcut list",
     ],
   },
 ];
@@ -150,7 +154,15 @@ export function GuideTourSpotlight({ open, onClose }: GuideTourSpotlightProps) {
   const [targetFound, setTargetFound] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  const step = SPOTLIGHT_STEPS[stepIndex] ?? SPOTLIGHT_STEPS[0]!;
+  // No sidebar (and no keyboard) on mobile: drop desktop-only steps.
+  const isMobile = useIsMobile();
+  const steps = useMemo(
+    () =>
+      isMobile ? SPOTLIGHT_STEPS.filter((s) => !s.desktopOnly) : SPOTLIGHT_STEPS,
+    [isMobile],
+  );
+
+  const step = steps[stepIndex] ?? steps[0]!;
   const StepIcon = step.icon;
 
   // Navigate to step's route if different from current
@@ -228,12 +240,12 @@ export function GuideTourSpotlight({ open, onClose }: GuideTourSpotlightProps) {
   }, [open, updateTargetRect]);
 
   const handleNext = useCallback(() => {
-    if (stepIndex < SPOTLIGHT_STEPS.length - 1) {
+    if (stepIndex < steps.length - 1) {
       setStepIndex((i) => i + 1);
     } else {
       onClose();
     }
-  }, [stepIndex, onClose]);
+  }, [stepIndex, steps.length, onClose]);
 
   const handlePrev = useCallback(() => {
     if (stepIndex > 0) {
@@ -324,7 +336,7 @@ export function GuideTourSpotlight({ open, onClose }: GuideTourSpotlightProps) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Guide Tour: Step ${stepIndex + 1} of ${SPOTLIGHT_STEPS.length} - ${step.title}`}
+      aria-label={`Guide Tour: Step ${stepIndex + 1} of ${steps.length} - ${step.title}`}
       className="fixed inset-0 z-50 overflow-hidden select-none"
     >
       {/* Dark backdrop cutout spotlight */}
@@ -403,7 +415,7 @@ export function GuideTourSpotlight({ open, onClose }: GuideTourSpotlightProps) {
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/60">
           {/* Step dots */}
           <div className="flex items-center gap-1.5" aria-label="Tour progress">
-            {SPOTLIGHT_STEPS.map((s, idx) => (
+            {steps.map((s, idx) => (
               <button
                 key={s.id}
                 type="button"
@@ -438,7 +450,7 @@ export function GuideTourSpotlight({ open, onClose }: GuideTourSpotlightProps) {
               onClick={handleNext}
               className="h-9 px-4 text-xs font-semibold shadow-xs"
             >
-              {stepIndex === SPOTLIGHT_STEPS.length - 1 ? (
+              {stepIndex >= steps.length - 1 ? (
                 "Finish Tour"
               ) : (
                 <>

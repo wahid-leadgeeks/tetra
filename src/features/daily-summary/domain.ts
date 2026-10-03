@@ -149,6 +149,32 @@ function gapWarnings(
   return warnings;
 }
 
+/** Breaks shorter than this many milliseconds are flagged as likely accidental. */
+const SHORT_BREAK_MS = 60_000;
+
+/** Short-break warnings for completed breaks lasting under a minute. */
+function shortBreakWarnings(breaks: DaySummaryBreakInput[], tz: string): DayWarning[] {
+  const warnings: DayWarning[] = [];
+  for (const b of breaks) {
+    if (!b.endedAt) continue;
+    const ms = b.endedAt.getTime() - b.startedAt.getTime();
+    if (ms >= SHORT_BREAK_MS) continue;
+    const seconds = Math.max(0, Math.floor(ms / 1000));
+    warnings.push({
+      type: "short_break",
+      message: `Break at ${zonedClock(b.startedAt, tz)} lasted under a minute (${seconds}s)`,
+      breakId: b.id,
+      seconds,
+    });
+  }
+  return warnings;
+}
+
+/** Informational warnings do not keep a day out of `ready`. */
+export function isBlockingWarning(w: DayWarning): boolean {
+  return w.type !== "short_break";
+}
+
 function deriveReviewState(
   stored: ReviewState,
   attendance: DaySummaryAttendanceInput | null,
@@ -156,7 +182,8 @@ function deriveReviewState(
 ): ReviewState {
   if (stored !== "draft") return stored;
   const closedCleanDay =
-    attendance !== null && attendance.status === "closed" && warnings.length === 0;
+    attendance !== null && attendance.status === "closed" &&
+    warnings.filter(isBlockingWarning).length === 0;
   return closedCleanDay ? "ready" : "draft";
 }
 
@@ -228,6 +255,7 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
   const warnings: DayWarning[] = [
     ...overlapWarnings(dayEntries, now, tz),
     ...(attendanceForGaps ? gapWarnings(dayEntries, attendanceForGaps, breaks, now) : []),
+    ...shortBreakWarnings(breaks, tz),
   ];
   if (dayEntries.some((e) => e.status === "active" || e.status === "paused")) {
     warnings.push({ type: "open_task", message: "A task is still open" });

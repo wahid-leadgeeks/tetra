@@ -49,7 +49,7 @@ export function StickyTaskBar({
   return (
     <div
       data-testid="sticky-task-bar"
-      className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 border-t border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden"
+      className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 animate-in fade-in slide-in-from-bottom-2 border-t border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden"
     >
       <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-4 py-2.5">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -75,7 +75,6 @@ export function StickyTaskBar({
 
         <Button
           type="button"
-          variant="outline"
           className="size-11 px-0"
           data-testid={paused ? "sticky-resume" : "sticky-pause"}
           aria-label={paused ? "Resume task" : "Pause task"}
@@ -91,7 +90,8 @@ export function StickyTaskBar({
 
         <Button
           type="button"
-          className="size-11 px-0"
+          variant="outline"
+          className="size-11 border-destructive/30 px-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
           data-testid="sticky-stop"
           aria-label="Stop task"
           disabled={busy}

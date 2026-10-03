@@ -167,7 +167,7 @@ TETRA standardizes tracking across eight corporate categories defined in [`src/l
 ## 5. Complete Feature Catalog
 
 ### 5.1 Attendance Tracking & Workday Lifecycle
-Implemented in [`src/features/attendance/`](file:///home/noah/project/tetra/src/features/attendance/) and presented via the [Today Screen](file:///home/noah/project/tetra/src/components/today/today-screen.tsx).
+Implemented in [`src/features/attendance/`](file:///home/noah/project/tetra/src/features/attendance/) and presented via the [Today Screen](file:///home/noah/project/tetra/src/components/today/today-screen.tsx), composed of `ActiveTaskCard`, `EmptyStateCard`, `TodayOverviewPanel`, `StopTaskConfirmDialog` and `StopWorkConfirmDialog` plus the `useTodayGuards` hook (unload prompt while working, plus desktop alerts for long tasks and extended breaks), each in its own module under [`src/components/today/`](file:///home/noah/project/tetra/src/components/today/).
 
 - **Clock In / Clock Out**:
   - `POST /api/attendance/start`: Opens daily attendance with a UTC timestamp.
@@ -188,34 +188,38 @@ Implemented in [`src/features/activities/`](file:///home/noah/project/tetra/src/
 - **Pause & Resume**: Pause a running task with accumulated duration tracked in `pausedSeconds`.
 - **1-Tap Task Switcher**: Switcher dialog (`SwitchTaskDialog`) accessible directly from the active timer card to seamlessly stop the current task and launch a new one without losing context.
 - **Quick-Start Favorites**: Pin favorite tasks with star badges for immediate one-click timer starts.
-- **Sticky Task Bar**: Floating bottom controller (`StickyTaskBar`) on mobile or during deep page scrolling with live elapsed time, pause/resume, and stop actions.
-- **Daily Target Progress Card**:
+- **Sticky Task Bar**: Mobile-only floating controller (`StickyTaskBar`, hidden from `md` up) that appears only once the active task card has scrolled under the sticky header (`useOutOfView`, IntersectionObserver-driven). It shows the task name, live elapsed time, and pause/resume and stop actions.
+- **Today Action Hierarchy**: The active card keeps the primary controls (Pause/Resume, Switch Task, Stop). Day-level actions sit in one quiet row beneath it: outline `Log Activity`, ghost `Break` / `End Break & Resume <task>`, and a destructive-outline `Stop Work` aligned right. Buttons use `size="sm"` from `sm` up and an `h-11` touch height below it.
+- **Daily Target Progress Card** (`TargetProgress`, `target-progress.tsx`):
   - Displays daily target progress against an 8-hour workday (480 minutes).
   - Calculates and displays real-time **Projected Wrap-Up Time** based on current pace, remaining minutes, and logged breaks.
 
 ---
 
 ### 5.3 Task Management & Kanban Board
-Located at route [`/tasks`](file:///home/noah/project/tetra/src/app/(app)/tasks/page.tsx) and implemented in [`src/components/tasks/tasks-view.tsx`](file:///home/noah/project/tetra/src/components/tasks/tasks-view.tsx).
+Located at route [`/tasks`](file:///home/noah/project/tetra/src/app/(app)/tasks/page.tsx) and implemented in [`src/components/tasks/tasks-view.tsx`](file:///home/noah/project/tetra/src/components/tasks/tasks-view.tsx), which composes `TasksHeader`, `TasksFilterBar`, `KanbanBoard` (`KanbanColumn`, `TaskCard`), `TaskListView` and `TaskModalDialog` (`task-dialog.tsx`). State lives in the `useTasksState` and `useKanbanState` hooks; filtering, sorting, grouping and stats are pure functions in `task-filters.ts`, and shared constants are in `task-constants.ts`.
 
 - **Dual View Modes**:
   - **Kanban Board**: Drag-and-drop task cards across columns: `To Do`, `In Progress`, and `Done`.
   - **List View**: Dense tabular listing with sortable headers.
 - **Direct Timer Trigger**: Play button on every task card to immediately start tracking that task.
-- **Favorites & Search**: Real-time text search and category filter pills with dedicated favorites toggle.
+- **Favorites & Search**: Real-time text search plus quick filters (All, Due Today, Overdue, Favorites).
+- **Filter Bar & Filters Sheet**: On `md` and up, a single filter row holds the search box, quick-filter pills, category select, sort select and hide-done toggle. Below `md`, only search and a `Filters` button remain; the button shows an active-filter count and opens a bottom sheet with the same controls plus `Clear filters`.
+- **View Menu**: A `View` menu (all widths) switches Layout (Kanban / List) and card Density; a segmented Kanban/List toggle is also shown from `md` up.
 - **Task Modals**: Create, edit, and delete tasks with custom descriptions and category assignments.
 
 ---
 
 ### 5.4 Interactive Timeline, Gap Filling & Splitting
-Located at route [`/timeline`](file:///home/noah/project/tetra/src/app/(app)/timeline/page.tsx) and implemented in [`src/components/timeline/timeline-view.tsx`](file:///home/noah/project/tetra/src/components/timeline/timeline-view.tsx).
+Located at route [`/timeline`](file:///home/noah/project/tetra/src/app/(app)/timeline/page.tsx) and implemented in [`src/components/timeline/timeline-view.tsx`](file:///home/noah/project/tetra/src/components/timeline/timeline-view.tsx), which composes `TimelineList` (with `TimelineEntryCard` and `TimelineBreakCard`), `DayOverviewCard` and the `DeleteEntryDialog` / `DeleteBreakDialog` pair (`timeline-delete-dialogs.tsx`). Day and category loading live in the `useTimelineDay` hook, and sorting, interleaving and gap detection are pure functions in `timeline-items.ts`.
 
 - **Chronological Feed**: Unified chronological stream interleaving completed time entries and break spans.
 - **Inline "Fill Gap" Action**: Automatically calculates gaps between consecutive items exceeding 5 minutes; provides an inline `+ Fill gap (XXm)` button that opens the entry dialog pre-populated with exact start and end times.
 - **Entry Split Dialog (`SplitEntryDialog`)**: Retroactively split an uninterrupted time block into two distinct tasks with a visual time slider or timestamp inputs.
 - **Granular Entry Editing & ±15m Nudges**: Edit dialog (`EntryDialog`) with quick adjustment buttons (`-15m`, `+15m`) for rapid boundary tweaking.
 - **Day Navigator**: Seamless date travel with Previous/Next day buttons, interactive date picker, and quick "Today" reset.
-- **Inline Sheet Actions**: "Pull from Sheet", "Sync to Sheet", and "Auto-sync on Edit" toggle available directly within the timeline header.
+- **Header Actions**: The Timeline header offers only **Add break** and **Add activity**. Sheet actions (Pull from Sheet, Sync to file, Sync now) live in Reports, and the auto-sync toggle lives in Settings. Background auto-sync of Timeline edits (add/edit/delete entries and breaks) is unchanged and still follows the `autoSyncTasks` setting.
+- **Duration Display**: Entry and break durations use the single `formatHuman` format (`3h 15m`, `45m`); sub-minute entries and breaks show `<1m`.
 
 ---
 
@@ -233,8 +237,15 @@ stateDiagram-v2
     Synced --> [*]
 ```
 
+- **Review & Sync Stepper (`ReviewStepper`)**: The right-hand card is a 3-step stepper with exactly one filled (primary) button, the current step's main action:
+  1. **Resolve "Needs attention"**: lists warnings with a `Fix issues on Timeline` link (and `Clock out now` when clock-out is missing). Done when no blocking warnings remain.
+  2. **Mark reviewed**: done once the day is reviewed or synced.
+  3. **Preview, then Sync to Sheet**: `Preview` opens the sync preview; `Sync to Sheet` is never gated by step (the server owns the review/config checks).
+  The step logic is the pure `computeReviewStep` helper in `review-step.ts`.
+- **"More" Menu**: An ellipsis menu in the stepper header (`review-more-menu`) holds the secondary sheet actions: **Pull from Sheet**, **Sync to file** (opens `FileSyncDialog`), and **Sync now (unreviewed)** (syncs with `allowUnreviewed: true`, skipping the review gate).
+- **Backfill Navigation (`BackfillNav`)**: When Reports is opened from the "Backfill N days" banner (`/reports?date=<oldest>&backfill=<d1,d2,...>`), a banner steps through the missing days with a "Next missing day" button (and a "k of N" counter while the current day is in the list).
 - **Daily Aggregate Totals**: Automatic summation of Total Attendance, Total Break, Total Work, and individual category minutes.
-- **Discrepancy & Gap Warnings**: Contextual alert banners for overlapping time entries, open attendance records, and large unlogged spans.
+- **Discrepancy & Gap Warnings**: Contextual alert banners for overlapping time entries, open attendance records, and large unlogged spans. A break shorter than one minute raises an informational `short_break` warning, which is shown dimmed and never blocks review (`isBlockingWarning`).
 - **Review State Machine**: Strictly enforces human review before initiating synchronization. Modifying an entry on a synced day flags it as `Changed after sync`.
 - **Periodic Summaries**: Tabs for Weekly Summary and Monthly Summary aggregating category distributions over broader time horizons.
 
@@ -252,6 +263,7 @@ Implemented in [`src/features/sheets-sync/`](file:///home/noah/project/tetra/src
 - **Auto Sheet Inspection (`/api/sheets/inspect`)**: Automatically reads target Google Sheets to detect available tab names, header rows, and column positions.
 - **Sync History & Retries**: Full audit log in `sync_logs` tracking timestamp, status (`pending`, `success`, `failed`), modified cells, and error messages with 1-click retry.
 - **File-Based Offline Sync (`FileSyncDialog`)**: Upload an `.xlsx` or `.csv` workbook file; TETRA applies the day's calculations and returns the updated file for download without requiring Google OAuth credentials.
+- **Where to trigger it**: Sync, preview, pull, file sync and unreviewed sync are all driven from the Reports stepper and its More menu; Timeline edits sync in the background when auto-sync is on.
 - **Reverse Sheet Pull (`pullDayFromSheet`)**: Reconstructs TETRA attendance and time entries from an existing Google Sheet date row using intelligent proportional duration allocation.
 
 ---
@@ -260,6 +272,10 @@ Implemented in [`src/features/sheets-sync/`](file:///home/noah/project/tetra/src
 Located at route [`/dashboard`](file:///home/noah/project/tetra/src/app/(app)/dashboard/page.tsx) and implemented in [`src/components/dashboard/dashboard-view.tsx`](file:///home/noah/project/tetra/src/components/dashboard/dashboard-view.tsx).
 
 - **Multi-Horizon KPI Cards**: High-level progress cards for Daily (8h target), Weekly (40h target), and Monthly work hours.
+- **Expected-so-far ("vs expected")**: Weekly and monthly badges compare logged time with the target for completed workdays before today (workdays elapsed x 8h; today is excluded and shown separately as in progress), labelled "vs expected". Diffs use an ASCII `-` sign.
+- **Weekend Mode**: On a weekend with no logged work the daily card reads "Weekend"; if time was logged it shows that time with a "Weekend · no target" label.
+- **Period Navigation**: No always-visible date input. Previous/Next buttons step by day, week or month depending on the tab, `Today` resets, and clicking the period label opens a native date picker for an arbitrary jump.
+- **Reports Links**: Category breakdown and warnings live in Reports, linked from the Daily tab (`Open Daily Review`, `/reports?date=`), the Weekly tab (`/reports/week?date=`) and the Monthly tab (`/reports/month?date=`). The daily tab keeps a compact attendance line.
 - **Faithful Personal Weekly Report Table**:
   - Accurately mirrors rows 44–55 of the official corporate Google Sheet.
   - Slices the selected month into calendar weeks (Week 1 through Week 5).
@@ -310,6 +326,14 @@ Alerts are delivered via the Header Notification Bell dropdown (`NotificationMen
   - <kbd>g</kbd> then <kbd>r</kbd>: Navigate to Reports
   - <kbd>g</kbd> then <kbd>s</kbd>: Navigate to Settings
 - **Progressive Web App (PWA)**: Manifest configured at [`src/app/manifest.ts`](file:///home/noah/project/tetra/src/app/manifest.ts) with offline detection badge (`NetworkStatus`).
+- **Navigation**:
+  - Desktop sidebar lists the six primary pages (Today, Dashboard, Timeline, Tasks, Reports, Calendar) with a Guide Tour button; there is no Settings link in the sidebar, since Settings is reached through the header gear and profile menu.
+  - Each sidebar item shows its number shortcut (<kbd>1</kbd> to <kbd>6</kbd>) as a keyboard hint only on hover or keyboard focus.
+  - On mobile the bottom bar has 5 items: Today, Timeline, Tasks, Reports and **More**. The More sheet holds Dashboard, Calendar, Guide tour and Sign out.
+  - The header has no Tour button; the tour is started from the sidebar or the mobile More sheet.
+  - Toasts appear at the top of the screen on mobile (clear of the bottom nav and sticky task bar) and bottom-right on desktop.
+- **Backfill Banner**: Missing-day alerts collapse into a single "Backfill N days" entry in the startup `NotificationBannerOverlay`, shown only on Today (`/`) and Reports. Its action opens `/reports?date=<oldest>&backfill=<d1,d2,...>`.
+- **Settings Auto-sync Switch**: Settings has a "Timeline Auto-sync" switch (`autoSyncTasks`) controlling background sync of the day to Google Sheet when Timeline entries are added, edited or deleted. It applies immediately by PATCHing `/api/sync-config` when a sync config is already saved; otherwise it only updates the form until Save.
 - **Interactive Guided Tour**: Built-in visual walkthrough (`GuideTourSpotlight` & `GuideTourDialog`) guiding new users through clock-in, active task controls, timeline gap resolution, and daily review synchronization.
 
 ---

@@ -163,7 +163,7 @@ export function CalendarScheduleCard({
 
         <CardContent className="px-5 pb-5 pt-0">
           {loading && events.length === 0 ? (
-            <div className="flex flex-col gap-2.5 py-2">
+            <div data-loading="true" className="flex flex-col gap-2.5 py-2">
               <div className="h-12 w-full animate-pulse rounded-lg bg-muted/60" />
               <div className="h-12 w-full animate-pulse rounded-lg bg-muted/40" />
             </div>

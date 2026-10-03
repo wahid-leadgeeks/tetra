@@ -4,18 +4,16 @@
  * Daily Review (DESIGN.md) — attendance/break/work totals, all 8 category
  * rows, human warnings, review gate, sync preview + sync, sync history.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarRange,
   Clock,
-  Download,
   LogOut,
   Pencil,
+  PenLine,
   TriangleAlert,
-  Upload,
-  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,6 +44,8 @@ import {
 } from "@/components/timeline/time";
 import { SyncPreviewDialog } from "@/components/reports/sync-preview-dialog";
 import { FileSyncDialog } from "@/components/reports/file-sync-dialog";
+import { BackfillNav } from "@/components/reports/backfill-nav";
+import { ReviewStepper } from "@/components/reports/review-stepper";
 import { EditAttendanceDialog } from "@/components/timeline/edit-attendance-dialog";
 import { getCategoryTheme } from "@/lib/categories";
 import { formatHuman } from "@/lib/time";
@@ -109,10 +109,13 @@ interface SyncResultDTO {
 interface ReviewViewProps {
   timeZone: string;
   initialDay: string;
+  /** Missing days to step through (sorted), from `?backfill=` (banner contract). */
+  backfillDays?: string[];
 }
 
-export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
+export function ReviewView({ timeZone, initialDay, backfillDays = [] }: ReviewViewProps) {
   const router = useRouter();
+  const [jumpPending, startJump] = useTransition();
   const [dayKey, setDayKey] = useState(initialDay);
   const [summary, setSummary] = useState<DaySummaryDTO | null>(null);
   const [logs, setLogs] = useState<SyncLogDTO[]>([]);
@@ -158,6 +161,14 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
     setDayKey(nextDay);
     setLoading(true);
     setError(null);
+  }
+
+  function handleBackfillJump(nextDay: string) {
+    // The page keys ReviewView on date + backfill list, so navigating remounts
+    // it on the next day and a reload keeps the list.
+    startJump(() => {
+      router.push(`/reports?date=${nextDay}&backfill=${backfillDays.join(",")}`);
+    });
   }
 
   function refresh() {
@@ -256,6 +267,27 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
     }
   }
 
+  // "Sync now (unreviewed)": same payload the Timeline's Sync to Sheet used.
+  async function handleSyncUnreviewed() {
+    setSyncing(true);
+    try {
+      const res = await apiFetch<SyncResultDTO>(`/api/days/${dayKey}/sync`, {
+        method: "POST",
+        body: JSON.stringify({ allowUnreviewed: true }),
+      });
+      if (res.idempotent || !res.changedCells || res.changedCells.length === 0) {
+        toast.info("Spreadsheet is already up to date.");
+      } else {
+        toast.success(`Synced ${res.changedCells.length} cells to Google Sheet!`);
+      }
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sync failed.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function handlePull() {
     setPulling(true);
     try {
@@ -287,6 +319,12 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
           timeZone={timeZone}
           onChange={handleDayChange}
         />
+        <BackfillNav
+          days={backfillDays}
+          currentDay={dayKey}
+          onJump={handleBackfillJump}
+          pending={jumpPending}
+        />
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline" className="h-11 px-4">
             <Link
@@ -304,7 +342,7 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
       <Separator className="my-6" />
 
       {loading ? (
-        <div className="grid gap-3" aria-label="Loading daily review">
+        <div className="grid gap-3" aria-label="Loading daily review" data-loading="true">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -441,6 +479,14 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
                     centerTitle="Work Time"
                     ariaLabel="Category time distribution pie chart"
                     testId="review-category-pie-chart"
+                    emptyAction={
+                      <Button asChild variant="outline" size="sm" className="h-11 px-3 sm:h-8">
+                        <Link href={`/timeline?date=${dayKey}`} data-testid="review-log-activity-link">
+                          <PenLine aria-hidden />
+                          Log an activity
+                        </Link>
+                      </Button>
+                    }
                   />
                 </div>
 
@@ -504,125 +550,24 @@ export function ReviewView({ timeZone, initialDay }: ReviewViewProps) {
             </Card>
           </div>
 
-          {/* Right Column: Actions & Sync + Warnings + Sync history */}
+          {/* Right Column: Review & Sync stepper + Sync history */}
           <div className="lg:col-span-5 min-w-0 w-full flex flex-col gap-6">
-            {/* Review & Sync Actions Card */}
-            <Card className="shadow-xs border-border/80" data-tour="review-sync">
-              <CardHeader className="pb-3">
-                <CardTitle>Review &amp; Sync</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Mark the day reviewed once numbers look good, then sync to your Google Sheet or export an updated spreadsheet.
-                </p>
-                <div className="grid gap-2.5 pt-1">
-                  <Button
-                    className="h-11 w-full font-medium shadow-xs"
-                    onClick={() => void handleMarkReviewed()}
-                    disabled={!canMarkReviewed || marking}
-                    title={
-                      canMarkReviewed
-                        ? undefined
-                        : "This day is already reviewed."
-                    }
-                    data-testid="review-submit"
-                  >
-                    {marking ? "Reviewing…" : "Mark reviewed"}
-                  </Button>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-11 font-medium shadow-xs"
-                      onClick={() => setPreviewOpen(true)}
-                    >
-                      Preview sync
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-11 font-medium shadow-xs"
-                      onClick={() => setFileSyncOpen(true)}
-                      data-testid="sync-file-button"
-                      title="No Google account needed — upload the report file, get it back updated"
-                    >
-                      Sync to file
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-11 font-medium shadow-xs"
-                      onClick={() => void handlePull()}
-                      disabled={pulling}
-                      data-testid="pull-button"
-                      title="Read IN, OUT, breaks, categories & notes from Google Sheet for this day"
-                    >
-                      <Download className="mr-1.5 size-4" />
-                      {pulling ? "Pulling…" : "Pull from Sheet"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-11 font-medium shadow-xs"
-                      onClick={() => void handleSync()}
-                      disabled={syncing}
-                      data-testid="sync-button"
-                    >
-                      <Upload className="mr-1.5 size-4" />
-                      {syncing ? "Syncing…" : "Sync to Sheet"}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Warnings — human messages, fix path to the Timeline */}
-            {summary.warnings.length > 0 && (
-              <Card
-                className="ring-amber-500/30 border-amber-500/40 bg-amber-500/[0.02] shadow-xs"
-                data-testid="review-warnings"
-              >
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <TriangleAlert
-                      aria-hidden
-                      className="size-4 text-amber-600 dark:text-amber-400"
-                    />
-                    Needs attention
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <ul className="grid gap-2">
-                    {summary.warnings.map((warning, index) => (
-                      <li
-                        key={`${warning.type}-${index}`}
-                        className="text-xs text-muted-foreground leading-relaxed"
-                      >
-                        {warning.message}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    {summary.warnings.some((w) => w.type === "missing_clock_out") && (
-                      <Button
-                        size="sm"
-                        className="h-9 px-3 text-xs font-medium cursor-pointer"
-                        onClick={() => void handleQuickClockOut()}
-                        disabled={clockingOut}
-                        data-testid="review-clockout-action"
-                      >
-                        <LogOut aria-hidden className="size-3.5 mr-1.5" />
-                        {clockingOut ? "Closing…" : "Clock out now"}
-                      </Button>
-                    )}
-                    <Button asChild variant="outline" className="h-9 px-3 text-xs font-medium">
-                      <Link href={`/timeline?date=${dayKey}`}>
-                        <Wrench aria-hidden className="size-3.5 mr-1.5" />
-                        Fix issues on Timeline
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            <ReviewStepper
+              summary={summary}
+              dayKey={dayKey}
+              marking={marking}
+              syncing={syncing}
+              pulling={pulling}
+              clockingOut={clockingOut}
+              canMarkReviewed={canMarkReviewed}
+              onMarkReviewed={() => void handleMarkReviewed()}
+              onPreview={() => setPreviewOpen(true)}
+              onSync={() => void handleSync()}
+              onSyncUnreviewed={() => void handleSyncUnreviewed()}
+              onPull={() => void handlePull()}
+              onFileSync={() => setFileSyncOpen(true)}
+              onQuickClockOut={() => void handleQuickClockOut()}
+            />
 
             {/* Sync history */}
             <Card className="shadow-xs border-border/80">

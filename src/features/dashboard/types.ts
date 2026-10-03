@@ -48,6 +48,14 @@ export interface DailyProgressDTO {
   categoryBreakdown: CategoryTotalDTO[];
   warnings: DayWarning[];
   timeEntriesCount: number;
+  isWeekend: boolean;
+  /** Target for completed workdays before today (today excluded). */
+  expectedMinutes: number;
+  /** Human diff `work - expectedMinutes` ("+1h 20m", "-40m", "0m"). */
+  expectedDiff: FormattedDiff;
+  expectedProgressPct: number;
+  /** Period starts after today. */
+  isFuture: boolean;
 }
 
 export type WeekDayStatus = "completed" | "in_progress" | "incomplete" | "weekend";
@@ -69,6 +77,11 @@ export interface WeekDayProgressDTO {
   progressPct: number;
   hasData: boolean;
   status: WeekDayStatus;
+  /** 480 for workdays before today, else 0 (today, future days, weekends). */
+  expectedMinutes: number;
+  expectedDiff: FormattedDiff;
+  isToday: boolean;
+  isFuture: boolean;
 }
 
 export interface WeeklyProgressDTO {
@@ -95,6 +108,13 @@ export interface WeeklyProgressDTO {
   daysTracked: number;
   days: WeekDayProgressDTO[];
   categoryBreakdown: CategoryTotalDTO[];
+  /** Target for completed workdays before today (today excluded). */
+  expectedMinutes: number;
+  /** Human diff `work - expectedMinutes` ("+1h 20m", "-40m", "0m"). */
+  expectedDiff: FormattedDiff;
+  expectedProgressPct: number;
+  /** Period starts after today. */
+  isFuture: boolean;
 }
 
 export interface MonthWeekSliceDTO extends MonthWeekSliceTarget {
@@ -138,6 +158,13 @@ export interface MonthlyProgressDTO {
   daysTracked: number;
   weekSlices: MonthWeekSliceDTO[];
   categoryBreakdown: CategoryTotalDTO[];
+  /** Target for completed workdays before today (today excluded). */
+  expectedMinutes: number;
+  /** Human diff `work - expectedMinutes` ("+1h 20m", "-40m", "0m"). */
+  expectedDiff: FormattedDiff;
+  expectedProgressPct: number;
+  /** Period starts after today. */
+  isFuture: boolean;
 }
 
 export interface DashboardDataDTO {

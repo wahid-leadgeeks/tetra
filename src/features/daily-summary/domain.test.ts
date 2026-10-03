@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDaySummary } from "./domain";
+import { buildDaySummary, isBlockingWarning } from "./domain";
 import type { BuildDaySummaryInput, DaySummaryEntryInput } from "./types";
 
 const TZ = "Asia/Jakarta"; // UTC+7, no DST — deterministic local times
@@ -401,6 +401,82 @@ describe("buildDaySummary warnings", () => {
     });
     expect(summary.totals.workMinutes).toBe(0);
     expect(summary.reviewState).toBe("draft");
+  });
+});
+
+describe("short_break warnings", () => {
+  it("warns about a 40-second break with clock and seconds", () => {
+    const summary = buildDaySummary(
+      input({
+        breaks: [
+          {
+            id: "b1",
+            startedAt: local(12, 0),
+            endedAt: new Date(local(12, 0).getTime() + 40_000),
+          },
+        ],
+      }),
+    );
+
+    const shorts = summary.warnings.filter((w) => w.type === "short_break");
+    expect(shorts).toEqual([
+      {
+        type: "short_break",
+        message: "Break at 12:00 lasted under a minute (40s)",
+        breakId: "b1",
+        seconds: 40,
+      },
+    ]);
+  });
+
+  it("does not warn about a 60-second break", () => {
+    const summary = buildDaySummary(
+      input({
+        breaks: [
+          {
+            id: "b1",
+            startedAt: local(12, 0),
+            endedAt: new Date(local(12, 0).getTime() + 60_000),
+          },
+        ],
+      }),
+    );
+
+    expect(summary.warnings.some((w) => w.type === "short_break")).toBe(false);
+  });
+
+  it("derives ready when the only warning is short_break", () => {
+    const summary = buildDaySummary(
+      input({
+        entries: [
+          entry({ id: "e1", startedAt: local(9, 0), endedAt: local(12, 0) }),
+          entry({
+            id: "e2",
+            startedAt: new Date(local(12, 0).getTime() + 40_000),
+            endedAt: local(15, 0),
+          }),
+        ],
+        breaks: [
+          {
+            id: "b1",
+            startedAt: local(12, 0),
+            endedAt: new Date(local(12, 0).getTime() + 40_000),
+          },
+        ],
+      }),
+    );
+
+    expect(summary.warnings.map((w) => w.type)).toEqual(["short_break"]);
+    expect(summary.reviewState).toBe("ready");
+  });
+
+  it("isBlockingWarning is false only for short_break", () => {
+    expect(isBlockingWarning({ type: "short_break", message: "m", breakId: "b", seconds: 1 })).toBe(false);
+    expect(isBlockingWarning({ type: "overlap", message: "m", entryIds: ["a", "b"] })).toBe(true);
+    expect(isBlockingWarning({ type: "gap", message: "m", minutes: 6 })).toBe(true);
+    expect(isBlockingWarning({ type: "open_task", message: "m" })).toBe(true);
+    expect(isBlockingWarning({ type: "missing_clock_out", message: "m" })).toBe(true);
+    expect(isBlockingWarning({ type: "no_work", message: "m" })).toBe(true);
   });
 });
 

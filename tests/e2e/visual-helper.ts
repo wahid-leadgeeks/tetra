@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Page, TestInfo } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 
 export interface VisualCaptureEntry {
   relativePath: string;
@@ -48,6 +48,11 @@ export async function takeVisualScreenshot(
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
+
+  // Never capture skeleton placeholders: wait for loaded content first.
+  await expect(page.locator('[data-loading="true"]')).toHaveCount(0, {
+    timeout: 15_000,
+  });
 
   // Allow animations and fonts to stabilize
   await page.evaluate(() => document.fonts.ready).catch(() => {});

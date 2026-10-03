@@ -13,13 +13,18 @@ export const metadata = {
 };
 
 interface ReportsPageProps {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; backfill?: string }>;
 }
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const session = await auth();
   const timeZone = session?.user?.timezone ?? FALLBACK_TIMEZONE;
-  const { date } = await searchParams;
+  const { date, backfill } = await searchParams;
+  // Contract with the notification banner: `?backfill=<d1,d2,...>` lists the
+  // missing days to step through (see collapseMissingDayAlerts).
+  const backfillDays = [
+    ...new Set((backfill ?? "").split(",").filter((d) => DAY_KEY_PATTERN.test(d))),
+  ].sort();
   const today = todayKey(timeZone);
 
   let initialDay: string;
@@ -45,5 +50,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     initialDay = hasTodayAttendance ? today : ensureWorkday(today);
   }
 
-  return <ReviewView timeZone={timeZone} initialDay={initialDay} />;
+  return (
+    <ReviewView
+      key={`${initialDay}|${backfillDays.join(",")}`}
+      timeZone={timeZone}
+      initialDay={initialDay}
+      backfillDays={backfillDays}
+    />
+  );
 }

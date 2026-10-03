@@ -84,6 +84,9 @@ test("phase 5 wave 2: keyboard nav, today shortcuts, sticky bar, monthly summary
 
   // Sticky active-task bar on mobile; stops from the bar.
   await page.setViewportSize({ width: 390, height: 844 });
+  // The sticky bar only appears once the active-task card scrolls out of view.
+  await expect(page.getByTestId("active-timer")).toBeAttached({ timeout: 10_000 });
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(page.getByTestId("sticky-timer")).toBeVisible({
     timeout: 10_000,
   });

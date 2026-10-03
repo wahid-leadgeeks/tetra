@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { CalendarSettingsCard } from "@/components/settings/calendar-settings-card";
 import { NotificationsSettingsCard } from "@/components/settings/notifications-settings-card";
 import { apiFetch, ApiError } from "@/components/timeline/api";
@@ -190,6 +191,8 @@ export function SettingsView({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [hasSyncConfig, setHasSyncConfig] = useState(false);
+  const [togglingAutoSync, setTogglingAutoSync] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] =
@@ -276,6 +279,7 @@ export function SettingsView({
           setCategoryNames(names);
         }
         if (config) {
+          setHasSyncConfig(true);
           setForm({
             spreadsheetId: config.spreadsheetId ?? "",
             worksheetName: config.worksheetName ?? "",
@@ -362,6 +366,31 @@ export function SettingsView({
     return errors;
   }
 
+  async function handleToggleAutoSync(checked: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      mapping: { ...prev.mapping, autoSyncTasks: checked },
+    }));
+    // Without a saved sync config there is nothing to PATCH; Save will persist it.
+    if (!hasSyncConfig) return;
+    setTogglingAutoSync(true);
+    try {
+      await apiFetch("/api/sync-config", {
+        method: "PATCH",
+        body: JSON.stringify({ autoSyncTasks: checked }),
+      });
+      toast.success(checked ? "Auto-sync enabled" : "Auto-sync disabled");
+    } catch (err) {
+      setForm((prev) => ({
+        ...prev,
+        mapping: { ...prev.mapping, autoSyncTasks: !checked },
+      }));
+      toast.error(err instanceof Error ? err.message : "Could not update sync setting");
+    } finally {
+      setTogglingAutoSync(false);
+    }
+  }
+
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
     const errors = validate();
@@ -411,6 +440,7 @@ export function SettingsView({
           },
         }),
       });
+      setHasSyncConfig(true);
       toast.success("Settings saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save.");
@@ -444,7 +474,7 @@ export function SettingsView({
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="grid gap-3" aria-label="Loading settings">
+              <div className="grid gap-3" aria-label="Loading settings" data-loading="true">
                 {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -642,30 +672,28 @@ export function SettingsView({
                       </div>
                     </label>
 
-                    <label className="flex items-start gap-2.5 rounded-lg border border-border/70 p-3 hover:bg-muted/30 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        className="size-4 mt-0.5 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                    <div className="flex items-start gap-2.5 rounded-lg border border-border/70 p-3">
+                      <Switch
+                        id="auto-sync-tasks-switch"
+                        className="mt-0.5"
                         checked={form.mapping.autoSyncTasks ?? true}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            mapping: {
-                              ...prev.mapping,
-                              autoSyncTasks: e.target.checked,
-                            },
-                          }))
-                        }
+                        disabled={togglingAutoSync}
+                        onCheckedChange={handleToggleAutoSync}
+                        data-testid="auto-sync-switch"
                       />
                       <div className="space-y-0.5">
-                        <span className="text-xs font-semibold text-foreground block">
-                          Tasks Auto-sync
-                        </span>
+                        <Label
+                          htmlFor="auto-sync-tasks-switch"
+                          className="text-xs font-semibold text-foreground block cursor-pointer"
+                        >
+                          Timeline Auto-sync
+                        </Label>
                         <span className="text-[11px] text-muted-foreground block leading-tight">
-                          Sync work total, category hours &amp; notes when tasks change.
+                          Controls background sync of the day to Google Sheet when you
+                          add, edit or delete Timeline entries. Applies immediately.
                         </span>
                       </div>
-                    </label>
+                    </div>
                   </div>
                 </fieldset>
 

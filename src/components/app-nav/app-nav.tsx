@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -9,7 +10,7 @@ import {
   Clock,
   LayoutDashboard,
   ListTodo,
-  Settings,
+  MoreHorizontal,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -17,6 +18,14 @@ import {
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/keyboard/kbd";
 import { useTour } from "@/components/guide-tour/tour-provider";
+import { SignOutButton } from "@/components/app-nav/sign-out-button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 export interface NavItem {
   href: string;
@@ -71,6 +80,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
 ];
 
+/** Bottom-nav tabs on mobile; the rest of NAV_ITEMS lives in the More sheet. */
+const MOBILE_PRIMARY_HREFS: readonly string[] = ["/", "/timeline", "/tasks", "/reports"];
+/** Routes reached through the mobile More sheet (or the header gear). */
+const MOBILE_MORE_HREFS: readonly string[] = ["/dashboard", "/calendar", "/settings"];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
@@ -93,7 +106,7 @@ export function SidebarNav() {
             data-testid={item.testId}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-all select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "group flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-all select-none focus-visible:ring-3 focus-visible:ring-ring/50",
               active
                 ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs"
                 : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
@@ -107,7 +120,10 @@ export function SidebarNav() {
               )}
             />
             {item.label}
-            <Kbd aria-hidden="true" className="ml-auto">
+            <Kbd
+              aria-hidden="true"
+              className="ml-auto opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            >
               {item.shortcut}
             </Kbd>
           </Link>
@@ -115,19 +131,6 @@ export function SidebarNav() {
       })}
 
       <div className="mt-3 pt-3 border-t border-sidebar-border/60 flex flex-col gap-1">
-        <Link
-          href="/settings"
-          data-testid="nav-settings"
-          className={cn(
-            "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-xs font-medium transition-colors cursor-pointer select-none",
-            isActive(pathname, "/settings")
-              ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-              : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-          )}
-        >
-          <Settings aria-hidden className="size-4 shrink-0" />
-          <span>Settings</span>
-        </Link>
         <button
           type="button"
           onClick={openTour}
@@ -145,14 +148,24 @@ export function SidebarNav() {
 /** Mobile bottom navigation (DESIGN.md: bottom navigation on mobile). */
 export function MobileNav() {
   const pathname = usePathname();
+  const { openTour } = useTour();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const primaryItems = NAV_ITEMS.filter((item) =>
+    MOBILE_PRIMARY_HREFS.includes(item.href),
+  );
+  const moreItems = NAV_ITEMS.filter(
+    (item) => !MOBILE_PRIMARY_HREFS.includes(item.href),
+  );
+  const moreActive = MOBILE_MORE_HREFS.some((href) => isActive(pathname, href));
 
   return (
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-6 pb-[env(safe-area-inset-bottom)]">
-        {NAV_ITEMS.map((item) => {
+      <ul className="mx-auto grid max-w-lg grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+        {primaryItems.map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <li key={item.href}>
@@ -161,7 +174,7 @@ export function MobileNav() {
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
                 className={cn(
-                  "flex min-h-14 flex-col items-center justify-center gap-1 px-0.5 sm:px-1 text-[10px] sm:text-[11px] font-medium outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  MOBILE_TAB_CLASS,
                   active
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -176,7 +189,91 @@ export function MobileNav() {
             </li>
           );
         })}
+        <li>
+          <button
+            type="button"
+            data-testid="mobile-nav-more"
+            aria-label="More"
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
+            aria-current={moreActive ? "page" : undefined}
+            onClick={() => setMoreOpen(true)}
+            className={cn(
+              MOBILE_TAB_CLASS,
+              "w-full cursor-pointer",
+              moreActive
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <MoreHorizontal aria-hidden className="size-4.5 sm:size-5" />
+            <span className="truncate">More</span>
+          </button>
+        </li>
       </ul>
+
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        <SheetContent
+          side="bottom"
+          data-testid="mobile-more-sheet"
+          className="gap-2 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        >
+          <SheetHeader className="pr-10">
+            <SheetTitle>More</SheetTitle>
+            <SheetDescription className="sr-only">
+              More pages, the guide tour, and sign out
+            </SheetDescription>
+          </SheetHeader>
+          <ul className="flex flex-col gap-1">
+            {moreItems.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setMoreOpen(false)}
+                    className={cn(
+                      MORE_ITEM_CLASS,
+                      active
+                        ? "bg-muted font-semibold text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    )}
+                  >
+                    <item.icon aria-hidden className="size-4.5 shrink-0" />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  openTour();
+                }}
+                className={cn(
+                  MORE_ITEM_CLASS,
+                  "w-full cursor-pointer text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                )}
+              >
+                <Sparkles aria-hidden className="size-4.5 shrink-0 text-primary" />
+                Guide tour
+              </button>
+            </li>
+            <li className="mt-1 border-t border-border/60 pt-1">
+              <SignOutButton />
+            </li>
+          </ul>
+        </SheetContent>
+      </Sheet>
     </nav>
   );
 }
+
+const MOBILE_TAB_CLASS =
+  "flex min-h-14 flex-col items-center justify-center gap-1 px-0.5 sm:px-1 text-[10px] sm:text-[11px] font-medium outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+const MORE_ITEM_CLASS =
+  "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50";

@@ -37,9 +37,10 @@ export async function getDashboardData(
     getMonthSummary(userId, validAnchorDate, tz),
   ]);
 
-  const daily = buildDailyProgressDTO(daySummary, validAnchorDate, tz);
-  const weekly = buildWeeklyProgressDTO(weekSummary, validAnchorDate);
-  const monthly = buildMonthlyProgressDTO(monthSummary, validAnchorDate.slice(0, 7));
+  const today = todayKey(tz);
+  const daily = buildDailyProgressDTO(daySummary, validAnchorDate, tz, today);
+  const weekly = buildWeeklyProgressDTO(weekSummary, validAnchorDate, today);
+  const monthly = buildMonthlyProgressDTO(monthSummary, validAnchorDate.slice(0, 7), today);
 
   return buildDashboardDTO({
     anchorDate: validAnchorDate,

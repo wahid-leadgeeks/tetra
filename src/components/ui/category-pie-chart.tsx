@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { getCategoryTheme } from "@/lib/categories";
 import { formatHuman } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,8 @@ export interface CategoryPieChartProps {
   centerTitle?: string;
   ariaLabel?: string;
   testId?: string;
+  /** Rendered below the ring when there is no activity to chart. */
+  emptyAction?: ReactNode;
 }
 
 const SIZE_CONFIG = {
@@ -155,6 +157,7 @@ export function CategoryPieChart({
   centerTitle = "Total Work",
   ariaLabel = "Category time distribution pie chart",
   testId = "category-pie-chart",
+  emptyAction,
 }: CategoryPieChartProps) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
@@ -300,6 +303,9 @@ export function CategoryPieChart({
           </div>
         )}
       </div>
+      {slices.length === 0 && emptyAction ? (
+        <div className="mt-3 flex justify-center">{emptyAction}</div>
+      ) : null}
     </div>
   );
 }

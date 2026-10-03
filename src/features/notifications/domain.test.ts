@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateUnreadCount,
+  collapseMissingDayAlerts,
   createNotification,
   filterNotifications,
   formatRelativeTime,
@@ -10,6 +11,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   mergeCompanionAlerts,
+  MISSING_DAY_ALERT_ID_PATTERN,
   removeNotificationById,
 } from "./domain";
 import type { TetraNotification } from "./types";
@@ -309,6 +311,29 @@ describe("Notifications domain logic", () => {
       expect(missingAlert!.title).toBe("Missing Work Day");
       expect(missingAlert!.message).toContain("2026-09-16");
       expect(missingAlert!.actionLabel).toBe("Review Day");
+      expect(missingAlert!.id).toBe("alert-missing-day-2026-09-16");
+      expect(missingAlert!.href).toBe("/reports?date=2026-09-16");
+    });
+
+    it("links the unsynced-yesterday alert to the Reports review page", () => {
+      const alerts = generateCompanionAlerts({
+        todayKey,
+        now: baseNow,
+        daySummary: {
+          workDate: todayKey,
+          attendance: null,
+          timeEntries: [],
+          warnings: [],
+          reviewState: "draft",
+        },
+        hasUnsyncedYesterday: true,
+        yesterdayKey: "2026-09-17",
+      });
+
+      const syncAlert = alerts.find((a) => a.type === "sync");
+      expect(syncAlert).toBeDefined();
+      expect(syncAlert!.href).toBe("/reports?date=2026-09-17");
+      expect(alerts.some((a) => a.href?.startsWith("/days/"))).toBe(false);
     });
 
     it("generates weekly target deficit alert when hours < 40 on late week", () => {
@@ -444,6 +469,87 @@ describe("Notifications domain logic", () => {
       expect(isBannerSuppressedForDate(null, "2026-09-18")).toBe(false);
       expect(isBannerSuppressedForDate(undefined, "2026-09-18")).toBe(false);
       expect(isBannerSuppressedForDate("", "2026-09-18")).toBe(false);
+    });
+  });
+
+  describe("collapseMissingDayAlerts", () => {
+    function alert(id: string, type: TetraNotification["type"], timestamp = "2026-09-18T15:00:00.000Z"): TetraNotification {
+      return {
+        id,
+        type,
+        severity: "warning",
+        title: type === "missing_day" ? "Missing Work Day" : "Other",
+        message: "msg",
+        timestamp,
+        read: false,
+        href: type === "missing_day" ? `/reports?date=${id.slice(-10)}` : "/",
+        actionLabel: type === "missing_day" ? "Review Day" : "Open",
+      };
+    }
+
+    it("pins the missing-day id pattern used to derive day keys", () => {
+      expect(MISSING_DAY_ALERT_ID_PATTERN.source).toBe("^alert-missing-day-(\\d{4}-\\d{2}-\\d{2})$");
+      expect(MISSING_DAY_ALERT_ID_PATTERN.exec("alert-missing-day-2026-09-16")?.[1]).toBe("2026-09-16");
+      expect(MISSING_DAY_ALERT_ID_PATTERN.test("alert-missing-day-2026-09-16x")).toBe(false);
+      expect(MISSING_DAY_ALERT_ID_PATTERN.test("alert-missing-days-2026-09-16")).toBe(false);
+    });
+
+    it("passes alerts through untouched when there are no missing days", () => {
+      const input = [alert("alert-gap-1", "gap"), alert("alert-meeting-1", "meeting")];
+      const entries = collapseMissingDayAlerts(input);
+      expect(entries).toEqual([
+        { ids: ["alert-gap-1"], alert: input[0] },
+        { ids: ["alert-meeting-1"], alert: input[1] },
+      ]);
+      expect(collapseMissingDayAlerts([])).toEqual([]);
+    });
+
+    it("collapses a single missing day into a singular backfill entry", () => {
+      const entries = collapseMissingDayAlerts([alert("alert-missing-day-2026-09-16", "missing_day")]);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].ids).toEqual(["alert-missing-day-2026-09-16"]);
+      expect(entries[0].alert.title).toBe("Backfill 1 day");
+      expect(entries[0].alert.actionLabel).toBe("Backfill 1 day");
+      expect(entries[0].alert.message).toBe("Wed Sep 16 has no work or attendance recorded.");
+      expect(entries[0].alert.href).toBe("/reports?date=2026-09-16&backfill=2026-09-16");
+      expect(entries[0].alert.type).toBe("missing_day");
+    });
+
+    it("collapses three missing days sorted ascending, oldest first, preserving order of other alerts", () => {
+      const gap = alert("alert-gap-1", "gap");
+      const weekly = alert("alert-weekly-target-2026-09-14", "weekly_target");
+      const input = [
+        gap,
+        alert("alert-missing-day-2026-09-17", "missing_day"),
+        alert("alert-missing-day-2026-09-14", "missing_day"),
+        weekly,
+        alert("alert-missing-day-2026-09-15", "missing_day"),
+      ];
+      const entries = collapseMissingDayAlerts(input);
+
+      expect(entries).toHaveLength(3);
+      expect(entries[0]).toEqual({ ids: ["alert-gap-1"], alert: gap });
+      expect(entries[2]).toEqual({ ids: ["alert-weekly-target-2026-09-14"], alert: weekly });
+
+      const collapsed = entries[1];
+      expect(collapsed.ids.slice().sort()).toEqual([
+        "alert-missing-day-2026-09-14",
+        "alert-missing-day-2026-09-15",
+        "alert-missing-day-2026-09-17",
+      ]);
+      expect(collapsed.alert.title).toBe("Backfill 3 days");
+      expect(collapsed.alert.actionLabel).toBe("Backfill 3 days");
+      expect(collapsed.alert.message).toBe(
+        "Mon Sep 14, Tue Sep 15, Thu Sep 17 have no work or attendance recorded.",
+      );
+      expect(collapsed.alert.href).toBe(
+        "/reports?date=2026-09-14&backfill=2026-09-14,2026-09-15,2026-09-17",
+      );
+    });
+
+    it("leaves a missing_day alert with a non-matching id as its own entry", () => {
+      const odd = alert("alert-missing-day-1", "missing_day");
+      expect(collapseMissingDayAlerts([odd])).toEqual([{ ids: ["alert-missing-day-1"], alert: odd }]);
     });
   });
 });

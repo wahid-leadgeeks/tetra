@@ -2,7 +2,7 @@
  * Pure domain logic for dashboard metrics, week slice partitioning, diff calculations,
  * and DTO assembly. Zero DB, zero system clock dependency.
  */
-import { addDaysISO, formatHMM, isWeekend } from "@/lib/time";
+import { addDaysISO, formatHMM, formatHuman, isWeekend } from "@/lib/time";
 import { monthRange } from "@/features/monthly-summary/domain";
 import { weekRange } from "@/features/weekly-summary/domain";
 import type { WeekSummary } from "@/features/weekly-summary/service";
@@ -76,6 +76,67 @@ export function formatDiffMinutes(diffMinutes: number): FormattedDiff {
     isAhead,
     isBehind,
     isExact: false,
+  };
+}
+
+/**
+ * Formats a `work - target` difference in human units with an ASCII sign
+ * ("+1h 20m", "-40m", "0m"). Same flags as {@link formatDiffMinutes}.
+ */
+export function formatDiffHuman(diffMinutes: number): FormattedDiff {
+  if (diffMinutes === 0) {
+    return { formatted: "0m", isAhead: false, isBehind: false, isExact: true };
+  }
+  const isAhead = diffMinutes > 0;
+  return {
+    formatted: `${isAhead ? "+" : "-"}${formatHuman(Math.abs(diffMinutes))}`,
+    isAhead,
+    isBehind: !isAhead,
+    isExact: false,
+  };
+}
+
+/** Counts Monday–Friday days in the inclusive range `[from, to]` (0 when `to < from`). */
+export function countWorkdays(from: string, to: string): number {
+  let count = 0;
+  for (let d = from; d <= to; d = addDaysISO(d, 1)) {
+    if (!isWeekend(d)) count++;
+  }
+  return count;
+}
+
+/**
+ * Target minutes expected by now for the period `[from, to]`: completed workdays
+ * strictly before `todayKey` × daily target. Today itself is excluded (still in
+ * progress), so a period starting today or later expects 0.
+ */
+export function expectedMinutesSoFar({
+  from,
+  to,
+  todayKey,
+}: {
+  from: string;
+  to: string;
+  todayKey: string;
+}): number {
+  const yesterday = addDaysISO(todayKey, -1);
+  const lastCompleted = to < yesterday ? to : yesterday;
+  return countWorkdays(from, lastCompleted) * DAILY_TARGET_MINUTES;
+}
+
+/** Expected-so-far fields shared by the daily, weekly, and monthly DTOs. */
+function buildExpectedFields(
+  workMinutes: number,
+  from: string,
+  to: string,
+  todayKey: string,
+): { expectedMinutes: number; expectedDiff: FormattedDiff; expectedProgressPct: number; isFuture: boolean } {
+  const expectedMinutes = expectedMinutesSoFar({ from, to, todayKey });
+  return {
+    expectedMinutes,
+    expectedDiff: formatDiffHuman(workMinutes - expectedMinutes),
+    expectedProgressPct: calculateProgressPct(workMinutes, expectedMinutes),
+    isFuture: from > todayKey,
   };
 }
 
@@ -283,6 +344,7 @@ export function buildDailyProgressDTO(
   summary: DaySummaryDTO | null,
   anchorDate?: string,
   _timezone?: string,
+  todayKey?: string,
 ): DailyProgressDTO {
   const dateKey = summary?.workDate ?? anchorDate ?? "2026-09-01";
   const isWork = !isWeekend(dateKey);
@@ -299,6 +361,13 @@ export function buildDailyProgressDTO(
   const hasData = summary
     ? summary.attendance !== null || summary.timeEntries.length > 0
     : false;
+  // Without a reference "today" the day is treated as fully elapsed.
+  const expected = buildExpectedFields(
+    workMinutes,
+    dateKey,
+    dateKey,
+    todayKey ?? addDaysISO(dateKey, 1),
+  );
 
   return {
     date: dateKey,
@@ -321,6 +390,8 @@ export function buildDailyProgressDTO(
     categoryBreakdown: summary?.byCategory ?? [],
     warnings: summary?.warnings ?? [],
     timeEntriesCount: summary?.timeEntries.length ?? 0,
+    isWeekend: !isWork,
+    ...expected,
   };
 }
 
@@ -345,8 +416,11 @@ export function buildWeeklyProgressDTO(
         byCategory?: CategoryTotalDTO[];
       },
   anchorDate?: string,
+  todayKey?: string,
 ): WeeklyProgressDTO {
   const { from, to } = weekSummaryOrInput;
+  // Without a reference "today" the week is treated as fully elapsed.
+  const refToday = todayKey ?? addDaysISO(to, 1);
   const inputDays = weekSummaryOrInput.days ?? [];
 
   const daysByDate = new Map<string, Record<string, unknown>>();
@@ -419,6 +493,8 @@ export function buildWeeklyProgressDTO(
       status = "in_progress";
     }
 
+    const dayExpected = isWork && workDate < refToday ? DAILY_TARGET_MINUTES : 0;
+
     weekDayDTOs.push({
       workDate,
       dayOfWeek: dayName,
@@ -436,6 +512,10 @@ export function buildWeeklyProgressDTO(
       progressPct,
       hasData: Boolean(hasDayData),
       status,
+      expectedMinutes: dayExpected,
+      expectedDiff: formatDiffHuman(workMinutes - dayExpected),
+      isToday: workDate === refToday,
+      isFuture: workDate > refToday,
     });
   }
 
@@ -487,6 +567,7 @@ export function buildWeeklyProgressDTO(
     daysTracked: totals.daysTracked,
     days: weekDayDTOs,
     categoryBreakdown: weekSummaryOrInput.byCategory ?? [],
+    ...buildExpectedFields(totalWork, from, to, refToday),
   };
 }
 
@@ -514,6 +595,7 @@ export function buildMonthlyProgressDTO(
         byCategory?: CategoryTotalDTO[];
       },
   optionalMonthKey?: string,
+  todayKey?: string,
 ): MonthlyProgressDTO {
   const monthKey =
     ("monthKey" in input && input.monthKey
@@ -611,6 +693,8 @@ export function buildMonthlyProgressDTO(
       }).length,
     weekSlices,
     categoryBreakdown: input.byCategory ?? [],
+    // Without a reference "today" the month is treated as fully elapsed.
+    ...buildExpectedFields(totalWorkMinutes, from, to, todayKey ?? addDaysISO(to, 1)),
   };
 }
 

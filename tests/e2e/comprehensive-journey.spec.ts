@@ -41,7 +41,7 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     );
 
     // 4. Guided Tour spotlight
-    await page.getByTestId("today-guide-tour").click();
+    await page.getByTestId("sidebar-guide-tour").click();
     const tourModal = page.locator('[role="dialog"][aria-label*="Guide Tour"]');
     await expect(tourModal).toBeVisible({ timeout: 5_000 });
     await takeVisualScreenshot(
@@ -188,8 +188,6 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     // 11. Timeline screen & Manual entry dialog
     await page.getByTestId("nav-timeline").click();
     await expect(page.getByTestId("timeline")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("auto-sync-switch")).toBeVisible();
-    await expect(page.getByTestId("sync-to-sheet-button")).toBeVisible();
     await takeVisualScreenshot(
       page,
       testInfo,
@@ -309,6 +307,7 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     );
 
     // Sync to file dialog
+    await page.getByTestId("review-more-menu").click();
     await page.getByTestId("sync-file-button").click();
     const syncFileDialog = page.locator('[role="dialog"]').filter({
       hasText: "Sync to file",
@@ -391,10 +390,11 @@ test.describe("Comprehensive Desktop E2E Journey with Visual Verification", () =
     );
 
     // 15. Settings & Integrations
-    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("header-settings-button").click();
     await expect(page.getByTestId("settings-spreadsheet-id")).toBeVisible({
       timeout: 30_000,
     });
+    await expect(page.getByTestId("auto-sync-switch")).toBeVisible();
     await takeVisualScreenshot(
       page,
       testInfo,

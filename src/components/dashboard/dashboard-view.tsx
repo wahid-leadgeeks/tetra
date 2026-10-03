@@ -1,10 +1,9 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useRef, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
-  Calendar,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -24,6 +23,7 @@ import { MonthlyProgressSection } from "@/components/dashboard/monthly-progress-
 import { PersonalWeeklyReportTable } from "@/components/dashboard/personal-weekly-report-table";
 import { ProgressKpiCard } from "@/components/dashboard/progress-kpi-card";
 import { WeeklyProgressSection } from "@/components/dashboard/weekly-progress-section";
+import { formatDiffHuman } from "@/features/dashboard/domain";
 import type { DashboardDataDTO, MonthWeekSliceDTO } from "@/features/dashboard/types";
 import { getCategoryTheme } from "@/lib/categories";
 import { addDaysISO, formatHuman, todayKey } from "@/lib/time";
@@ -43,6 +43,7 @@ export function DashboardView({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const anchorDate = initialData.anchorDate;
   const timezone = initialData.timezone;
@@ -91,6 +92,19 @@ export function DashboardView({
     navigateTo(today);
   }
 
+  /** Opens the native date picker anchored under the period label. */
+  function openDatePicker() {
+    const input = dateInputRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      // showPicker is unsupported or blocked: fall back to focusing the input.
+      input.focus();
+      input.click();
+    }
+  }
+
   // Compute descriptive period label for active tab
   let periodLabel = formatDayLong(anchorDate);
   if (activeTab === "weekly") {
@@ -117,38 +131,20 @@ export function DashboardView({
             </p>
           </div>
 
-          {/* Quick actions: Today reset & Date jump picker */}
-          <div className="flex items-center gap-2">
-            {!isToday && (
-              <Button
-                variant="outline"
-                size="sm"
-                data-testid="dashboard-today-btn"
-                onClick={handleTodayJump}
-                disabled={isPending}
-                className="gap-1.5 text-xs"
-              >
-                <RotateCcw aria-hidden className="size-3.5" />
-                <span>Today</span>
-              </Button>
-            )}
-
-            <div className="flex items-center gap-1 rounded-lg border border-border/80 bg-background px-2 py-1 shadow-2xs">
-              <Calendar aria-hidden className="size-3.5 text-muted-foreground" />
-              <input
-                type="date"
-                data-testid="dashboard-date-picker"
-                value={anchorDate}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    navigateTo(e.target.value);
-                  }
-                }}
-                className="bg-transparent font-mono text-xs text-foreground outline-none cursor-pointer"
-                aria-label="Jump to specific date"
-              />
-            </div>
-          </div>
+          {/* Quick action: Today reset */}
+          {!isToday && (
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="dashboard-today-btn"
+              onClick={handleTodayJump}
+              disabled={isPending}
+              className="gap-1.5 self-start text-xs sm:self-auto"
+            >
+              <RotateCcw aria-hidden className="size-3.5" />
+              <span>Today</span>
+            </Button>
+          )}
         </div>
 
         {/* Period Navigation Bar */}
@@ -168,12 +164,33 @@ export function DashboardView({
             <ChevronLeft aria-hidden className="size-4" />
           </Button>
 
-          <p
-            data-testid="dashboard-period-label"
-            className="min-w-0 flex-1 truncate text-center font-heading text-sm sm:text-base font-semibold text-foreground"
-          >
-            {periodLabel}
-          </p>
+          <div className="relative flex min-w-0 flex-1 justify-center">
+            <button
+              type="button"
+              data-testid="dashboard-period-label"
+              onClick={openDatePicker}
+              disabled={isPending}
+              aria-label={`${periodLabel}. Jump to a specific date`}
+              className="min-w-0 max-w-full truncate rounded-md px-2 py-1 text-center font-heading text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-base"
+            >
+              {periodLabel}
+            </button>
+            {/* Native picker opened from the label; not focusable or visible on its own */}
+            <input
+              ref={dateInputRef}
+              type="date"
+              tabIndex={-1}
+              aria-hidden
+              data-testid="dashboard-period-date-input"
+              value={anchorDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  navigateTo(e.target.value);
+                }
+              }}
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-0 w-full opacity-0"
+            />
+          </div>
 
           <Button
             variant="outline"
@@ -244,7 +261,9 @@ export function DashboardView({
               title={`${initialData.daily.dayOfWeek} Work`}
               workMinutes={initialData.daily.workMinutes}
               targetMinutes={initialData.daily.targetMinutes}
-              diff={initialData.daily.diff}
+              diff={formatDiffHuman(initialData.daily.diffMinutes)}
+              diffLabel="vs 8h target"
+              weekend={initialData.daily.isWeekend}
               progressPct={initialData.daily.progressPct}
               attendanceMinutes={initialData.daily.attendanceMinutes}
               breakMinutes={initialData.daily.breakMinutes}
@@ -260,6 +279,8 @@ export function DashboardView({
               workMinutes={initialData.weekly.workMinutes}
               targetMinutes={initialData.weekly.targetMinutes}
               diff={initialData.weekly.diff}
+              expectedMinutes={initialData.weekly.expectedMinutes}
+              expectedDiff={initialData.weekly.expectedDiff}
               progressPct={initialData.weekly.progressPct}
               daysTracked={initialData.weekly.daysTracked}
               workdaysCount={initialData.weekly.workdaysCount}
@@ -276,6 +297,8 @@ export function DashboardView({
               workMinutes={initialData.monthly.workMinutes}
               targetMinutes={initialData.monthly.targetMinutes}
               diff={initialData.monthly.diff}
+              expectedMinutes={initialData.monthly.expectedMinutes}
+              expectedDiff={initialData.monthly.expectedDiff}
               progressPct={initialData.monthly.progressPct}
               daysTracked={initialData.monthly.daysTracked}
               workdaysCount={initialData.monthly.totalWorkdays}

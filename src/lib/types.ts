@@ -98,7 +98,8 @@ export type DayWarning =
   | { type: "gap"; message: string; minutes: number }
   | { type: "open_task"; message: string }
   | { type: "missing_clock_out"; message: string }
-  | { type: "no_work"; message: string };
+  | { type: "no_work"; message: string }
+  | { type: "short_break"; message: string; breakId: string; seconds: number };
 
 export interface DaySummaryDTO {
   workDate: string;

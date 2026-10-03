@@ -11,13 +11,25 @@ import {
   X,
 } from "lucide-react"
 
+import { useIsMobile } from "@/hooks/use-media-query"
+
+/** Clears the 3.5rem sticky header so mobile toasts sit just below it. */
+const MOBILE_TOAST_OFFSET = { top: "4rem" }
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  // Mobile: top-center below the header, away from the bottom nav and the
+  // sticky task bar. `mobileOffset` covers sonner's own <=600px mode;
+  // `offset` covers 601-767px, which sonner treats as desktop.
+  const isMobile = useIsMobile()
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      position={isMobile ? "top-center" : "bottom-right"}
+      offset={isMobile ? MOBILE_TOAST_OFFSET : undefined}
+      mobileOffset={MOBILE_TOAST_OFFSET}
       closeButton={true}
       richColors={true}
       gap={14}

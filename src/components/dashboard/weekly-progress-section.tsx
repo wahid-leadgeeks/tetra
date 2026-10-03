@@ -1,20 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import {
-  ArrowRight,
-  BarChart3,
-  Calendar,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, BarChart3, Calendar } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CategoryPieChart } from "@/components/ui/category-pie-chart";
+import { Card, CardContent } from "@/components/ui/card";
 import { ProgressKpiCard } from "@/components/dashboard/progress-kpi-card";
+import { formatDiffHuman } from "@/features/dashboard/domain";
 import type { WeekDayProgressDTO, WeeklyProgressDTO } from "@/features/dashboard/types";
-import { getCategoryTheme } from "@/lib/categories";
 import { formatHuman } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +18,9 @@ export interface WeeklyProgressSectionProps {
 }
 
 function getDayStatusBadge(day: WeekDayProgressDTO) {
-  if (!day.isWorkday && day.workMinutes === 0) {
+  if (!day.isWorkday) {
+    // A weekend with no work renders "Weekend" in the card body instead.
+    if (day.workMinutes === 0) return null;
     return (
       <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/60">
         Weekend
@@ -48,6 +44,8 @@ function getDayStatusBadge(day: WeekDayProgressDTO) {
     );
   }
 
+  if (day.isFuture || (day.isToday && !day.hasData)) return null;
+
   return (
     <Badge variant="outline" className="text-[10px] text-muted-foreground">
       {day.hasData ? "Partial" : "Off"}
@@ -59,8 +57,6 @@ export function WeeklyProgressSection({
   weekly,
   onSelectDay,
 }: WeeklyProgressSectionProps) {
-  const activeCategories = weekly.categoryBreakdown.filter((c) => c.minutes > 0);
-
   return (
     <div data-testid="weekly-progress-section" className="grid gap-6">
       {/* Weekly KPI Overview */}
@@ -70,12 +66,14 @@ export function WeeklyProgressSection({
         workMinutes={weekly.workMinutes}
         targetMinutes={weekly.targetMinutes}
         diff={weekly.diff}
+        expectedMinutes={weekly.expectedMinutes}
+        expectedDiff={weekly.expectedDiff}
         progressPct={weekly.progressPct}
         daysTracked={weekly.daysTracked}
         workdaysCount={weekly.workdaysCount}
         breakMinutes={weekly.breakMinutes}
         icon={BarChart3}
-        subtext={`${weekly.dateRangeLabel} (${weekly.workdaysCount} workdays × 8:00)`}
+        subtext={`${weekly.dateRangeLabel} (${weekly.workdaysCount} workdays × 8h)`}
       />
 
       {/* 7-Day Card Grid */}
@@ -95,6 +93,9 @@ export function WeeklyProgressSection({
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-7">
           {weekly.days.map((day) => {
             const isClickable = Boolean(onSelectDay);
+            const isWeekendOff = !day.isWorkday && day.workMinutes === 0;
+            // Past workdays compare to their expected 8h; today compares to its 8h target.
+            const dayDiff = day.isToday ? formatDiffHuman(day.diffMinutes) : day.expectedDiff;
 
             return (
               <Card
@@ -124,158 +125,90 @@ export function WeeklyProgressSection({
                   </div>
 
                   {/* Logged time vs target */}
-                  <div className="flex items-baseline justify-between gap-1 py-1">
-                    <span className="font-mono text-base font-bold text-foreground tabular-nums">
-                      {formatHuman(day.workMinutes)}
-                    </span>
-                    <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-                      / {day.isWorkday ? "8h" : "0h"}
-                    </span>
-                  </div>
+                  {isWeekendOff ? (
+                    <p className="py-1 font-heading text-base font-semibold text-muted-foreground">
+                      Weekend
+                    </p>
+                  ) : (
+                    <div className="flex items-baseline justify-between gap-1 py-1">
+                      <span className="font-mono text-base font-bold text-foreground tabular-nums">
+                        {formatHuman(day.workMinutes)}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {day.isWorkday ? "/ 8h" : "no target"}
+                      </span>
+                    </div>
+                  )}
 
-                  {/* Diff badge */}
+                  {/* Diff badge (vs expected; future days have nothing to compare yet) */}
                   {day.isWorkday && (
                     <div className="pt-1">
-                      <Badge
-                        variant={day.diff.isExact ? "outline" : "default"}
-                        className={cn(
-                          "font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0",
-                          day.diff.isAhead &&
-                            "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                          day.diff.isBehind &&
-                            "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                          day.diff.isExact && "border-border/60 bg-muted/40 text-muted-foreground",
-                        )}
-                      >
-                        {day.diff.formatted}
-                      </Badge>
+                      {day.isFuture ? (
+                        <span className="font-mono text-[10px] text-muted-foreground">—</span>
+                      ) : (
+                        <Badge
+                          variant={dayDiff.isExact ? "outline" : "default"}
+                          className={cn(
+                            "font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0",
+                            dayDiff.isAhead &&
+                              "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                            dayDiff.isBehind &&
+                              "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                            dayDiff.isExact && "border-border/60 bg-muted/40 text-muted-foreground",
+                          )}
+                        >
+                          {dayDiff.formatted}
+                        </Badge>
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Progress bar */}
-                <div className="pt-3">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted shadow-inner">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-300",
-                        day.diff.isAhead || day.progressPct >= 100
-                          ? "bg-emerald-500"
-                          : "bg-primary",
+                {day.isWorkday && (
+                  <div className="pt-3">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted shadow-inner">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-300",
+                          day.progressPct >= 100 ? "bg-emerald-500" : "bg-primary",
+                        )}
+                        style={{
+                          width: `${Math.min(100, Math.max(0, day.progressPct))}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between pt-1 text-[10px] text-muted-foreground tabular-nums">
+                      <span>{day.progressPct}%</span>
+                      {day.isAnchorDate && (
+                        <span className="font-semibold text-primary">Active</span>
                       )}
-                      style={{
-                        width: `${Math.min(100, Math.max(0, day.progressPct))}%`,
-                      }}
-                    />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between pt-1 text-[10px] text-muted-foreground tabular-nums">
-                    <span>{day.progressPct}%</span>
-                    {day.isAnchorDate && (
-                      <span className="font-semibold text-primary">Active</span>
-                    )}
-                  </div>
-                </div>
+                )}
               </Card>
             );
           })}
         </div>
       </div>
 
-      {/* Weekly Category Distribution */}
+      {/* Weekly Report link: category breakdown lives in /reports/week */}
       <Card className="border-border/80 bg-card shadow-xs">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles aria-hidden className="size-4 text-primary" />
-              <CardTitle className="font-heading text-sm font-semibold text-foreground">
-                Weekly Category Distribution
-              </CardTitle>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {activeCategories.length} active of {weekly.categoryBreakdown.length} categories
-            </span>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <div className="grid gap-0.5">
+            <p className="font-heading text-sm font-semibold text-foreground">Weekly Report</p>
+            <p className="text-xs text-muted-foreground">
+              Category breakdown and per-day totals
+            </p>
           </div>
-          <CardDescription className="text-xs text-muted-foreground">
-            Time allocated across categories for Week {weekly.weekNumber}
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="grid gap-4">
-          <div className="flex justify-center py-2">
-            <CategoryPieChart
-              categories={weekly.categoryBreakdown}
-              totalMinutes={weekly.workMinutes}
-              size="md"
-              centerTitle="Weekly"
-              ariaLabel="Weekly category time distribution pie chart"
-              testId="weekly-category-pie-chart"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            {weekly.categoryBreakdown.map((category) => {
-              const theme = getCategoryTheme(category.key);
-              const isZero = category.minutes === 0;
-              const pct =
-                weekly.workMinutes > 0
-                  ? Math.round((category.minutes / weekly.workMinutes) * 100)
-                  : 0;
-
-              return (
-                <div
-                  key={category.key}
-                  className={cn(
-                    "flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                    !isZero && "hover:bg-muted/40",
-                  )}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "size-2 rounded-full shrink-0",
-                        isZero ? "bg-muted-foreground/30" : theme.dotClass,
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "truncate font-medium",
-                        isZero ? "text-muted-foreground" : "text-foreground",
-                      )}
-                    >
-                      {category.name}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span
-                      className={cn(
-                        "font-mono tabular-nums",
-                        isZero ? "text-muted-foreground/60" : "font-semibold text-foreground",
-                      )}
-                    >
-                      {formatHuman(category.minutes)}
-                    </span>
-                    <span className="w-9 text-right font-mono text-muted-foreground tabular-nums">
-                      {pct}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/reports/week?date=${weekly.from}`} data-testid="dashboard-open-week-report-link">
+              <span>Open Weekly Report</span>
+              <ArrowRight aria-hidden className="size-3.5" />
+            </Link>
+          </Button>
         </CardContent>
       </Card>
-
-      {/* Action link */}
-      <div className="flex justify-end pt-1">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/reports/week?date=${weekly.from}`}>
-            <span>Open Full Weekly Report</span>
-            <ArrowRight aria-hidden className="size-3.5" />
-          </Link>
-        </Button>
-      </div>
     </div>
   );
 }

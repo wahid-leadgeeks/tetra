@@ -171,7 +171,7 @@ export function CalendarSettingsCard() {
 
       <CardContent>
         {loading ? (
-          <div className="grid gap-3" aria-label="Loading calendar settings">
+          <div className="grid gap-3" aria-label="Loading calendar settings" data-loading="true">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}

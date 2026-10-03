@@ -6,6 +6,9 @@ import {
   buildMonthlyProgressDTO,
   buildWeeklyProgressDTO,
   calculateProgressPct,
+  countWorkdays,
+  expectedMinutesSoFar,
+  formatDiffHuman,
   formatDiffMinutes,
   formatMonthLabel,
   formatSliceDateRange,
@@ -685,5 +688,178 @@ describe("formatting helpers", () => {
   it("computes ISO week numbers accurately", () => {
     expect(getISOWeekNumber("2026-01-01")).toBe(1);
     expect(getISOWeekNumber("2026-09-08")).toBe(37);
+  });
+});
+
+/* ========================================================================== */
+/* 9. Expected-so-far targets, human diffs, weekend flags                     */
+/* ========================================================================== */
+describe("countWorkdays", () => {
+  it("counts Mon–Fri inclusively across a weekend", () => {
+    // Thu 2026-09-10 .. Tue 2026-09-15 → Thu, Fri, Mon, Tue
+    expect(countWorkdays("2026-09-10", "2026-09-15")).toBe(4);
+    expect(countWorkdays("2026-09-12", "2026-09-13")).toBe(0);
+  });
+
+  it("counts across a month boundary and returns 0 for an empty range", () => {
+    // Wed 2026-09-30 .. Mon 2026-10-05 → Wed, Thu, Fri, Mon
+    expect(countWorkdays("2026-09-30", "2026-10-05")).toBe(4);
+    expect(countWorkdays("2026-09-10", "2026-09-09")).toBe(0);
+  });
+});
+
+describe("expectedMinutesSoFar (completed workdays before today)", () => {
+  const week = { from: "2026-09-07", to: "2026-09-13" };
+
+  it("mid-week Wednesday expects Mon + Tue only (today excluded)", () => {
+    expect(expectedMinutesSoFar({ ...week, todayKey: "2026-09-09" })).toBe(2 * 480);
+  });
+
+  it("weekend anchor expects the full five workdays", () => {
+    expect(expectedMinutesSoFar({ ...week, todayKey: "2026-09-12" })).toBe(5 * 480);
+  });
+
+  it("future week and a week starting today expect 0", () => {
+    expect(expectedMinutesSoFar({ ...week, todayKey: "2026-09-01" })).toBe(0);
+    expect(expectedMinutesSoFar({ ...week, todayKey: "2026-09-07" })).toBe(0);
+  });
+
+  it("past week expects the full target", () => {
+    expect(expectedMinutesSoFar({ ...week, todayKey: "2026-10-03" })).toBe(5 * 480);
+  });
+
+  it("partially elapsed month counts workdays before today", () => {
+    // Sep 2026 starts Tue; before Wed 16th: Sep 1–4 (4), 7–11 (5), 14–15 (2)
+    expect(
+      expectedMinutesSoFar({ from: "2026-09-01", to: "2026-09-30", todayKey: "2026-09-16" }),
+    ).toBe(11 * 480);
+  });
+});
+
+describe("formatDiffHuman", () => {
+  it("uses an ASCII '+' / '-' sign with human units", () => {
+    expect(formatDiffHuman(80)).toEqual({
+      formatted: "+1h 20m",
+      isAhead: true,
+      isBehind: false,
+      isExact: false,
+    });
+    expect(formatDiffHuman(-40)).toEqual({
+      formatted: "-40m",
+      isAhead: false,
+      isBehind: true,
+      isExact: false,
+    });
+    expect(formatDiffHuman(-130).formatted).toBe("-2h 10m");
+    expect(formatDiffHuman(-120).formatted).toBe("-2h");
+    // Pin ASCII hyphen-minus (U+002D), not U+2212
+    expect(formatDiffHuman(-1).formatted.charCodeAt(0)).toBe(0x2d);
+  });
+
+  it("returns exact 0m for zero and -0", () => {
+    const exact = { formatted: "0m", isAhead: false, isBehind: false, isExact: true };
+    expect(formatDiffHuman(0)).toEqual(exact);
+    expect(formatDiffHuman(-0)).toEqual(exact);
+  });
+});
+
+describe("builders expose expected-so-far fields", () => {
+  it("weekly: today in progress is excluded from expected but its work still counts", () => {
+    // Today = Wed 2026-09-09; Mon 8h, Tue 6h, Wed 3h so far
+    const weekly = buildWeeklyProgressDTO(
+      {
+        from: "2026-09-07",
+        to: "2026-09-13",
+        days: [
+          { workDate: "2026-09-07", workMinutes: 480 },
+          { workDate: "2026-09-08", workMinutes: 360 },
+          { workDate: "2026-09-09", workMinutes: 180 },
+        ],
+      },
+      "2026-09-09",
+      "2026-09-09",
+    );
+
+    // Existing full-week fields unchanged
+    expect(weekly.targetMinutes).toBe(2400);
+    expect(weekly.diff.formatted).toBe("-23:00");
+
+    expect(weekly.expectedMinutes).toBe(960);
+    expect(weekly.expectedDiff.formatted).toBe("+1h");
+    expect(weekly.expectedProgressPct).toBe(106);
+    expect(weekly.isFuture).toBe(false);
+
+    const [mon, tue, wed, thu, , sat] = weekly.days;
+    expect(mon!.expectedMinutes).toBe(480);
+    expect(mon!.expectedDiff.formatted).toBe("0m");
+    expect(tue!.expectedDiff.formatted).toBe("-2h");
+    expect(wed!.isToday).toBe(true);
+    expect(wed!.expectedMinutes).toBe(0);
+    expect(thu!.isFuture).toBe(true);
+    expect(thu!.expectedMinutes).toBe(0);
+    expect(sat!.expectedMinutes).toBe(0);
+  });
+
+  it("weekly: mid-week behind pace reads in human units, not H:MM", () => {
+    const weekly = buildWeeklyProgressDTO(
+      {
+        from: "2026-09-07",
+        to: "2026-09-13",
+        days: [
+          { workDate: "2026-09-07", workMinutes: 400 },
+          { workDate: "2026-09-08", workMinutes: 430 },
+        ],
+      },
+      "2026-09-09",
+      "2026-09-09",
+    );
+    expect(weekly.expectedDiff.formatted).toBe("-2h 10m");
+  });
+
+  it("weekly: future week is flagged and expects nothing", () => {
+    const weekly = buildWeeklyProgressDTO(
+      { from: "2026-09-14", to: "2026-09-20" },
+      "2026-09-14",
+      "2026-09-09",
+    );
+    expect(weekly.isFuture).toBe(true);
+    expect(weekly.expectedMinutes).toBe(0);
+    expect(weekly.expectedDiff.isExact).toBe(true);
+  });
+
+  it("weekly: omitted todayKey treats the week as elapsed (expected = full target)", () => {
+    const weekly = buildWeeklyProgressDTO({ from: "2026-09-07", to: "2026-09-13" }, "2026-09-07");
+    expect(weekly.expectedMinutes).toBe(weekly.targetMinutes);
+    expect(weekly.days.every((d) => !d.isFuture)).toBe(true);
+  });
+
+  it("monthly: partially elapsed month compares to workdays before today", () => {
+    const monthly = buildMonthlyProgressDTO(
+      { monthKey: "2026-09", summaries: [{ workDate: "2026-09-01", workMinutes: 480 }] },
+      "2026-09",
+      "2026-09-16",
+    );
+    expect(monthly.totalTargetMinutes).toBe(22 * 480);
+    expect(monthly.formattedTotalTarget).toBe("176:00");
+    expect(monthly.expectedMinutes).toBe(11 * 480);
+    expect(monthly.expectedDiff.formatted).toBe("-80h");
+  });
+
+  it("daily: weekend flag, and today's expected is 0 while past workdays expect 8h", () => {
+    const sat = buildDailyProgressDTO(null, "2026-09-12", "Asia/Jakarta", "2026-09-12");
+    expect(sat.isWeekend).toBe(true);
+    expect(sat.expectedMinutes).toBe(0);
+
+    const today = buildDailyProgressDTO(null, "2026-09-09", "Asia/Jakarta", "2026-09-09");
+    expect(today.isWeekend).toBe(false);
+    expect(today.expectedMinutes).toBe(0);
+    expect(today.diff.formatted).toBe("-8:00");
+
+    const past = buildDailyProgressDTO(null, "2026-09-08", "Asia/Jakarta", "2026-09-09");
+    expect(past.expectedMinutes).toBe(480);
+    expect(past.expectedDiff.formatted).toBe("-8h");
+
+    const future = buildDailyProgressDTO(null, "2026-09-10", "Asia/Jakarta", "2026-09-09");
+    expect(future.isFuture).toBe(true);
   });
 });

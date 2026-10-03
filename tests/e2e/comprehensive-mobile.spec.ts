@@ -53,7 +53,9 @@ test.describe("Comprehensive Mobile Responsive E2E Journey with Visual Verificat
     await dialog.getByTestId("task-name-input").fill("Mobile On-the-Go Task");
     await dialog.getByTestId("start-task").click();
 
-    // Verify Sticky Task Bar appears on mobile
+    // The sticky bar only appears once the active-task card scrolls out of view
+    await expect(page.getByTestId("active-timer")).toBeAttached({ timeout: 10_000 });
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await expect(page.getByTestId("sticky-timer")).toBeVisible({
       timeout: 10_000,
     });
@@ -71,6 +73,20 @@ test.describe("Comprehensive Mobile Responsive E2E Journey with Visual Verificat
     await expect(page.getByTestId("sticky-timer")).toBeHidden({
       timeout: 10_000,
     });
+
+    // 4b. Mobile bottom-nav "More" sheet
+    await page.getByTestId("mobile-nav-more").click();
+    const moreSheet = page.getByTestId("mobile-more-sheet");
+    await expect(moreSheet).toBeVisible({ timeout: 10_000 });
+    await takeVisualScreenshot(
+      page,
+      testInfo,
+      "mobile/09-mobile-more-sheet.png",
+      "Mobile bottom-nav More sheet with Dashboard, Calendar, Guide tour and Sign out",
+      "Mobile Experience",
+    );
+    await page.keyboard.press("Escape");
+    await expect(moreSheet).toBeHidden({ timeout: 10_000 });
 
     // 5. Mobile Timeline view
     await page.goto("/timeline");
@@ -119,6 +135,20 @@ test.describe("Comprehensive Mobile Responsive E2E Journey with Visual Verificat
       "Mobile Tasks view with one-tap start buttons and star favorites",
       "Mobile Experience",
     );
+
+    // 8b. Mobile Tasks filters bottom sheet
+    await page.getByTestId("tasks-filters-button").click();
+    const filtersSheet = page.getByTestId("tasks-filters-sheet");
+    await expect(filtersSheet).toBeVisible({ timeout: 10_000 });
+    await takeVisualScreenshot(
+      page,
+      testInfo,
+      "mobile/10-mobile-tasks-filters-sheet.png",
+      "Mobile Tasks filters bottom sheet with quick filters, category, sort and hide-done",
+      "Mobile Experience",
+    );
+    await page.keyboard.press("Escape");
+    await expect(filtersSheet).toBeHidden({ timeout: 10_000 });
 
     // 9. Mobile Settings view
     await page.goto("/settings");

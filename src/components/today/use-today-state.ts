@@ -150,21 +150,28 @@ export function useTodayState(timezone: string) {
       }
     >("clock-in", "/api/attendance/start");
     if (attendance) {
-      if (attendance.autoSync?.attempted) {
-        if (attendance.autoSync.success) {
-          if (attendance.autoSync.idempotent) {
+      // Apply the open attendance now: `pending` clears before `settle()`
+      // re-fetches the day, and a task started in that window must not try
+      // to clock in a second time ("Already clocked in").
+      const { autoSync, ...openAttendance } = attendance;
+      setSummary((prev) =>
+        prev ? { ...prev, attendance: openAttendance } : prev,
+      );
+      if (autoSync?.attempted) {
+        if (autoSync.success) {
+          if (autoSync.idempotent) {
             toast.success(
               "Work day started · Clock-in already set in Google Sheet",
             );
           } else {
             toast.success(
-              `Work day started · Clock-in synced to Google Sheet (${attendance.autoSync.cell}: ${attendance.autoSync.value})`,
+              `Work day started · Clock-in synced to Google Sheet (${autoSync.cell}: ${autoSync.value})`,
             );
           }
         } else {
           toast.success("Work day started");
           toast.error(
-            `Google Sheet notice: ${attendance.autoSync.message ?? "Could not sync clock-in to sheet"}`,
+            `Google Sheet notice: ${autoSync.message ?? "Could not sync clock-in to sheet"}`,
           );
         }
       } else {
