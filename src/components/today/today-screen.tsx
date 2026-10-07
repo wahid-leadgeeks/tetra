@@ -6,11 +6,12 @@ import { Coffee, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ActiveTaskCard } from "@/components/today/active-task-card";
+import { EntryTaskDialog } from "@/components/tasks/entry-task-dialog";
 import { EmptyStateCard } from "@/components/today/empty-state-card";
 import { StartTaskDialog } from "@/components/today/start-task-dialog";
 import { TodayOverviewPanel } from "@/components/today/today-overview-panel";
 import { TodayTasksCard } from "@/components/today/today-tasks-card";
-import { CalendarScheduleCard } from "@/components/today/calendar-schedule-card";
+import { CalendarScheduleCard } from "@/components/calendar/calendar-schedule-card";
 import { QuickStart } from "@/components/today/quick-start";
 import { StickyTaskBar } from "@/components/today/sticky-task-bar";
 import { StopTaskConfirmDialog } from "@/components/today/stop-task-confirm-dialog";
@@ -49,6 +50,7 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
 
   const {
     summary,
+    categories,
     loadState,
     pending,
     refresh,
@@ -67,6 +69,8 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
     rootMargin: "-56px 0px 0px 0px",
   });
 
+  const [taskDialogEntry, setTaskDialogEntry] = useState<TimeEntryDTO | null>(null);
+  const [tasksRefreshKey, setTasksRefreshKey] = useState(0);
   const [logActivityOpen, setLogActivityOpen] = useState(false);
   const [switchTaskOpen, setSwitchTaskOpen] = useState(false);
   const [stopWorkConfirmOpen, setStopWorkConfirmOpen] = useState(false);
@@ -204,6 +208,7 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
                       onResumeTask={resumeTask}
                       onStopTask={() => setStopTaskConfirmOpen(true)}
                       onSwitchTask={() => setSwitchTaskOpen(true)}
+                      onOpenTask={() => setTaskDialogEntry(activeEntry)}
                     />
                   </div>
                 ) : (
@@ -291,11 +296,13 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
               <TodayTasksCard
                 timezone={timezone}
                 onRefreshToday={() => void refresh()}
+                refreshKey={tasksRefreshKey}
               />
 
               {/* Google Calendar Today's Schedule */}
               <CalendarScheduleCard
                 timezone={timezone}
+                syncAfterImport
                 onImportSuccess={() => void refresh()}
               />
 
@@ -343,6 +350,19 @@ export function TodayScreen({ timezone, nowIso }: TodayScreenProps) {
           onSwitch={startTask}
         />
       ) : null}
+
+      <EntryTaskDialog
+        entry={taskDialogEntry}
+        categories={categories}
+        onOpenChange={(o) => {
+          if (!o) setTaskDialogEntry(null);
+        }}
+        onSaved={() => {
+          setTaskDialogEntry(null);
+          void refresh();
+          setTasksRefreshKey((k) => k + 1);
+        }}
+      />
 
       <StopTaskConfirmDialog
         stopTaskConfirmOpen={stopTaskConfirmOpen}

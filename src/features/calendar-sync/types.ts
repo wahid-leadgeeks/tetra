@@ -44,6 +44,9 @@ export interface CalendarItemDTO {
 export interface ImportCalendarItemInput {
   eventId: string;
   title: string;
+  /** Original (unedited) event title, used for dedupe when `title` was edited. */
+  sourceTitle?: string;
+  isAllDay?: boolean;
   categoryKey: string;
   startedAt: string;
   endedAt: string;
@@ -55,7 +58,10 @@ export interface ImportCalendarEventsInputDTO {
 }
 
 export interface ImportCalendarEventsResultDTO {
+  /** Entries actually inserted (skipped duplicates excluded). */
   importedCount: number;
+  skippedCount: number;
+  skippedEventIds: string[];
   createdTaskIds: string[];
   createdEntryIds: string[];
 }

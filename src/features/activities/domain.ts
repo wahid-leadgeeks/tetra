@@ -8,7 +8,8 @@ import type {
   CategoryDTO,
   EntrySource,
   EntryStatus,
-  TaskDTO,
+  TaskPriority,
+  TaskStatus,
   TimeEntryDTO,
 } from "@/lib/types";
 
@@ -179,10 +180,21 @@ export function validateNoOverlap(
   if (conflicts.length > 0) throw new OverlapError(conflicts);
 }
 
+/** Task row fields needed to build a TimeEntryDTO (structurally the joined `tasks` row). */
+export interface EntryTaskRow {
+  name: string;
+  categoryId: string;
+  status: string;
+  priority: string;
+  description: string | null;
+  dueAt: Date | null;
+  isFavorite: boolean;
+}
+
 /** Map a stored row (plus joined task/category) to the API contract. */
 export function toTimeEntryDTO(
   entry: TimeEntryCore,
-  task: Pick<TaskDTO, "name">,
+  task: EntryTaskRow,
   category: Pick<CategoryDTO, "key" | "name">,
   now: Date,
 ): TimeEntryDTO {
@@ -202,5 +214,13 @@ export function toTimeEntryDTO(
     durationMinutes: running ? null : entryDurationMinutes(entry, now),
     pausedSeconds: entry.pausedSeconds,
     pausedAt: entry.pausedAt === null ? null : entry.pausedAt.toISOString(),
+    taskDetails: {
+      categoryId: task.categoryId,
+      status: task.status as TaskStatus,
+      priority: task.priority as TaskPriority,
+      description: task.description,
+      dueAt: task.dueAt?.toISOString() ?? null,
+      isFavorite: task.isFavorite,
+    },
   };
 }

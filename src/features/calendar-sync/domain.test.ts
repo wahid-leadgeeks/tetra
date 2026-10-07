@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOverlappingEntries, processCalendarEvent } from "./domain";
+import { findOverlappingEntries, isMatchingImportedEntry, processCalendarEvent } from "./domain";
 import { DEFAULT_CATEGORY_RULES, matchCategory } from "./rules";
 import type { RawCalendarEvent } from "./google";
 import type { TimeEntryDTO } from "@/lib/types";
@@ -273,5 +273,47 @@ describe("Calendar Event Processing", () => {
     expect(suggestion!.overlappingEntryIds).toHaveLength(0);
     expect(suggestion!.meetUrl).toBe("https://meet.google.com/abc-defg-hij");
     expect(suggestion!.suggestedCategoryKey).toBe("meeting");
+  });
+
+  it("flags an all-day event that matches an existing entry as imported", () => {
+    const allDayEntry: TimeEntryDTO[] = [
+      {
+        ...existingDTOs[0],
+        id: "e-holiday",
+        taskName: "National Holiday",
+        startedAt: "2026-09-08T00:00:00.000Z",
+        endedAt: "2026-09-09T00:00:00.000Z",
+        durationMinutes: 1440,
+      },
+    ];
+    const raw: RawCalendarEvent = {
+      id: "gcal-holiday",
+      summary: "National Holiday",
+      start: { date: "2026-09-08" },
+      end: { date: "2026-09-09" },
+    };
+    const suggestion = processCalendarEvent(raw, allDayEntry, "Asia/Jakarta");
+    expect(suggestion!.isAllDay).toBe(true);
+    expect(suggestion!.isImported).toBe(true);
+    expect(suggestion!.hasOverlap).toBe(false);
+  });
+});
+
+describe("isMatchingImportedEntry", () => {
+  const start = new Date("2026-09-08T02:00:00.000Z");
+  const end = new Date("2026-09-08T03:00:00.000Z");
+  const span = (taskName: string) => ({ id: "e", taskName, startedAt: start, endedAt: end });
+
+  it("never matches when either name is empty or whitespace", () => {
+    expect(isMatchingImportedEntry(span("Standup"), "", start, end)).toBe(false);
+    expect(isMatchingImportedEntry(span("Standup"), "   ", start, end)).toBe(false);
+    expect(isMatchingImportedEntry(span(""), "Standup", start, end)).toBe(false);
+    expect(isMatchingImportedEntry(span(" "), " ", start, end)).toBe(false);
+  });
+
+  it("still matches equal / substring names within the 2-minute window", () => {
+    expect(isMatchingImportedEntry(span("Daily Standup"), "standup", start, end)).toBe(true);
+    const lateEnd = new Date(end.getTime() + 3 * 60_000);
+    expect(isMatchingImportedEntry(span("Standup"), "Standup", start, lateEnd)).toBe(false);
   });
 });

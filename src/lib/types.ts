@@ -48,6 +48,16 @@ export interface TaskDTO {
   createdAt?: string;
 }
 
+/** Task fields carried on an entry so entry-based UIs can show/edit task details. */
+export interface EntryTaskDetailsDTO {
+  categoryId: string; // the task's own category (may differ from the entry's)
+  status: TaskStatus;
+  priority: TaskPriority;
+  description: string | null;
+  dueAt: string | null;
+  isFavorite: boolean;
+}
+
 export interface TimeEntryDTO {
   id: string;
   taskId: string;
@@ -66,6 +76,8 @@ export interface TimeEntryDTO {
   pausedSeconds: number;
   /** Start of the currently open pause; null unless status is "paused". */
   pausedAt: string | null;
+  /** Details of the entry's task; optional so fixtures and reports can omit it. */
+  taskDetails?: EntryTaskDetailsDTO;
 }
 
 export interface BreakDTO {

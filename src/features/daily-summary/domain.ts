@@ -9,6 +9,8 @@ import type {
   DaySummaryDTO,
   DayWarning,
   ReviewState,
+  TaskPriority,
+  TaskStatus,
   TimeEntryDTO,
 } from "@/lib/types";
 import { envelopeAttendanceSpan } from "@/features/attendance/domain";
@@ -282,6 +284,18 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
     durationMinutes: entry.status === "active" ? null : minutes,
     pausedSeconds: entry.pausedSeconds,
     pausedAt: entry.pausedAt?.toISOString() ?? null,
+    ...(entry.taskDetails
+      ? {
+          taskDetails: {
+            categoryId: entry.taskDetails.categoryId,
+            status: entry.taskDetails.status as TaskStatus,
+            priority: entry.taskDetails.priority as TaskPriority,
+            description: entry.taskDetails.description,
+            dueAt: entry.taskDetails.dueAt?.toISOString() ?? null,
+            isFavorite: entry.taskDetails.isFavorite,
+          },
+        }
+      : {}),
   }));
 
   return {

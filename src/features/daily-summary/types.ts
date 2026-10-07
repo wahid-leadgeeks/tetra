@@ -36,6 +36,14 @@ export interface DaySummaryEntryInput {
   pausedSeconds: number;
   notes: string | null;
   source: EntrySource;
+  taskDetails?: {
+    categoryId: string;
+    status: string;
+    priority: string;
+    description: string | null;
+    dueAt: Date | null;
+    isFavorite: boolean;
+  };
 }
 
 export interface DaySummaryCategoryInput {

@@ -22,7 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CalendarEventSuggestionDTO } from "@/features/calendar-sync/types";
+import type {
+  CalendarEventSuggestionDTO,
+  ImportCalendarEventsResultDTO,
+} from "@/features/calendar-sync/types";
 import { CATEGORIES } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 
@@ -30,8 +33,7 @@ interface ImportCalendarDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   events: CalendarEventSuggestionDTO[];
-  onImportSuccess: () => void;
-  dayKey?: string;
+  onImportSuccess: (result: ImportCalendarEventsResultDTO) => void;
 }
 
 interface EditableEventItem {
@@ -47,6 +49,8 @@ interface EditableEventItem {
   hasOverlap: boolean;
   overlappingTaskNames: string[];
   isImported: boolean;
+  isAllDay: boolean;
+  sourceTitle: string;
 }
 
 export function ImportCalendarDialog({
@@ -54,13 +58,14 @@ export function ImportCalendarDialog({
   onOpenChange,
   events,
   onImportSuccess,
-  dayKey,
 }: ImportCalendarDialogProps) {
   const [items, setItems] = useState<EditableEventItem[]>(() =>
     events.map((e) => ({
       id: e.id,
-      selected: !e.isImported && !e.hasOverlap, // uncheck if already imported or overlapping
+      // Unchecked when already imported, overlapping, or all-day.
+      selected: !e.isImported && !e.hasOverlap && !e.isAllDay,
       title: e.title,
+      sourceTitle: e.title,
       categoryKey: e.suggestedCategoryKey,
       startedAt: e.startedAt,
       endedAt: e.endedAt,
@@ -70,30 +75,11 @@ export function ImportCalendarDialog({
       hasOverlap: e.hasOverlap,
       overlappingTaskNames: e.overlappingTaskNames,
       isImported: e.isImported,
+      isAllDay: e.isAllDay,
     })),
   );
 
   const [importing, setImporting] = useState(false);
-
-  // Sync state if incoming events change
-  if (items.length !== events.length && events.length > 0 && !importing) {
-    setItems(
-      events.map((e) => ({
-        id: e.id,
-        selected: !e.isImported && !e.hasOverlap,
-        title: e.title,
-        categoryKey: e.suggestedCategoryKey,
-        startedAt: e.startedAt,
-        endedAt: e.endedAt,
-        notes: e.description,
-        formattedClock: e.formattedClock,
-        durationMinutes: e.durationMinutes,
-        hasOverlap: e.hasOverlap,
-        overlappingTaskNames: e.overlappingTaskNames,
-        isImported: e.isImported,
-      })),
-    );
-  }
 
   const selectedCount = items.filter((i) => i.selected).length;
 
@@ -132,6 +118,8 @@ export function ImportCalendarDialog({
             startedAt: item.startedAt,
             endedAt: item.endedAt,
             notes: item.notes,
+            sourceTitle: item.sourceTitle,
+            isAllDay: item.isAllDay,
           })),
         }),
       });
@@ -141,37 +129,19 @@ export function ImportCalendarDialog({
         throw new Error(errorData.error || "Failed to import calendar events");
       }
 
-      toast.success(
-        `Imported ${selectedItems.length} calendar ${
-          selectedItems.length === 1 ? "activity" : "activities"
-        } into your day.`,
-      );
-      onOpenChange(false);
-      onImportSuccess();
-
-      // Non-blocking auto-sync to Google Sheet if configured
-      const targetDay =
-        dayKey ||
-        (selectedItems[0]?.startedAt ? selectedItems[0].startedAt.slice(0, 10) : null);
-      if (targetDay) {
-        fetch(`/api/days/${targetDay}/sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allowUnreviewed: true }),
-        })
-          .then(async (res) => {
-            if (!res.ok) return;
-            const data = await res.json().catch(() => null);
-            if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
-              toast.success(
-                `Auto-synced to Google Sheet (${data.changedCells.length} ${
-                  data.changedCells.length === 1 ? "cell" : "cells"
-                })`,
-              );
-            }
-          })
-          .catch(() => {});
+      const result: ImportCalendarEventsResultDTO = await res.json();
+      const message =
+        `Imported ${result.importedCount}` +
+        (result.skippedCount > 0
+          ? `, skipped ${result.skippedCount} already on the timeline`
+          : "");
+      if (result.importedCount === 0) {
+        toast.info(message);
+      } else {
+        toast.success(message);
       }
+      onOpenChange(false);
+      onImportSuccess(result);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -189,7 +159,7 @@ export function ImportCalendarDialog({
           </div>
           <DialogDescription>
             Confirm or adjust the suggested task names and categories before
-            recording them as completed activities on today&apos;s timeline.
+            recording them as completed activities on this day&apos;s timeline.
           </DialogDescription>
         </DialogHeader>
 
@@ -197,6 +167,7 @@ export function ImportCalendarDialog({
           {items.map((item) => (
             <div
               key={item.id}
+              data-testid={`calendar-import-row-${item.id}`}
               className={cn(
                 "flex flex-col gap-3 rounded-xl border p-3.5 transition-all",
                 item.isImported
@@ -234,6 +205,10 @@ export function ImportCalendarDialog({
                   <Badge variant="outline" className="text-[11px] gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10">
                     <AlertCircle className="size-3 shrink-0" />
                     Overlaps: {item.overlappingTaskNames.join(", ")}
+                  </Badge>
+                ) : item.isAllDay ? (
+                  <Badge variant="outline" className="text-[11px] font-normal">
+                    All-day event
                   </Badge>
                 ) : null}
               </div>
@@ -283,6 +258,7 @@ export function ImportCalendarDialog({
           <Button
             type="button"
             onClick={handleConfirmImport}
+            data-testid="calendar-import-confirm"
             disabled={selectedCount === 0 || importing}
           >
             {importing ? (

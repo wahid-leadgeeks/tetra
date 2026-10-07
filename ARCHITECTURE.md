@@ -198,6 +198,16 @@ Record SyncLog
 
 Sync must be idempotent and must never overwrite unrelated cells.
 
+### Calendar schedule import
+
+The "Schedule -> Review & Import" flow is available on Today and on Timeline (for the viewed day). `importCalendarEvents` is transactional per user: it takes `FOR NO KEY UPDATE` on the user's row (not `FOR UPDATE`, which would deadlock against `startTimer` inserts that take `KEY SHARE` through their FKs), then skips events that already match an entry of the user by title + time (+-2 min). The server checks both the edited `title` and the original `sourceTitle`. Imported days are marked changed (`markDayChanged`). There is no durable link between time entries and calendar events and no schema change.
+
+Known limitations:
+- If the user edits the title on the first import (entry stored as "Weekly sync" for event "Sync") and later imports the same event again without editing, neither `title` nor `sourceTitle` ("Sync") matches "Weekly sync" (unless one contains the other), so a duplicate entry is created.
+- Renaming the task after import has the same effect, and the schedule card shows the event as "New" again.
+
+Both are accepted consequences of having no durable link.
+
 ## Time handling
 
 - Store timestamps in UTC.

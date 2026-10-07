@@ -121,4 +121,15 @@ describe("filterTodayTasks", () => {
     const result = filterTodayTasks(tasks, timezone, todayStr);
     expect(result.allTodayTasks).toHaveLength(0);
   });
+
+  it("treats dialog-written T23:59:59Z due dates as date-only (no UTC+7 day shift)", () => {
+    const tasks: TaskDTO[] = [
+      mockTask({ id: "t1", status: "todo", dueAt: "2026-10-07T23:59:59Z" }),
+      mockTask({ id: "t2", status: "todo", dueAt: "2026-10-06T23:59:59Z" }),
+    ];
+
+    const result = filterTodayTasks(tasks, "Asia/Jakarta", "2026-10-07");
+    expect(result.dueTodayTasks.map((t) => t.id)).toEqual(["t1"]);
+    expect(result.overdueTasks.map((t) => t.id)).toEqual(["t2"]);
+  });
 });

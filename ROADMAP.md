@@ -84,6 +84,7 @@ Remaining Phase 4 work needs real Google credentials; see
 ## Phase 6 — Integrations
 - [x] Google Calendar (event management, Meet links, guest sync).
 - [x] Meeting suggestions (calendar events imported with rule-based categories).
+- [x] Review & Import calendar schedule on Timeline (idempotent import); task details on Today and Timeline.
 - [ ] n8n API/webhook integration.
 - [ ] Scheduled reminders.
 

@@ -50,6 +50,8 @@ export async function getBatchDaySummaries(
       })
       .from(categories)
       .orderBy(asc(categories.sortOrder)),
+    // Intentionally omits `taskDetails`: reports do not render task details and
+    // DaySummaryEntryInput.taskDetails is optional.
     db
       .select({
         id: timeEntries.id,

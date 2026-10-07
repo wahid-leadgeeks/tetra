@@ -39,6 +39,7 @@ interface TimelineListProps {
   setSplitEntry: (entry: TimeEntryDTO) => void;
   setEditEntry: (entry: TimeEntryDTO) => void;
   setDeleteEntry: (entry: TimeEntryDTO) => void;
+  setTaskEntry: (entry: TimeEntryDTO) => void;
   setEditBreak: (breakItem: BreakDTO) => void;
   setDeleteBreak: (breakItem: BreakDTO) => void;
 }
@@ -53,6 +54,7 @@ export function TimelineList({
   setSplitEntry,
   setEditEntry,
   setDeleteEntry,
+  setTaskEntry,
   setEditBreak,
   setDeleteBreak,
 }: TimelineListProps) {
@@ -146,6 +148,7 @@ export function TimelineList({
                 setSplitEntry={setSplitEntry}
                 setEditEntry={setEditEntry}
                 setDeleteEntry={setDeleteEntry}
+                setTaskEntry={setTaskEntry}
               />
             </li>
           ) : (

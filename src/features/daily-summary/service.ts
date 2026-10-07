@@ -80,6 +80,12 @@ export async function getDaySummary(
       pausedSeconds: timeEntries.pausedSeconds,
       notes: timeEntries.notes,
       source: timeEntries.source,
+      taskCategoryId: tasks.categoryId,
+      taskStatus: tasks.status,
+      taskPriority: tasks.priority,
+      taskDescription: tasks.description,
+      taskDueAt: tasks.dueAt,
+      taskIsFavorite: tasks.isFavorite,
     })
     .from(timeEntries)
     .innerJoin(tasks, eq(tasks.id, timeEntries.taskId))
@@ -146,7 +152,27 @@ export async function getDaySummary(
         }
       : null,
     breaks: breakRows,
-    entries: entryRows,
+    entries: entryRows.map(
+      ({
+        taskCategoryId,
+        taskStatus,
+        taskPriority,
+        taskDescription,
+        taskDueAt,
+        taskIsFavorite,
+        ...entry
+      }) => ({
+        ...entry,
+        taskDetails: {
+          categoryId: taskCategoryId,
+          status: taskStatus,
+          priority: taskPriority,
+          description: taskDescription,
+          dueAt: taskDueAt,
+          isFavorite: taskIsFavorite,
+        },
+      }),
+    ),
     categories: categoryRows,
     reviewStateStored: attendanceRow?.reviewState ?? "draft",
     now,

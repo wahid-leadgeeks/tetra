@@ -8,7 +8,11 @@ const importSchema = z.object({
   events: z.array(
     z.object({
       eventId: z.string(),
-      title: z.string().min(1),
+      title: z.string().trim().min(1),
+      // Unedited event title; "" is treated as absent by the service so one
+      // blank value cannot reject the whole batch.
+      sourceTitle: z.string().trim().optional(),
+      isAllDay: z.boolean().optional(),
       categoryKey: z.string().min(1),
       startedAt: z.string().datetime(),
       endedAt: z.string().datetime(),

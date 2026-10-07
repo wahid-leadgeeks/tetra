@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { isDueToday, isOverdue, dueDateKey } from "@/components/tasks/task-dates";
 import { PRIORITY_CONFIG, type CardDensity } from "@/components/tasks/task-constants";
 import { getCategoryTheme } from "@/lib/categories";
 import type { TaskDTO, TaskStatus } from "@/lib/types";
@@ -56,14 +57,8 @@ export function TaskCard({
   const priorityInfo = PRIORITY_CONFIG[task.priority || "medium"];
 
   // Check due status
-  const isOverdue =
-    task.dueAt &&
-    task.status !== "done" &&
-    task.status !== "cancelled" &&
-    task.dueAt.slice(0, 10) < currentTodayKey;
-
-  const isDueToday =
-    task.dueAt && task.dueAt.slice(0, 10) === currentTodayKey;
+  const overdue = isOverdue(task.dueAt, task.status, currentTodayKey);
+  const dueToday = isDueToday(task.dueAt, currentTodayKey);
 
   // Compact Mode
   if (cardDensity === "compact") {
@@ -86,7 +81,7 @@ export function TaskCard({
           <h4 className="text-xs font-medium text-foreground truncate" title={task.name}>
             {task.name}
           </h4>
-          {isOverdue && (
+          {overdue && (
             <span className="text-[10px] text-destructive font-semibold shrink-0">!</span>
           )}
         </div>
@@ -254,12 +249,12 @@ export function TaskCard({
       {/* Due Date / Overdue Indicator */}
       {task.dueAt && (
         <div className="flex items-center gap-1 text-[10px] min-w-0">
-          {isOverdue ? (
+          {overdue ? (
             <span className="flex items-center gap-1 text-destructive font-medium truncate">
               <AlertTriangle className="size-2.5 shrink-0" />
-              <span>Overdue ({task.dueAt.slice(5, 10)})</span>
+              <span>Overdue ({dueDateKey(task.dueAt).slice(5)})</span>
             </span>
-          ) : isDueToday ? (
+          ) : dueToday ? (
             <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium truncate">
               <Calendar className="size-2.5 shrink-0" />
               <span>Due today</span>
@@ -267,7 +262,7 @@ export function TaskCard({
           ) : (
             <span className="flex items-center gap-1 text-muted-foreground truncate">
               <Calendar className="size-2.5 shrink-0" />
-              <span>Due {task.dueAt.slice(5, 10)}</span>
+              <span>Due {dueDateKey(task.dueAt).slice(5)}</span>
             </span>
           )}
         </div>

@@ -35,6 +35,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { dueDateKey } from "@/components/tasks/task-dates";
+import { TaskModalDialog } from "@/components/tasks/task-dialog";
+import {
+  DueDateBadge,
+  FavoriteBadge,
+  PRIORITY_BADGES,
+} from "@/components/tasks/task-meta-badges";
+import { TaskNotes } from "@/components/tasks/task-notes";
 import { todayKey, zonedDayKey } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { CategoryDTO, TaskDTO, TaskPriority } from "@/lib/types";
@@ -42,30 +50,10 @@ import type { CategoryDTO, TaskDTO, TaskPriority } from "@/lib/types";
 interface TodayTasksCardProps {
   timezone: string;
   onRefreshToday?: () => void;
+  /** Bump to refetch tasks (e.g. after the active task was edited elsewhere). */
+  refreshKey?: number;
   className?: string;
 }
-
-const PRIORITY_BADGES: Record<
-  TaskPriority,
-  { label: string; class: string }
-> = {
-  urgent: {
-    label: "Urgent",
-    class: "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 font-medium",
-  },
-  high: {
-    label: "High",
-    class: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium",
-  },
-  medium: {
-    label: "Medium",
-    class: "border-border/60 bg-muted/30 text-muted-foreground",
-  },
-  low: {
-    label: "Low",
-    class: "border-border/40 bg-muted/20 text-muted-foreground/80",
-  },
-};
 
 export interface TodayTasksGrouped {
   inProgressTasks: TaskDTO[];
@@ -88,7 +76,8 @@ export function filterTodayTasks(
 
   for (const t of tasks) {
     let isToday = false;
-    const dueDay = t.dueAt ? zonedDayKey(new Date(t.dueAt), timezone) : null;
+    // Due dates are date-only (`...T23:59:59Z` from the task dialog): never zone-convert.
+    const dueDay = t.dueAt ? dueDateKey(t.dueAt) : null;
     const completedDay = t.completedAt
       ? zonedDayKey(new Date(t.completedAt), timezone)
       : null;
@@ -128,6 +117,7 @@ export function filterTodayTasks(
 export function TodayTasksCard({
   timezone,
   onRefreshToday,
+  refreshKey,
   className,
 }: TodayTasksCardProps) {
   const [tasks, setTasks] = useState<TaskDTO[]>([]);
@@ -135,6 +125,7 @@ export function TodayTasksCard({
   const [loading, setLoading] = useState(true);
   const [actionTaskId, setActionTaskId] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [openTask, setOpenTask] = useState<TaskDTO | null>(null);
 
   // New task form state
   const [newTaskName, setNewTaskName] = useState("");
@@ -163,6 +154,12 @@ export function TodayTasksCard({
       console.error("Failed to refresh today tasks:", err);
     }
   }, []);
+
+  useEffect(() => {
+    // refreshData only sets state after awaiting the fetches; refetch on parent request.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (refreshKey) void refreshData();
+  }, [refreshKey, refreshData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -290,9 +287,6 @@ export function TodayTasksCard({
 
     setCreating(true);
     try {
-      const todayDate = new Date();
-      todayDate.setHours(17, 0, 0, 0); // Default to end of workday
-
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -301,7 +295,7 @@ export function TodayTasksCard({
           categoryId: newCategoryId,
           priority: newPriority,
           status: "todo",
-          dueAt: todayDate.toISOString(),
+          dueAt: `${todayStr}T23:59:59Z`,
         }),
       });
 
@@ -411,6 +405,8 @@ export function TodayTasksCard({
                 actionLoading={actionTaskId === task.id}
                 onToggleDone={() => void handleToggleDone(task)}
                 onStartTimer={() => void handleStartTimer(task)}
+                onOpenTask={() => setOpenTask(task)}
+                timezone={timezone}
               />
             ))}
 
@@ -425,6 +421,8 @@ export function TodayTasksCard({
                 actionLoading={actionTaskId === task.id}
                 onToggleDone={() => void handleToggleDone(task)}
                 onStartTimer={() => void handleStartTimer(task)}
+                onOpenTask={() => setOpenTask(task)}
+                timezone={timezone}
               />
             ))}
 
@@ -439,6 +437,8 @@ export function TodayTasksCard({
                 actionLoading={actionTaskId === task.id}
                 onToggleDone={() => void handleToggleDone(task)}
                 onStartTimer={() => void handleStartTimer(task)}
+                onOpenTask={() => setOpenTask(task)}
+                timezone={timezone}
               />
             ))}
 
@@ -452,11 +452,34 @@ export function TodayTasksCard({
                 actionLoading={actionTaskId === task.id}
                 onToggleDone={() => void handleToggleDone(task)}
                 onStartTimer={() => void handleStartTimer(task)}
+                onOpenTask={() => setOpenTask(task)}
+                timezone={timezone}
               />
             ))}
           </div>
         )}
       </CardContent>
+
+      <TaskModalDialog
+        open={openTask !== null}
+        onOpenChange={(o) => {
+          if (!o) setOpenTask(null);
+        }}
+        task={openTask}
+        defaultColumn="todo"
+        categories={categories}
+        existingTasks={tasks}
+        onSaved={() => {
+          setOpenTask(null);
+          void refreshData();
+          onRefreshToday?.();
+        }}
+        onDeleted={() => {
+          setOpenTask(null);
+          void refreshData();
+          onRefreshToday?.();
+        }}
+      />
 
       {/* Add Task for Today Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
@@ -560,6 +583,8 @@ interface TaskRowItemProps {
   actionLoading: boolean;
   onToggleDone: () => void;
   onStartTimer: () => void;
+  onOpenTask: () => void;
+  timezone: string;
 }
 
 function TaskRowItem({
@@ -570,6 +595,8 @@ function TaskRowItem({
   actionLoading,
   onToggleDone,
   onStartTimer,
+  onOpenTask,
+  timezone,
 }: TaskRowItemProps) {
   const isDone = task.status === "done";
   const isInProgress = task.status === "in_progress";
@@ -605,14 +632,18 @@ function TaskRowItem({
 
         {/* Task name and metadata */}
         <div className="flex flex-col min-w-0 flex-1">
-          <span
+          <button
+            type="button"
+            data-testid="today-task-open"
+            onClick={onOpenTask}
+            title={`Open "${task.name}"`}
             className={cn(
-              "text-sm font-medium leading-snug truncate",
+              "text-left text-sm font-medium leading-snug truncate hover:underline cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-sm",
               isDone ? "line-through text-muted-foreground" : "text-foreground",
             )}
           >
             {task.name}
-          </span>
+          </button>
           <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px]">
             {task.categoryName ? (
               <CategoryBadge
@@ -633,6 +664,9 @@ function TaskRowItem({
               </span>
             ) : null}
 
+            <DueDateBadge dueAt={task.dueAt} status={task.status} timezone={timezone} />
+            <FavoriteBadge isFavorite={task.isFavorite} />
+
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-sm px-1.5 py-0 border",
@@ -643,6 +677,15 @@ function TaskRowItem({
               {badgeLabel}
             </span>
           </div>
+          {task.description ? (
+            <TaskNotes
+              variant="clamp"
+              clampLines={1}
+              text={task.description}
+              onOpen={onOpenTask}
+              className="mt-1.5"
+            />
+          ) : null}
         </div>
       </div>
 

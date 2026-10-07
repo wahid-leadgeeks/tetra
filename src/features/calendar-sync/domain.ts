@@ -44,6 +44,11 @@ export function isMatchingImportedEntry(
   const normEntry = entry.taskName.trim().toLowerCase();
   const normEvent = eventSummary.trim().toLowerCase();
 
+  // An empty name would match everything via `includes("")`.
+  if (normEntry === "" || normEvent === "") {
+    return false;
+  }
+
   return (
     normEntry === normEvent ||
     normEntry.includes(normEvent) ||
@@ -155,7 +160,7 @@ export function processCalendarEvent(
   const nonImportedSpans: ExistingEntrySpan[] = [];
 
   for (const span of entrySpans) {
-    if (!isAllDay && isMatchingImportedEntry(span, event.summary, startDate, endDate)) {
+    if (isMatchingImportedEntry(span, event.summary, startDate, endDate)) {
       isImported = true;
     } else {
       nonImportedSpans.push(span);

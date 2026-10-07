@@ -5,6 +5,7 @@ import {
   OverlapError,
   toTimeEntryDTO,
   validateNoOverlap,
+  type EntryTaskRow,
   type OverlapEntry,
   type TimeEntryCore,
 } from "./domain";
@@ -315,7 +316,15 @@ describe("validateNoOverlap", () => {
 });
 
 describe("toTimeEntryDTO", () => {
-  const task = { name: "Deploy" };
+  const task: EntryTaskRow = {
+    name: "Deploy",
+    categoryId: "cat-task",
+    status: "in_progress",
+    priority: "high",
+    description: "Ship it",
+    dueAt: new Date("2026-09-10T23:59:59Z"),
+    isFavorite: true,
+  };
   const category = { key: "infrastructure", name: "Infrastructure" };
 
   it("maps a completed entry with server-calculated duration", () => {
@@ -343,6 +352,32 @@ describe("toTimeEntryDTO", () => {
       durationMinutes: 110,
       pausedSeconds: 600,
       pausedAt: null,
+      taskDetails: {
+        categoryId: "cat-task",
+        status: "in_progress",
+        priority: "high",
+        description: "Ship it",
+        dueAt: "2026-09-10T23:59:59.000Z",
+        isFavorite: true,
+      },
+    });
+  });
+
+  it("toTimeEntryDTO exposes taskDetails", () => {
+    const entry = makeEntry({ id: "e9", taskId: "task-1", startedAt: T(9), endedAt: T(10) });
+    const dto = toTimeEntryDTO(
+      entry,
+      { ...task, description: null, dueAt: null, isFavorite: false, priority: "low", status: "todo" },
+      category,
+      NOW,
+    );
+    expect(dto.taskDetails).toEqual({
+      categoryId: "cat-task",
+      status: "todo",
+      priority: "low",
+      description: null,
+      dueAt: null,
+      isFavorite: false,
     });
   });
 

@@ -38,6 +38,8 @@ interface TaskModalDialogProps {
   existingTasks: TaskDTO[];
   onSaved: (task: TaskDTO) => void;
   onDeleted: (taskId: string) => void;
+  /** Hide the Delete button (e.g. when opened from a time entry). Default true. */
+  allowDelete?: boolean;
 }
 
 export function TaskModalDialog({
@@ -49,6 +51,7 @@ export function TaskModalDialog({
   existingTasks,
   onSaved,
   onDeleted,
+  allowDelete = true,
 }: TaskModalDialogProps) {
   if (!open) return null;
 
@@ -63,6 +66,7 @@ export function TaskModalDialog({
         onOpenChange={onOpenChange}
         onSaved={onSaved}
         onDeleted={onDeleted}
+        allowDelete={allowDelete}
       />
     </Dialog>
   );
@@ -76,6 +80,7 @@ function TaskModalInner({
   onOpenChange,
   onSaved,
   onDeleted,
+  allowDelete,
 }: {
   task: TaskDTO | null;
   defaultColumn: TaskStatus;
@@ -84,6 +89,7 @@ function TaskModalInner({
   onOpenChange: (open: boolean) => void;
   onSaved: (task: TaskDTO) => void;
   onDeleted: (taskId: string) => void;
+  allowDelete: boolean;
 }) {
   const isEditing = Boolean(task);
 
@@ -282,7 +288,7 @@ function TaskModalInner({
           <div className="space-y-1">
             <Label className="text-xs font-semibold text-foreground/80">Priority</Label>
             <Select value={priority} onValueChange={(val: TaskPriority) => setPriority(val)}>
-              <SelectTrigger className="w-full text-xs h-9">
+              <SelectTrigger className="w-full text-xs h-9" data-testid="task-dialog-priority">
                 <SelectValue placeholder="Priority" />
               </SelectTrigger>
               <SelectContent>
@@ -373,7 +379,7 @@ function TaskModalInner({
 
       <DialogFooter className="flex flex-row items-center justify-between gap-2 px-6 py-3.5 border-t border-border/60 bg-muted/20 mt-auto shrink-0">
         <div>
-          {isEditing && (
+          {isEditing && allowDelete && (
             <Button
               type="button"
               variant="ghost"
@@ -403,6 +409,7 @@ function TaskModalInner({
             type="button"
             size="sm"
             onClick={handleSave}
+            data-testid="task-dialog-save"
             disabled={saving || deleting}
             className="text-xs gap-1.5 font-medium shadow-sm"
           >

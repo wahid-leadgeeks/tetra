@@ -4,6 +4,7 @@ import { schema } from "@/server/db";
 import { seedBasics, testDb, setupTestDb } from "@/test/pglite-db";
 import { OverlapError } from "./domain";
 import { upsertTask } from "./entry-helpers";
+import { getDayEntries } from "./entry-queries";
 import {
   createManualEntry,
   deleteEntry,
@@ -82,6 +83,33 @@ describe("activities service against PGlite", () => {
       expect(dto.endedAt).toBeNull();
       expect(dto.notes).toBe("n");
       expect((await getActiveEntry(userId))?.id).toBe(dto.id);
+    });
+
+    it("carries the task's details on startTimer and getDayEntries", async () => {
+      const { userId, categoryId } = await seedBasics();
+      const dueAt = new Date("2026-10-07T23:59:59Z");
+      await testDb.insert(tasks).values({
+        userId,
+        name: "Detailed",
+        categoryId,
+        priority: "high",
+        description: "Prepare slides",
+        dueAt,
+        isFavorite: true,
+      });
+      const dto = await startTimer(userId, TZ, { taskName: "Detailed", categoryId });
+      const expected = {
+        categoryId,
+        status: "in_progress",
+        priority: "high",
+        description: "Prepare slides",
+        dueAt: dueAt.toISOString(),
+        isFavorite: true,
+      };
+      expect(dto.taskDetails).toEqual(expected);
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
+      const entries = await getDayEntries(userId, day, TZ);
+      expect(entries.find((e) => e.id === dto.id)?.taskDetails).toEqual(expected);
     });
 
     it("starting a second timer stops the first (single current entry)", async () => {

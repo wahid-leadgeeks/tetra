@@ -16,10 +16,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
+import { CalendarScheduleCard } from "@/components/calendar/calendar-schedule-card";
 import { DayNavigator } from "@/components/timeline/day-navigator";
 import { DayOverviewCard } from "@/components/timeline/day-overview-card";
 import { EditAttendanceDialog } from "@/components/timeline/edit-attendance-dialog";
 import { EntryDialog, type EntryPrefill } from "@/components/timeline/entry-dialog";
+import { EntryTaskDialog } from "@/components/tasks/entry-task-dialog";
 import { SplitEntryDialog } from "@/components/timeline/split-entry-dialog";
 import {
   DeleteBreakDialog,
@@ -53,6 +55,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const [editEntry, setEditEntry] = useState<TimeEntryDTO | null>(null);
   const [splitEntry, setSplitEntry] = useState<TimeEntryDTO | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<TimeEntryDTO | null>(null);
+  const [taskEntry, setTaskEntry] = useState<TimeEntryDTO | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editBreak, setEditBreak] = useState<BreakDTO | null>(null);
   const [deleteBreak, setDeleteBreak] = useState<BreakDTO | null>(null);
@@ -232,6 +235,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
             setSplitEntry={setSplitEntry}
             setEditEntry={setEditEntry}
             setDeleteEntry={setDeleteEntry}
+            setTaskEntry={setTaskEntry}
             setEditBreak={setEditBreak}
             setDeleteBreak={setDeleteBreak}
           />
@@ -247,6 +251,20 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
             handleQuickClockOut={handleQuickClockOut}
             setAttendanceDialogOpen={setAttendanceDialogOpen}
           />
+          <div data-testid="timeline-schedule-card">
+            <CalendarScheduleCard
+              key={dayKey}
+              timezone={timeZone}
+              dayKey={dayKey}
+              title="Schedule"
+              emptyMessage="No calendar events found for this day."
+              syncAfterImport={false}
+              onImportSuccess={(r) => {
+                if (r.importedCount > 0) handleSaved();
+                else refresh();
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -309,6 +327,18 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
         timeZone={timeZone}
         categories={categories}
         onSaved={handleSaved}
+      />
+
+      <EntryTaskDialog
+        entry={taskEntry}
+        categories={categories}
+        onOpenChange={(o) => {
+          if (!o) setTaskEntry(null);
+        }}
+        onSaved={() => {
+          setTaskEntry(null);
+          refresh();
+        }}
       />
 
       <DeleteEntryDialog

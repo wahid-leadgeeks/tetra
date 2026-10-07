@@ -12,14 +12,17 @@ import {
   Video,
 } from "lucide-react";
 
+import { toast } from "sonner";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CategoryBadge } from "@/components/ui/category-badge";
-import { ImportCalendarDialog } from "@/components/today/import-calendar-dialog";
+import { ImportCalendarDialog } from "@/components/calendar/import-calendar-dialog";
 import type {
   CalendarConfigDTO,
   CalendarEventSuggestionDTO,
+  ImportCalendarEventsResultDTO,
 } from "@/features/calendar-sync/types";
 import { cn } from "@/lib/utils";
 import { todayKey } from "@/lib/time";
@@ -27,7 +30,11 @@ import { todayKey } from "@/lib/time";
 interface CalendarScheduleCardProps {
   timezone: string;
   dayKey?: string;
-  onImportSuccess?: () => void;
+  title?: string;
+  emptyMessage?: string;
+  onImportSuccess?: (result: ImportCalendarEventsResultDTO) => void;
+  /** Trigger a sheet sync for the day after an import that inserted entries. */
+  syncAfterImport?: boolean;
   className?: string;
 }
 
@@ -41,7 +48,10 @@ interface CalendarEventsApiResponse {
 export function CalendarScheduleCard({
   timezone,
   dayKey,
+  title = "Today's Schedule",
+  emptyMessage = "No scheduled events found for today.",
   onImportSuccess,
+  syncAfterImport = false,
   className,
 }: CalendarScheduleCardProps) {
   const [events, setEvents] = useState<CalendarEventSuggestionDTO[]>([]);
@@ -53,60 +63,73 @@ export function CalendarScheduleCard({
 
   const effectiveDayKey = dayKey || todayKey(timezone);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
+  const loadSchedule = useCallback(
+    async (isCancelled: () => boolean = () => false) => {
       try {
         const res = await fetch(`/api/calendar/events?date=${effectiveDayKey}`);
-        if (cancelled) return;
+        if (isCancelled()) return;
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || "Failed to load calendar events");
         }
         const data: CalendarEventsApiResponse = await res.json();
-        if (cancelled) return;
+        if (isCancelled()) return;
         setEvents(data.events || []);
         setConfig(data.config || null);
         setHasGoogleAuth(data.hasGoogleAuth ?? false);
+        setError(null);
       } catch (err) {
-        if (!cancelled) {
+        if (!isCancelled()) {
           setError(err instanceof Error ? err.message : "Failed to load events");
         }
       } finally {
-        if (!cancelled) {
+        if (!isCancelled()) {
           setLoading(false);
         }
       }
-    }
-    void load();
+    },
+    [effectiveDayKey],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    // Deferred so the fetch result, not the effect body, drives state updates.
+    void Promise.resolve().then(() => loadSchedule(() => cancelled));
     return () => {
       cancelled = true;
     };
-  }, [effectiveDayKey]);
+  }, [loadSchedule]);
 
   const refreshSchedule = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/calendar/events?date=${effectiveDayKey}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to load calendar events");
-      }
-      const data: CalendarEventsApiResponse = await res.json();
-      setEvents(data.events || []);
-      setConfig(data.config || null);
-      setHasGoogleAuth(data.hasGoogleAuth ?? false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load events");
-    } finally {
-      setLoading(false);
-    }
-  }, [effectiveDayKey]);
+    await loadSchedule();
+  }, [loadSchedule]);
 
-  const handleImportSuccess = () => {
+  const handleImportSuccess = (result: ImportCalendarEventsResultDTO) => {
     void refreshSchedule();
-    onImportSuccess?.();
+    onImportSuccess?.(result);
+
+    // Non-blocking sheet sync; screens opt in so autoSyncTasks stays respected.
+    if (syncAfterImport && result.importedCount > 0) {
+      fetch(`/api/days/${effectiveDayKey}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowUnreviewed: true }),
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json().catch(() => null);
+          if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
+            toast.success(
+              `Auto-synced to Google Sheet (${data.changedCells.length} ${
+                data.changedCells.length === 1 ? "cell" : "cells"
+              })`,
+            );
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const readyToImportCount = events.filter((e) => !e.isImported && !e.hasOverlap).length;
@@ -126,7 +149,7 @@ export function CalendarScheduleCard({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-heading text-sm font-semibold tracking-tight text-foreground">
-                  Today&apos;s Schedule
+                  {title}
                 </h3>
                 {config?.calendarName && config.calendarName !== "Primary" && (
                   <span className="text-[11px] text-muted-foreground">
@@ -216,7 +239,7 @@ export function CalendarScheduleCard({
             </div>
           ) : events.length === 0 ? (
             <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 px-3.5 py-3 text-xs text-muted-foreground">
-              <span>No scheduled events found for today.</span>
+              <span>{emptyMessage}</span>
               <span className="text-[11px] text-muted-foreground/70">
                 All clear!
               </span>
@@ -332,13 +355,14 @@ export function CalendarScheduleCard({
         </CardContent>
       </Card>
 
-      <ImportCalendarDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-        events={events}
-        onImportSuccess={handleImportSuccess}
-        dayKey={effectiveDayKey}
-      />
+      {importDialogOpen && (
+        <ImportCalendarDialog
+          open
+          onOpenChange={setImportDialogOpen}
+          events={events}
+          onImportSuccess={handleImportSuccess}
+        />
+      )}
     </>
   );
 }

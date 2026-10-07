@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { todayKey } from "@/lib/time";
 import { sendBrowserAlert } from "@/features/notifications/store";
-import type { AttendanceDTO, DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
+import type { AttendanceDTO, CategoryDTO, DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
 
 export type PendingAction =
   | "clock-in"
@@ -52,6 +52,21 @@ export function useTodayState(timezone: string) {
   const [summary, setSummary] = useState<DaySummaryDTO | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [categories, setCategories] = useState<CategoryDTO[]>([]);
+
+  // Categories are fetched once; they feed the task editor dialog.
+  useEffect(() => {
+    let active = true;
+    fetch("/api/categories", { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<CategoryDTO[]>) : []))
+      .then((data) => {
+        if (active) setCategories(data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -362,6 +377,7 @@ export function useTodayState(timezone: string) {
 
   return {
     summary,
+    categories,
     loadState,
     pending,
     refresh,

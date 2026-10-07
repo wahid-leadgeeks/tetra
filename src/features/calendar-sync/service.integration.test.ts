@@ -315,4 +315,141 @@ describe("importCalendarEvents", () => {
     expect(res.importedCount).toBe(0);
     expect(await testDb.select().from(dailyAttendance)).toHaveLength(0);
   });
+
+  describe("idempotency and day bookkeeping", () => {
+    const item = (over: Record<string, unknown> = {}) => ({
+      eventId: "evt-1",
+      title: "Standup",
+      categoryKey: "unknown",
+      startedAt: "2026-01-05T02:00:00Z",
+      endedAt: "2026-01-05T02:30:00Z",
+      ...over,
+    });
+    const run = (userId: string, events: Record<string, unknown>[]) =>
+      importCalendarEvents(userId, { events } as never);
+
+    it("re-importing the same payload skips it and keeps one entry", async () => {
+      const { userId } = await seedBasics();
+      const first = await run(userId, [item()]);
+      expect(first).toMatchObject({ importedCount: 1, skippedCount: 0, skippedEventIds: [] });
+      const second = await run(userId, [item()]);
+      expect(second).toMatchObject({ importedCount: 0, skippedCount: 1, skippedEventIds: ["evt-1"] });
+      expect(second.createdEntryIds).toEqual([]);
+      expect(await testDb.select().from(timeEntries)).toHaveLength(1);
+    });
+
+    it("the schedule still reports the imported event as isImported", async () => {
+      const { userId } = await seedBasics();
+      await testDb.insert(calendarEvents).values({
+        userId, title: "Standup", startAt: new Date("2026-01-05T02:00:00Z"), endAt: new Date("2026-01-05T02:30:00Z"),
+      });
+      await run(userId, [item()]);
+      const res = await getCalendarSchedule(userId, "2026-01-05", TZ);
+      expect(res.events).toHaveLength(1);
+      expect(res.events[0].isImported).toBe(true);
+    });
+
+    it("same title with an end time 3 minutes different is imported", async () => {
+      const { userId } = await seedBasics();
+      await run(userId, [item()]);
+      const res = await run(userId, [item({ eventId: "evt-2", endedAt: "2026-01-05T02:33:00Z" })]);
+      expect(res).toMatchObject({ importedCount: 1, skippedCount: 0 });
+      expect(await testDb.select().from(timeEntries)).toHaveLength(2);
+    });
+
+    it("an identical entry of another user does not cause a skip", async () => {
+      const a = await seedBasics();
+      const b = await seedBasics();
+      await run(a.userId, [item()]);
+      const res = await run(b.userId, [item()]);
+      expect(res).toMatchObject({ importedCount: 1, skippedCount: 0 });
+      const entries = await testDb.select().from(timeEntries);
+      expect(entries).toHaveLength(2);
+      expect(entries.filter((e) => e.userId === b.userId)).toHaveLength(1);
+    });
+
+    it("two identical items in one request insert one row", async () => {
+      const { userId } = await seedBasics();
+      const res = await run(userId, [item(), item({ eventId: "evt-dup" })]);
+      expect(res).toMatchObject({ importedCount: 1, skippedCount: 1, skippedEventIds: ["evt-dup"] });
+      expect(await testDb.select().from(timeEntries)).toHaveLength(1);
+    });
+
+    it("concurrent identical imports produce exactly one entry and one task", async () => {
+      // PGlite serialises transactions: this proves the dedupe + task upsert path,
+      // not the FOR NO KEY UPDATE row lock (verified by code review).
+      const { userId } = await seedBasics();
+      const results = await Promise.all([run(userId, [item()]), run(userId, [item()])]);
+      expect(results.map((r) => r.importedCount).sort()).toEqual([0, 1]);
+      expect(await testDb.select().from(timeEntries)).toHaveLength(1);
+      expect(await testDb.select().from(tasks)).toHaveLength(1);
+    });
+
+    it("an existing task keeps its status and startedAt (no upsertTask side effects)", async () => {
+      const { userId, categoryId } = await seedBasics();
+      await testDb.insert(tasks).values({ userId, name: "Standup", categoryId, status: "todo" });
+      const res = await run(userId, [item()]);
+      expect(res.createdTaskIds).toEqual([]);
+      const [task] = await testDb.select().from(tasks);
+      expect(task.status).toBe("todo");
+      expect(task.startedAt).toBeNull();
+      expect(task.lastUsedAt).not.toBeNull();
+    });
+
+    it("a synced day becomes changed_after_sync after an import", async () => {
+      const { userId } = await seedBasics();
+      await testDb.insert(dailyAttendance).values({
+        userId,
+        workDate: "2026-01-05",
+        clockInAt: new Date("2026-01-05T01:00:00Z"),
+        clockOutAt: new Date("2026-01-05T10:00:00Z"),
+        status: "closed",
+        reviewState: "synced",
+      });
+      await run(userId, [item()]);
+      const [att] = await testDb.select().from(dailyAttendance);
+      expect(att.reviewState).toBe("changed_after_sync");
+    });
+
+    it("a fully skipped import leaves attendance untouched", async () => {
+      const { userId } = await seedBasics();
+      await run(userId, [item()]);
+      // Narrow the bounds so any expandAttendanceBounds call would widen them again.
+      const clockInAt = new Date("2026-01-05T02:10:00Z");
+      const clockOutAt = new Date("2026-01-05T02:20:00Z");
+      await testDb
+        .update(dailyAttendance)
+        .set({ clockInAt, clockOutAt, reviewState: "synced" })
+        .where(eq(dailyAttendance.userId, userId));
+      const res = await run(userId, [item()]);
+      expect(res.skippedCount).toBe(1);
+      const [att] = await testDb.select().from(dailyAttendance);
+      expect(att.clockInAt).toEqual(clockInAt);
+      expect(att.clockOutAt).toEqual(clockOutAt);
+      expect(att.reviewState).toBe("synced");
+    });
+
+    it("an edited title is skipped when sourceTitle matches an existing entry", async () => {
+      const { userId } = await seedBasics();
+      await run(userId, [item({ title: "Sync" })]);
+      const res = await run(userId, [item({ title: "Weekly planning", sourceTitle: "Sync" })]);
+      expect(res).toMatchObject({ importedCount: 0, skippedCount: 1 });
+      expect(await testDb.select().from(timeEntries)).toHaveLength(1);
+    });
+
+    it("an edited title without sourceTitle is imported (known limitation)", async () => {
+      const { userId } = await seedBasics();
+      await run(userId, [item({ title: "Sync" })]);
+      const res = await run(userId, [item({ title: "Weekly planning" })]);
+      expect(res).toMatchObject({ importedCount: 1, skippedCount: 0 });
+      expect(await testDb.select().from(timeEntries)).toHaveLength(2);
+    });
+
+    it("an empty sourceTitle is treated as absent", async () => {
+      const { userId } = await seedBasics();
+      await run(userId, [item({ title: "Sync" })]);
+      const res = await run(userId, [item({ title: "Weekly planning", sourceTitle: "" })]);
+      expect(res).toMatchObject({ importedCount: 1, skippedCount: 0 });
+    });
+  });
 });

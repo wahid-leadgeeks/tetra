@@ -1,9 +1,11 @@
 "use client";
 
-import { ArrowRightLeft, Loader2, Pause, Play, Square } from "lucide-react";
+import { ArrowRightLeft, ListChecks, Loader2, Pause, Play, Square } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { TaskMetaBadges } from "@/components/tasks/task-meta-badges";
+import { TaskNotes } from "@/components/tasks/task-notes";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { formatStopwatch } from "@/components/today/timer";
 import { useStopwatch } from "@/components/today/use-stopwatch";
@@ -23,6 +25,8 @@ interface ActiveTaskCardProps {
   onResumeTask: () => Promise<boolean>;
   onStopTask: () => void | Promise<boolean>;
   onSwitchTask: () => void;
+  /** Opens the task editor; the Details button renders only with `entry.taskDetails`. */
+  onOpenTask: () => void;
 }
 
 /**
@@ -39,6 +43,7 @@ export function ActiveTaskCard({
   onResumeTask,
   onStopTask,
   onSwitchTask,
+  onOpenTask,
 }: ActiveTaskCardProps) {
   const { elapsedMs, paused } = useStopwatch(entry, initialNowMs);
 
@@ -88,6 +93,16 @@ export function ActiveTaskCard({
           <p className="text-xl leading-snug font-semibold md:text-2xl text-foreground">
             {entry.taskName}
           </p>
+          <TaskMetaBadges details={entry.taskDetails} timezone={timezone} />
+          {entry.taskDetails?.description ? (
+            <div data-testid="active-task-description">
+              <TaskNotes
+                variant="clamp"
+                text={entry.taskDetails.description}
+                onOpen={onOpenTask}
+              />
+            </div>
+          ) : null}
           <p className="text-sm text-muted-foreground">
             Started {zonedClock(new Date(entry.startedAt), timezone)}
           </p>
@@ -154,6 +169,21 @@ export function ActiveTaskCard({
             Stop
           </Button>
         </div>
+
+        {entry.taskDetails ? (
+          <div className="-mt-3 flex">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 px-3 text-xs"
+              data-testid="active-task-details"
+              onClick={onOpenTask}
+            >
+              <ListChecks aria-hidden className="size-3.5" />
+              Details
+            </Button>
+          </div>
+        ) : null}
 
         {entry.notes ? (
           <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
