@@ -26,7 +26,7 @@ export async function PATCH(
       return badRequest(parsed.error.issues[0]?.message || "Invalid payload");
     }
 
-    const task = await updateTask(authCtx.userId, id, parsed.data);
+    const task = await updateTask(authCtx.userId, id, parsed.data, authCtx.timezone);
     return NextResponse.json(task);
   } catch (err) {
     console.error("Failed to update task:", err);
@@ -49,7 +49,7 @@ export async function DELETE(
   if (!id) return badRequest("Task ID is required");
 
   try {
-    const success = await deleteTask(authCtx.userId, id);
+    const success = await deleteTask(authCtx.userId, id, authCtx.timezone);
     if (!success) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }

@@ -3,7 +3,7 @@
  * delegates all math to the pure domain (server-side durations only).
  */
 import { and, asc, eq, gt, isNull, lte, or } from "drizzle-orm";
-import type { DaySummaryDTO } from "@/lib/types";
+import type { DaySummaryWithSyncDTO } from "@/lib/types";
 import { todayKey, zonedDayEnd, zonedDayStart } from "@/lib/time";
 import { db } from "@/server/db";
 import {
@@ -15,7 +15,7 @@ import {
 } from "@/server/db/schema";
 import { envelopeAttendanceSpan } from "@/features/attendance/domain";
 import { autoClosePastAttendances } from "@/features/attendance/service";
-import { buildDaySummary } from "./domain";
+import { buildDaySummary, computeNeedsSync } from "./domain";
 
 /** Thrown when review is attempted before the day is clocked out. */
 export class ClockOutRequiredError extends Error {
@@ -29,7 +29,7 @@ export async function getDaySummary(
   userId: string,
   dayKey: string,
   tz: string,
-): Promise<DaySummaryDTO> {
+): Promise<DaySummaryWithSyncDTO> {
   if (dayKey === todayKey(tz)) {
     await autoClosePastAttendances(userId, tz);
   }
@@ -86,6 +86,7 @@ export async function getDaySummary(
       taskDescription: tasks.description,
       taskDueAt: tasks.dueAt,
       taskIsFavorite: tasks.isFavorite,
+      updatedAt: timeEntries.updatedAt,
     })
     .from(timeEntries)
     .innerJoin(tasks, eq(tasks.id, timeEntries.taskId))
@@ -134,13 +135,14 @@ export async function getDaySummary(
 
       attendanceRow.clockInAt = enveloped.clockInAt;
       attendanceRow.clockOutAt = enveloped.clockOutAt;
+      attendanceRow.updatedAt = now;
       if (attendanceRow.reviewState === "synced") {
         attendanceRow.reviewState = "changed_after_sync";
       }
     }
   }
 
-  return buildDaySummary({
+  const summary = buildDaySummary({
     workDate: dayKey,
     tz,
     attendance: attendanceRow
@@ -160,6 +162,7 @@ export async function getDaySummary(
         taskDescription,
         taskDueAt,
         taskIsFavorite,
+        updatedAt: _updatedAt,
         ...entry
       }) => ({
         ...entry,
@@ -177,6 +180,19 @@ export async function getDaySummary(
     reviewStateStored: attendanceRow?.reviewState ?? "draft",
     now,
   });
+
+  // Uses the overlapping-entries superset on purpose: every entry that
+  // contributes minutes to this day can change what the sheet row shows.
+  return {
+    ...summary,
+    needsSync: computeNeedsSync({
+      hasAttendance: attendanceRow !== null,
+      lastSyncedAt: attendanceRow?.lastSyncedAt ?? null,
+      attendanceUpdatedAt: attendanceRow?.updatedAt ?? null,
+      entryUpdatedAts: entryRows.map((e) => e.updatedAt),
+    }),
+    lastSyncedAt: attendanceRow?.lastSyncedAt?.toISOString() ?? null,
+  };
 }
 
 /** Mark a clocked-out day as reviewed; warnings are acknowledged, not blocking. */

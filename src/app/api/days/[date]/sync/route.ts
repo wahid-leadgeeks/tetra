@@ -2,12 +2,9 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CATEGORY_KEYS, type CategoryKey } from "@/features/sheets-sync/mapping";
-import {
-  executeSync,
-  previewSync,
-  SheetsApiError,
-} from "@/features/sheets-sync/service";
+import { executeSync, previewSync } from "@/features/sheets-sync/service";
 import { auth } from "@/server/auth";
+import { jsonError, syncErrorResponse } from "./sync-error-response";
 
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -20,30 +17,6 @@ const syncOptionsSchema = z.object({
 
 interface SyncRouteContext {
   params: Promise<{ date: string }>;
-}
-
-function jsonError(status: number, message: string): NextResponse {
-  return NextResponse.json({ error: message }, { status });
-}
-
-/**
- * SyncNotConfiguredError and business errors (not reviewed, date row not
- * found, invalid input) → 400. Google API failures → 502.
- */
-function syncErrorResponse(err: unknown): NextResponse {
-  if (err instanceof SheetsApiError) {
-    const msg = err.message.toLowerCase();
-    if (
-      msg.includes("invalid authentication credentials") ||
-      msg.includes("invalid_grant") ||
-      msg.includes("google oauth access expired")
-    ) {
-      return jsonError(401, "Google OAuth session expired. Please sign in again.");
-    }
-    return jsonError(502, err.message);
-  }
-  if (err instanceof Error) return jsonError(400, err.message);
-  return jsonError(400, "Sync failed");
 }
 
 async function requireAuth(): Promise<

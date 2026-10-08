@@ -2,7 +2,8 @@
  * Shared internal helpers for the activities service modules.
  * Not part of the public service API (re-exported nowhere).
  */
-import { and, eq, gt, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { zonedDayEnd, zonedDayKey } from "@/lib/time";
 import type { TimeEntryDTO } from "@/lib/types";
 import type { TimeEntryCore } from "./domain";
 import { toTimeEntryDTO } from "./domain";
@@ -94,22 +95,69 @@ export async function upsertTask(
   return task;
 }
 
-/** A synced day becomes `changed_after_sync` once its entries change. */
+/**
+ * Every local day key touched by the entry range `[start, end ?? now)`.
+ * Always contains at least the start day.
+ */
+export function entryDayKeys(
+  start: Date,
+  end: Date | null,
+  timeZone: string,
+  now: Date = new Date(),
+): string[] {
+  const firstKey = zonedDayKey(start, timeZone);
+  const effectiveEnd = end ?? now;
+  const keys = [firstKey];
+  if (effectiveEnd.getTime() <= start.getTime()) return keys;
+  const lastKey = zonedDayKey(
+    new Date(effectiveEnd.getTime() - 1),
+    timeZone,
+  );
+  let key = firstKey;
+  while (key < lastKey) {
+    key = zonedDayKey(
+      new Date(zonedDayEnd(key, timeZone).getTime() + 1),
+      timeZone,
+    );
+    keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * Record that the given days changed: always bumps
+ * `daily_attendance.updated_at` (the "last change" timestamp compared with
+ * `last_synced_at`), and moves a `synced` day to `changed_after_sync`.
+ * Days without an attendance row are untouched.
+ */
+export async function markDaysChanged(
+  tx: Tx,
+  userId: string,
+  dayKeys: string[],
+): Promise<void> {
+  const unique = [...new Set(dayKeys)];
+  if (unique.length === 0) return;
+  await tx
+    .update(dailyAttendance)
+    .set({
+      updatedAt: new Date(),
+      reviewState: sql`CASE WHEN ${dailyAttendance.reviewState} = 'synced' THEN 'changed_after_sync'::review_state ELSE ${dailyAttendance.reviewState} END`,
+    })
+    .where(
+      and(
+        eq(dailyAttendance.userId, userId),
+        inArray(dailyAttendance.workDate, unique),
+      ),
+    );
+}
+
+/** Single-day form of {@link markDaysChanged} (always bumps `updated_at`). */
 export async function markDayChanged(
   tx: Tx,
   userId: string,
   dayKey: string,
 ): Promise<void> {
-  await tx
-    .update(dailyAttendance)
-    .set({ reviewState: "changed_after_sync", updatedAt: new Date() })
-    .where(
-      and(
-        eq(dailyAttendance.userId, userId),
-        eq(dailyAttendance.workDate, dayKey),
-        eq(dailyAttendance.reviewState, "synced"),
-      ),
-    );
+  await markDaysChanged(tx, userId, [dayKey]);
 }
 
 /** Entries whose [startedAt, endedAt) range intersects [rangeStart, rangeEnd). */

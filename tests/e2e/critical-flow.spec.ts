@@ -57,7 +57,8 @@ test("critical flow: login → work → task → break → stop → review → s
   // 8. Sync — no Google credentials configured: expect a clear, graceful error
   await page.getByTestId("sync-button").click();
   await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: /config/i }),
+    page.locator("[data-sonner-toast]").filter({ hasText: /spreadsheet configured/i })
+      .last(),
   ).toBeVisible({ timeout: 10_000 });
 
   // 9. Timeline shows the tracked entry

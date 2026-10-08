@@ -127,6 +127,18 @@ export interface DaySummaryDTO {
   reviewState: ReviewState;
 }
 
+/**
+ * Day summary as served by `getDaySummary` (GET /api/days/[date]): the plain
+ * `DaySummaryDTO` plus whether the day has changes newer than its last sheet
+ * sync. Kept separate so `DaySummaryDTO` fixtures and batch builders are
+ * unaffected.
+ */
+export type DaySummaryWithSyncDTO = DaySummaryDTO & {
+  needsSync: boolean;
+  /** ISO instant of the last successful sync, or null if never synced. */
+  lastSyncedAt: string | null;
+};
+
 export interface SyncCellDTO {
   a1: string;
   value: string;

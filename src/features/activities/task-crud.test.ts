@@ -7,21 +7,39 @@ import { tasks } from "@/server/db/schema";
 import { type Tx, upsertTask } from "./entry-helpers";
 import { createTask, deleteTask, updateTask } from "./entry-mutations";
 
-const { insertMock, updateMock, selectMock, deleteMock } = vi.hoisted(() => ({
-  insertMock: vi.fn(),
-  updateMock: vi.fn(),
-  selectMock: vi.fn(),
-  deleteMock: vi.fn(),
-}));
+const { insertMock, updateMock, selectMock, deleteMock, mockDb } = vi.hoisted(
+  () => {
+    const mocks = {
+      insertMock: vi.fn(),
+      updateMock: vi.fn(),
+      selectMock: vi.fn(),
+      deleteMock: vi.fn(),
+    };
+    const mockDb = {
+      insert: mocks.insertMock,
+      update: mocks.updateMock,
+      select: mocks.selectMock,
+      delete: mocks.deleteMock,
+    };
+    return { ...mocks, mockDb };
+  },
+);
 
 vi.mock("@/server/db", () => ({
   db: {
-    insert: insertMock,
-    update: updateMock,
-    select: selectMock,
-    delete: deleteMock,
+    ...mockDb,
+    transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   },
 }));
+
+/** The pre-delete select of the task's entries (none in these unit tests). */
+function mockNoEntries() {
+  selectMock.mockReturnValueOnce({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue([]),
+    }),
+  });
+}
 
 type TaskRow = typeof tasks.$inferSelect;
 
@@ -144,9 +162,12 @@ describe("updateTask", () => {
       }),
     });
 
-    const result = await updateTask("user-1", "task-1", {
-      status: "in_progress",
-    });
+    const result = await updateTask(
+      "user-1",
+      "task-1",
+      { status: "in_progress" },
+      "UTC",
+    );
 
     expect(result.status).toBe("in_progress");
   });
@@ -180,10 +201,12 @@ describe("updateTask", () => {
       }),
     });
 
-    const result = await updateTask("user-1", "task-1", {
-      status: "done",
-      completedAt: completedTime,
-    });
+    const result = await updateTask(
+      "user-1",
+      "task-1",
+      { status: "done", completedAt: completedTime },
+      "UTC",
+    );
 
     expect(result.status).toBe("done");
     expect(result.completedAt).toBe(completedTime.toISOString());
@@ -219,9 +242,12 @@ describe("updateTask", () => {
       }),
     });
 
-    const result = await updateTask("user-1", "task-1", {
-      status: "todo",
-    });
+    const result = await updateTask(
+      "user-1",
+      "task-1",
+      { status: "todo" },
+      "UTC",
+    );
 
     expect(result.status).toBe("todo");
     expect(result.completedAt).toBeNull();
@@ -237,7 +263,7 @@ describe("updateTask", () => {
     });
 
     await expect(
-      updateTask("user-1", "non-existent", { status: "done" }),
+      updateTask("user-1", "non-existent", { status: "done" }, "UTC"),
     ).rejects.toThrow("Task not found");
   });
 });
@@ -248,24 +274,26 @@ describe("deleteTask", () => {
   });
 
   it("deletes a task successfully", async () => {
+    mockNoEntries();
     deleteMock.mockReturnValueOnce({
       where: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([{ id: "task-1" }]),
       }),
     });
 
-    const success = await deleteTask("user-1", "task-1");
+    const success = await deleteTask("user-1", "task-1", "UTC");
     expect(success).toBe(true);
   });
 
   it("returns false when task is not found or not owned by user", async () => {
+    mockNoEntries();
     deleteMock.mockReturnValueOnce({
       where: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([]),
       }),
     });
 
-    const success = await deleteTask("user-1", "missing");
+    const success = await deleteTask("user-1", "missing", "UTC");
     expect(success).toBe(false);
   });
 });

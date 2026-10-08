@@ -8,11 +8,13 @@ import {
   clockIn,
   clockOut,
   createManualBreak,
+  deleteBreak,
   endBreak,
   getAttendance,
   getAttendanceToday,
   startBreak,
   updateAttendanceTimes,
+  updateBreak,
 } from "./service";
 
 vi.mock("@/server/db", async () => (await import("@/test/pglite-db")).dbModuleMock());
@@ -183,6 +185,116 @@ describe("attendance service against PGlite", () => {
       const [att] = await testDb.select().from(dailyAttendance);
       expect(att.clockInAt).toEqual(pastAt(1));
       expect(att.clockOutAt).toEqual(pastAt(9));
+      expect(att.reviewState).toBe("changed_after_sync");
+    });
+
+    it("createManualBreak that widens bounds but overlaps leaves attendance untouched", async () => {
+      const { userId } = await seedBasics();
+      await testDb.insert(dailyAttendance).values({
+        userId,
+        workDate: PAST_DAY,
+        clockInAt: pastAt(2),
+        clockOutAt: pastAt(8),
+        status: "closed",
+        reviewState: "synced",
+      });
+      await createManualBreak(userId, TZ, { workDate: PAST_DAY, startedAt: pastAt(5), endedAt: pastAt(6) });
+      await testDb.update(dailyAttendance).set({ reviewState: "synced" });
+      const [before] = await testDb.select().from(dailyAttendance);
+
+      await expect(
+        createManualBreak(userId, TZ, { workDate: PAST_DAY, startedAt: pastAt(5, 30), endedAt: pastAt(9) }),
+      ).rejects.toThrow("Break overlaps with an existing break");
+
+      const [after] = await testDb.select().from(dailyAttendance);
+      expect(after.clockInAt).toEqual(pastAt(2));
+      expect(after.clockOutAt).toEqual(pastAt(8));
+      expect(after.reviewState).toBe("synced");
+      expect(after.updatedAt).toEqual(before.updatedAt);
+      expect(await testDb.select().from(breakEntries)).toHaveLength(1);
+    });
+  });
+
+  describe("break mutations bump updated_at (needs-sync signal)", () => {
+    const EARLIER = new Date("2025-12-01T00:00:00Z");
+
+    async function openBreakWithEarlierStamp(userId: string, reviewState: "ready" | "synced") {
+      await clockIn(userId, TZ);
+      await startBreak(userId, TZ);
+      await testDb.update(dailyAttendance).set({ reviewState, updatedAt: EARLIER, lastSyncedAt: EARLIER });
+    }
+
+    it("startBreak bumps updated_at and keeps a ready day ready", async () => {
+      const { userId } = await seedBasics();
+      await clockIn(userId, TZ);
+      await testDb.update(dailyAttendance).set({ reviewState: "ready", updatedAt: EARLIER });
+      await startBreak(userId, TZ);
+      const [att] = await testDb.select().from(dailyAttendance);
+      expect(att.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(att.reviewState).toBe("ready");
+    });
+
+    it("endBreak on a ready day bumps updated_at and keeps review_state", async () => {
+      const { userId } = await seedBasics();
+      await openBreakWithEarlierStamp(userId, "ready");
+      await endBreak(userId, TZ);
+      const [att] = await testDb.select().from(dailyAttendance);
+      expect(att.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(att.updatedAt.getTime()).toBeGreaterThan(att.lastSyncedAt!.getTime());
+      expect(att.reviewState).toBe("ready");
+    });
+
+    it("endBreak on a synced day flips it to changed_after_sync", async () => {
+      const { userId } = await seedBasics();
+      await openBreakWithEarlierStamp(userId, "synced");
+      await endBreak(userId, TZ);
+      const [att] = await testDb.select().from(dailyAttendance);
+      expect(att.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(att.reviewState).toBe("changed_after_sync");
+    });
+
+    it("createManualBreak fully inside the span of a ready day bumps updated_at", async () => {
+      const { userId } = await seedBasics();
+      await testDb.insert(dailyAttendance).values({
+        userId,
+        workDate: PAST_DAY,
+        clockInAt: pastAt(2),
+        clockOutAt: pastAt(8),
+        status: "closed",
+        reviewState: "ready",
+        lastSyncedAt: EARLIER,
+        updatedAt: EARLIER,
+      });
+      await createManualBreak(userId, TZ, { workDate: PAST_DAY, startedAt: pastAt(4), endedAt: pastAt(5) });
+      const [att] = await testDb.select().from(dailyAttendance);
+      expect(att.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(att.reviewState).toBe("ready");
+      expect(att.clockInAt).toEqual(pastAt(2));
+      expect(att.clockOutAt).toEqual(pastAt(8));
+    });
+
+    it("updateBreak and deleteBreak bump updated_at; a synced day becomes changed_after_sync", async () => {
+      const { userId } = await seedBasics();
+      await testDb.insert(dailyAttendance).values({
+        userId,
+        workDate: PAST_DAY,
+        clockInAt: pastAt(2),
+        clockOutAt: pastAt(8),
+        status: "closed",
+        reviewState: "ready",
+      });
+      const brk = await createManualBreak(userId, TZ, { workDate: PAST_DAY, startedAt: pastAt(4), endedAt: pastAt(5) });
+
+      await testDb.update(dailyAttendance).set({ reviewState: "ready", updatedAt: EARLIER });
+      await updateBreak(userId, brk.id, TZ, { endedAt: pastAt(4, 30) });
+      let [att] = await testDb.select().from(dailyAttendance);
+      expect(att.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(att.reviewState).toBe("ready");
+
+      await testDb.update(dailyAttendance).set({ reviewState: "synced", updatedAt: EARLIER });
+      await deleteBreak(userId, brk.id, TZ);
+      [att] = await testDb.select().from(dailyAttendance);
+      expect(att.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
       expect(att.reviewState).toBe("changed_after_sync");
     });
   });

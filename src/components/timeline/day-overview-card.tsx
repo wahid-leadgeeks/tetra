@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Pencil, Plus } from "lucide-react";
+import { Loader2, LogOut, Pencil, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,9 @@ interface DayOverviewCardProps {
   clockingOut: boolean;
   handleQuickClockOut: () => Promise<void>;
   setAttendanceDialogOpen: (open: boolean) => void;
+  needsSync: boolean;
+  syncing: boolean;
+  onSyncNow: () => void;
 }
 
 export function DayOverviewCard({
@@ -28,12 +31,36 @@ export function DayOverviewCard({
   clockingOut,
   handleQuickClockOut,
   setAttendanceDialogOpen,
+  needsSync,
+  syncing,
+  onSyncNow,
 }: DayOverviewCardProps) {
   return (
     <Card className="shadow-xs border-border/80" data-testid="timeline-summary">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-bold">Day Overview</CardTitle>
+          {needsSync && (
+            <div className="flex items-center gap-1">
+              <span
+                data-testid="timeline-needs-sync"
+                className="text-xs text-muted-foreground"
+              >
+                Not synced ·
+              </span>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-xs cursor-pointer"
+                data-testid="timeline-sync-now"
+                disabled={syncing}
+                onClick={onSyncNow}
+              >
+                {syncing && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                Sync now
+              </Button>
+            </div>
+          )}
           {summary && (
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
               {summary.timeEntries.length} {summary.timeEntries.length === 1 ? "task" : "tasks"}

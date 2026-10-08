@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { syncDayToSheet } from "@/lib/auto-sync";
 import { todayKey } from "@/lib/time";
 import { sendBrowserAlert } from "@/features/notifications/store";
 import type { AttendanceDTO, CategoryDTO, DaySummaryDTO, TimeEntryDTO } from "@/lib/types";
@@ -268,23 +269,11 @@ export function useTodayState(timezone: string) {
       await settle();
       const targetDay = summary?.workDate;
       if (targetDay) {
-        fetch(`/api/days/${targetDay}/sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allowUnreviewed: true }),
-        })
-          .then(async (res) => {
-            if (!res.ok) return;
-            const data = await res.json().catch(() => null);
-            if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
-              toast.success(
-                `Break auto-synced to Google Sheet (${data.changedCells.length} ${
-                  data.changedCells.length === 1 ? "cell" : "cells"
-                })`,
-              );
-            }
-          })
-          .catch(() => {});
+        void syncDayToSheet(targetDay, {
+          auto: true,
+          successMessage: (n) =>
+            `Break auto-synced to Google Sheet (${n} ${n === 1 ? "cell" : "cells"})`,
+        });
       }
       return true;
     }
@@ -326,23 +315,11 @@ export function useTodayState(timezone: string) {
       await settle();
       const targetDay = summary?.workDate;
       if (targetDay) {
-        fetch(`/api/days/${targetDay}/sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allowUnreviewed: true }),
-        })
-          .then(async (res) => {
-            if (!res.ok) return;
-            const data = await res.json().catch(() => null);
-            if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
-              toast.success(
-                `Auto-synced to Google Sheet (${data.changedCells.length} ${
-                  data.changedCells.length === 1 ? "cell" : "cells"
-                })`,
-              );
-            }
-          })
-          .catch(() => {});
+        void syncDayToSheet(targetDay, {
+          auto: true,
+          successMessage: (n) =>
+            `Auto-synced to Google Sheet (${n} ${n === 1 ? "cell" : "cells"})`,
+        });
       }
       return true;
     }

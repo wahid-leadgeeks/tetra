@@ -6,9 +6,19 @@ import { defineConfig, devices } from "@playwright/test";
 // CI keeps its own throwaway Postgres service (see .github/workflows/ci.yml).
 const E2E_PGLITE_DIR = ".data/e2e-pglite";
 
+// Blank the Google sync settings so .env.local can never inject an
+// "env-default" spreadsheet config (and real sheet id) into e2e runs.
+// getSyncConfig() treats an empty GOOGLE_SPREADSHEET_ID as "not set".
+const BLANK_GOOGLE_ENV = {
+  GOOGLE_SPREADSHEET_ID: "",
+  GOOGLE_SHEET_NAME: "",
+  GOOGLE_SHEET_GID: "",
+  SHEET_MAPPING_FORMAT: "",
+};
+
 const localWebServer = {
   command: `rm -rf ${E2E_PGLITE_DIR} && pnpm db:migrate && pnpm db:seed && pnpm dev`,
-  env: { DATABASE_URL: `file:${E2E_PGLITE_DIR}` },
+  env: { DATABASE_URL: `file:${E2E_PGLITE_DIR}`, ...BLANK_GOOGLE_ENV },
   // Never reuse an already running dev server: it may be connected to the
   // remote database. If port 3000 is busy, Playwright fails instead.
   reuseExistingServer: false,
@@ -16,6 +26,7 @@ const localWebServer = {
 
 const ciWebServer = {
   command: "pnpm start",
+  env: { ...BLANK_GOOGLE_ENV },
   reuseExistingServer: false,
 };
 

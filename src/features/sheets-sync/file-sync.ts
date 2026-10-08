@@ -78,13 +78,16 @@ export async function executeFileSync(
 
   const timezone = await getUserTimezone(userId);
   const summary = await getDaySummary(userId, dayKey, timezone);
+  // Snapshot taken when the summary was read: edits after this instant
+  // compare as newer than last_synced_at.
+  const syncedAt = new Date();
   if (summary.reviewState !== "reviewed") {
     throw new Error("Review the day before sync");
   }
 
   return isCsvFileName(input.fileName)
-    ? syncCsv(userId, dayKey, input, config, summary)
-    : syncXlsx(userId, dayKey, input, config, summary);
+    ? syncCsv(userId, dayKey, input, config, summary, syncedAt)
+    : syncXlsx(userId, dayKey, input, config, summary, syncedAt);
 }
 
 async function syncXlsx(
@@ -93,6 +96,7 @@ async function syncXlsx(
   input: FileSyncInput,
   config: SpreadsheetConfigDTO,
   summary: DaySummaryDTO,
+  syncedAt: Date,
 ): Promise<FileSyncResult> {
   let workbook;
   try {
@@ -156,6 +160,7 @@ async function syncXlsx(
     XLSX_MIME,
     userId,
     dayKey,
+    syncedAt,
   );
 }
 
@@ -165,6 +170,7 @@ async function syncCsv(
   input: FileSyncInput,
   config: SpreadsheetConfigDTO,
   summary: DaySummaryDTO,
+  syncedAt: Date,
 ): Promise<FileSyncResult> {
   const sheet = parseCsv(input.buffer.toString("utf-8"));
 
@@ -212,6 +218,7 @@ async function syncCsv(
     "text/csv",
     userId,
     dayKey,
+    syncedAt,
   );
 }
 
@@ -225,6 +232,7 @@ async function finish(
   mimeType: string,
   userId: string,
   dayKey: string,
+  syncedAt: Date,
 ): Promise<FileSyncResult> {
   const payloadHash = computePayloadHash(rowNumber, cells);
   const changedCells = extractChangedCells(cellsToWrite);
@@ -238,7 +246,7 @@ async function finish(
       errorMessage: null,
     },
   );
-  await markSynced(userId, dayKey);
+  await markSynced(userId, dayKey, syncedAt);
 
   return {
     status: "success",
@@ -263,13 +271,20 @@ async function recordFailure(
   });
 }
 
-async function markSynced(userId: string, workDate: string): Promise<void> {
+/**
+ * Success terminal state. `lastSyncedAt` is the summary snapshot time;
+ * `updated_at` is deliberately left alone so later edits compare as newer.
+ */
+async function markSynced(
+  userId: string,
+  workDate: string,
+  syncedAt: Date,
+): Promise<void> {
   await db
     .update(dailyAttendance)
     .set({
-      lastSyncedAt: new Date(),
+      lastSyncedAt: syncedAt,
       reviewState: "synced",
-      updatedAt: new Date(),
     })
     .where(
       and(

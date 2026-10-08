@@ -476,6 +476,7 @@ export async function pullDayFromSheet(
         reviewState: "reviewed",
         reviewedAt: now,
         lastSyncedAt: now,
+        updatedAt: now,
       })
       .returning();
     attendanceId = created.id;
@@ -549,6 +550,7 @@ export async function pullDayFromSheet(
       status: "completed",
       notes: preservedNotes,
       source: "manual",
+      updatedAt: now,
     });
   }
 

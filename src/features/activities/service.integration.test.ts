@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
+import { getDaySummary } from "@/features/daily-summary/service";
 import { schema } from "@/server/db";
 import { seedBasics, testDb, setupTestDb } from "@/test/pglite-db";
 import { OverlapError } from "./domain";
@@ -8,12 +9,14 @@ import { getDayEntries } from "./entry-queries";
 import {
   createManualEntry,
   deleteEntry,
+  deleteTask,
   getActiveEntry,
   pauseTimer,
   resumeTimer,
   startTimer,
   stopTimer,
   updateEntry,
+  updateTask,
 } from "./service";
 
 vi.mock("@/server/db", async () => (await import("@/test/pglite-db")).dbModuleMock());
@@ -286,6 +289,202 @@ describe("activities service against PGlite", () => {
       await deleteEntry(userId, one.id, TZ);
       expect(await testDb.select().from(timeEntries)).toHaveLength(0);
       await expect(deleteEntry(userId, one.id, TZ)).rejects.toThrow("Entry not found");
+    });
+  });
+
+  describe("multi-day change flags (needs-sync signal)", () => {
+    const NY = "America/New_York";
+    const EARLIER = new Date("2025-12-01T00:00:00Z");
+
+    async function seedDays(userId: string, days: string[]) {
+      for (const workDate of days) {
+        await testDb.insert(dailyAttendance).values({
+          userId,
+          workDate,
+          clockInAt: new Date(`${workDate}T13:00:00Z`),
+          clockOutAt: new Date(`${workDate}T22:00:00Z`),
+          status: "closed",
+          reviewState: "ready",
+        });
+      }
+    }
+
+    async function resetStamps() {
+      await testDb.update(dailyAttendance).set({ updatedAt: EARLIER, lastSyncedAt: EARLIER });
+    }
+
+    async function stampByDay() {
+      const rows = await testDb.select().from(dailyAttendance);
+      return new Map(rows.map((r) => [r.workDate, r] as const));
+    }
+
+    it("deleteEntry of an entry spanning local midnight bumps both days", async () => {
+      const { userId, categoryId } = await seedBasics({ timezone: NY });
+      await seedDays(userId, ["2026-01-05", "2026-01-06", "2026-01-07"]);
+      // 23:00 Jan 5 → 01:00 Jan 6 in New York (EST, UTC-5).
+      const entry = await createManualEntry(userId, NY, {
+        taskName: "Late night",
+        categoryId,
+        startedAt: new Date("2026-01-06T04:00:00Z"),
+        endedAt: new Date("2026-01-06T06:00:00Z"),
+      });
+      await resetStamps();
+      await testDb.update(dailyAttendance).set({ reviewState: "synced" }).where(eq(dailyAttendance.workDate, "2026-01-06"));
+
+      await deleteEntry(userId, entry.id, NY);
+
+      const days = await stampByDay();
+      expect(days.get("2026-01-05")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(days.get("2026-01-06")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(days.get("2026-01-07")!.updatedAt).toEqual(EARLIER);
+      expect(days.get("2026-01-05")!.reviewState).toBe("ready");
+      expect(days.get("2026-01-06")!.reviewState).toBe("changed_after_sync");
+    });
+
+    it("updateEntry moving an entry from day A to day B bumps both", async () => {
+      const { userId, categoryId } = await seedBasics({ timezone: NY });
+      await seedDays(userId, ["2026-01-05", "2026-01-07", "2026-01-08"]);
+      const entry = await createManualEntry(userId, NY, {
+        taskName: "Movable",
+        categoryId,
+        startedAt: new Date("2026-01-05T15:00:00Z"),
+        endedAt: new Date("2026-01-05T16:00:00Z"),
+      });
+      await resetStamps();
+
+      await updateEntry(
+        userId,
+        entry.id,
+        { startedAt: new Date("2026-01-07T15:00:00Z"), endedAt: new Date("2026-01-07T16:00:00Z") },
+        NY,
+      );
+
+      const days = await stampByDay();
+      expect(days.get("2026-01-05")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(days.get("2026-01-07")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+      expect(days.get("2026-01-08")!.updatedAt).toEqual(EARLIER);
+    });
+
+    describe("updateTask / deleteTask", () => {
+      /** One task with entries on Jan 5 and Jan 7 (NY local); Jan 8 has none. */
+      async function seedTaskOnTwoDays() {
+        const { userId, categoryId } = await seedBasics({ timezone: NY });
+        await seedDays(userId, ["2026-01-05", "2026-01-07", "2026-01-08"]);
+        const first = await createManualEntry(userId, NY, {
+          taskName: "Shared task",
+          categoryId,
+          startedAt: new Date("2026-01-05T15:00:00Z"),
+          endedAt: new Date("2026-01-05T16:00:00Z"),
+        });
+        const second = await createManualEntry(userId, NY, {
+          taskName: "Shared task",
+          categoryId,
+          startedAt: new Date("2026-01-07T15:00:00Z"),
+          endedAt: new Date("2026-01-07T16:00:00Z"),
+        });
+        expect(second.taskId).toBe(first.taskId);
+        await resetStamps();
+        return { userId, categoryId, taskId: first.taskId };
+      }
+
+      it("renaming a task bumps every day with its entries, not unrelated days", async () => {
+        const { userId, taskId } = await seedTaskOnTwoDays();
+        // Entries predate the sync too, so only the rename can flag the days.
+        await testDb.update(timeEntries).set({ updatedAt: EARLIER });
+        for (const day of ["2026-01-05", "2026-01-07", "2026-01-08"]) {
+          expect((await getDaySummary(userId, day, NY)).needsSync).toBe(false);
+        }
+
+        await updateTask(userId, taskId, { name: "Renamed task" }, NY);
+
+        const days = await stampByDay();
+        for (const day of ["2026-01-05", "2026-01-07"]) {
+          const row = days.get(day)!;
+          expect(row.updatedAt.getTime()).toBeGreaterThan(row.lastSyncedAt!.getTime());
+          expect((await getDaySummary(userId, day, NY)).needsSync).toBe(true);
+        }
+        expect(days.get("2026-01-08")!.updatedAt).toEqual(EARLIER);
+        expect((await getDaySummary(userId, "2026-01-08", NY)).needsSync).toBe(false);
+      });
+
+      it("changing only status, priority or description bumps no day", async () => {
+        const { userId, taskId } = await seedTaskOnTwoDays();
+
+        await updateTask(userId, taskId, { status: "done" }, NY);
+        await updateTask(userId, taskId, { priority: "high" }, NY);
+        await updateTask(userId, taskId, { description: "More detail" }, NY);
+        // Same name (after trim) is not a sheet-relevant change either.
+        await updateTask(userId, taskId, { name: "  Shared task  " }, NY);
+
+        const days = await stampByDay();
+        for (const day of ["2026-01-05", "2026-01-07", "2026-01-08"]) {
+          expect(days.get(day)!.updatedAt).toEqual(EARLIER);
+        }
+      });
+
+      it("changing the category bumps every day with its entries", async () => {
+        const { userId, taskId } = await seedTaskOnTwoDays();
+        const [other] = await testDb
+          .insert(schema.categories)
+          .values({ key: `other-${Date.now()}`, name: "Other" })
+          .returning();
+
+        await updateTask(userId, taskId, { categoryId: other.id }, NY);
+
+        const days = await stampByDay();
+        expect(days.get("2026-01-05")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+        expect(days.get("2026-01-07")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+        expect(days.get("2026-01-08")!.updatedAt).toEqual(EARLIER);
+      });
+
+      it("a synced day flips to changed_after_sync; a ready day stays ready", async () => {
+        const { userId, taskId } = await seedTaskOnTwoDays();
+        await testDb
+          .update(dailyAttendance)
+          .set({ reviewState: "synced" })
+          .where(eq(dailyAttendance.workDate, "2026-01-05"));
+
+        await updateTask(userId, taskId, { name: "Renamed again" }, NY);
+
+        const days = await stampByDay();
+        expect(days.get("2026-01-05")!.reviewState).toBe("changed_after_sync");
+        expect(days.get("2026-01-07")!.reviewState).toBe("ready");
+      });
+
+      it("an entry crossing local midnight in America/New_York marks both days", async () => {
+        const { userId, categoryId } = await seedBasics({ timezone: NY });
+        await seedDays(userId, ["2026-01-05", "2026-01-06", "2026-01-07"]);
+        // 23:00 Jan 5 → 01:00 Jan 6 in New York (EST, UTC-5).
+        const entry = await createManualEntry(userId, NY, {
+          taskName: "Night owl",
+          categoryId,
+          startedAt: new Date("2026-01-06T04:00:00Z"),
+          endedAt: new Date("2026-01-06T06:00:00Z"),
+        });
+        await resetStamps();
+
+        await updateTask(userId, entry.taskId, { name: "Night owl (renamed)" }, NY);
+
+        const days = await stampByDay();
+        expect(days.get("2026-01-05")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+        expect(days.get("2026-01-06")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+        expect(days.get("2026-01-07")!.updatedAt).toEqual(EARLIER);
+      });
+
+      it("deleteTask bumps every day that had its entries and removes the entries", async () => {
+        const { userId, taskId } = await seedTaskOnTwoDays();
+
+        expect(await deleteTask(userId, taskId, NY)).toBe(true);
+
+        const days = await stampByDay();
+        expect(days.get("2026-01-05")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+        expect(days.get("2026-01-07")!.updatedAt.getTime()).toBeGreaterThan(EARLIER.getTime());
+        expect(days.get("2026-01-08")!.updatedAt).toEqual(EARLIER);
+        expect(
+          await testDb.select().from(timeEntries).where(eq(timeEntries.taskId, taskId)),
+        ).toHaveLength(0);
+        expect(await deleteTask(userId, taskId, NY)).toBe(false);
+      });
     });
   });
 });

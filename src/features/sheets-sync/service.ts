@@ -129,6 +129,9 @@ export async function executeSync(
 ): Promise<SyncResult> {
   const timezone = await getUserTimezone(userId);
   const summary = await getDaySummary(userId, dayKey, timezone);
+  // Snapshot taken when the summary was read: edits after this instant
+  // compare as newer than last_synced_at.
+  const syncedAt = new Date();
   if (
     !options.allowUnreviewed &&
     !options.tasksOnly &&
@@ -139,6 +142,9 @@ export async function executeSync(
 
   const config = await getSyncConfig(userId);
   if (!config) throw new SyncNotConfiguredError("No spreadsheet configured");
+  if (config.spreadsheetId === "file") {
+    throw new SyncNotConfiguredError("Google sync is not enabled (file mode)");
+  }
   if (options.tasksOnly && config.mapping.autoSyncTasks === false) {
     return { status: "success", changedCells: [], idempotent: true };
   }
@@ -202,7 +208,7 @@ export async function executeSync(
       changedCells: [],
       errorMessage: null,
     });
-    await markSynced(userId, dayKey, { setSyncedState: isReviewed });
+    await markSynced(userId, dayKey, { setSyncedState: isReviewed, syncedAt });
     return { status: "success", changedCells: [], idempotent: true };
   }
 
@@ -222,7 +228,7 @@ export async function executeSync(
     changedCells,
     errorMessage: null,
   });
-  await markSynced(userId, dayKey, { setSyncedState: isReviewed });
+  await markSynced(userId, dayKey, { setSyncedState: isReviewed, syncedAt });
   return { status: "success", changedCells, idempotent: false };
 }
 
@@ -452,19 +458,24 @@ async function writeCells(
   });
 }
 
-/** Success terminal state: attendance marked synced + lastSyncedAt. */
-async function markSynced(
+/**
+ * Success terminal state: `lastSyncedAt = syncedAt` (the instant the synced
+ * summary was read) and, when reviewed, `reviewState = "synced"`.
+ * `updated_at` is deliberately not touched, so any change written after the
+ * snapshot compares as newer than `last_synced_at`. UPDATE only: a day
+ * without an attendance row is never created here.
+ */
+export async function markSynced(
   userId: string,
   workDate: string,
-  options?: { setSyncedState?: boolean },
+  options: { setSyncedState?: boolean; syncedAt: Date },
 ): Promise<void> {
-  const setSynced = options?.setSyncedState ?? true;
+  const setSynced = options.setSyncedState ?? true;
   await db
     .update(dailyAttendance)
     .set({
-      lastSyncedAt: new Date(),
+      lastSyncedAt: options.syncedAt,
       ...(setSynced ? { reviewState: "synced" } : {}),
-      updatedAt: new Date(),
     })
     .where(
       and(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDaySummary, isBlockingWarning } from "./domain";
+import { buildDaySummary, computeNeedsSync, isBlockingWarning } from "./domain";
 import type { BuildDaySummaryInput, DaySummaryEntryInput } from "./types";
 
 const TZ = "Asia/Jakarta"; // UTC+7, no DST — deterministic local times
@@ -603,5 +603,77 @@ describe("buildDaySummary day window", () => {
     expect(summary.totals.attendanceMinutes).toBe(600);
     expect(summary.totals.workMinutes).toBe(300); // 4h + 1h = 5h = 300m
     expect(summary.totals.breakMinutes).toBe(60); // 1h = 60m
+  });
+});
+
+describe("computeNeedsSync", () => {
+  const T0 = new Date("2026-09-02T03:00:00Z");
+  const T1 = new Date("2026-09-02T04:00:00Z");
+  const T2 = new Date("2026-09-02T05:00:00Z");
+
+  it("no attendance row → false, even with entries", () => {
+    expect(
+      computeNeedsSync({
+        hasAttendance: false,
+        lastSyncedAt: null,
+        attendanceUpdatedAt: null,
+        entryUpdatedAts: [T2],
+      }),
+    ).toBe(false);
+  });
+
+  it("attendance never synced → true", () => {
+    expect(
+      computeNeedsSync({
+        hasAttendance: true,
+        lastSyncedAt: null,
+        attendanceUpdatedAt: T0,
+        entryUpdatedAts: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("updatedAt equal to lastSyncedAt → false", () => {
+    expect(
+      computeNeedsSync({
+        hasAttendance: true,
+        lastSyncedAt: T1,
+        attendanceUpdatedAt: new Date(T1.getTime()),
+        entryUpdatedAts: [new Date(T1.getTime())],
+      }),
+    ).toBe(false);
+  });
+
+  it("updatedAt before lastSyncedAt → false", () => {
+    expect(
+      computeNeedsSync({
+        hasAttendance: true,
+        lastSyncedAt: T1,
+        attendanceUpdatedAt: T0,
+        entryUpdatedAts: [T0],
+      }),
+    ).toBe(false);
+  });
+
+  it("an entry updated after the sync → true", () => {
+    expect(
+      computeNeedsSync({
+        hasAttendance: true,
+        lastSyncedAt: T1,
+        attendanceUpdatedAt: T0,
+        entryUpdatedAts: [T0, T2],
+      }),
+    ).toBe(true);
+  });
+
+  it("attendance updated after the sync → true", () => {
+    expect(
+      computeNeedsSync({
+        hasAttendance: true,
+        lastSyncedAt: T1,
+        attendanceUpdatedAt: T2,
+        entryUpdatedAts: [],
+      }),
+    ).toBe(true);
   });
 });

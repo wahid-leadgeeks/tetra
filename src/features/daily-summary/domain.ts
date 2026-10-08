@@ -325,3 +325,30 @@ export function buildDaySummary(input: BuildDaySummaryInput): DaySummaryDTO {
     reviewState: deriveReviewState(reviewStateStored, attendanceForGaps, warnings),
   };
 }
+
+export interface NeedsSyncInput {
+  hasAttendance: boolean;
+  lastSyncedAt: Date | null;
+  attendanceUpdatedAt: Date | null;
+  entryUpdatedAts: Date[];
+}
+
+/**
+ * True when the day has changes newer than its last successful sheet sync:
+ * `hasAttendance && (lastSyncedAt === null || max(updatedAt…) > lastSyncedAt)`.
+ *
+ * A day with entries but no attendance row is intentionally `false`: sync
+ * state lives on `daily_attendance`, `markSynced` is an UPDATE only (it must
+ * never create attendance), so nothing could ever clear the flag for it.
+ * Equal timestamps count as synced (a pull stamps both with the same instant).
+ */
+export function computeNeedsSync(input: NeedsSyncInput): boolean {
+  if (!input.hasAttendance) return false;
+  if (input.lastSyncedAt === null) return true;
+  const syncedMs = input.lastSyncedAt.getTime();
+  const changedMs = [input.attendanceUpdatedAt, ...input.entryUpdatedAts].reduce(
+    (max, d) => (d === null ? max : Math.max(max, d.getTime())),
+    Number.NEGATIVE_INFINITY,
+  );
+  return changedMs > syncedMs;
+}

@@ -6,6 +6,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -62,7 +63,14 @@ export async function apiFetch<T>(
         );
       }
     }
-    throw new ApiError(errorMessage(body, res.status), res.status);
+    const code =
+      body !== null &&
+      typeof body === "object" &&
+      "code" in body &&
+      typeof (body as { code: unknown }).code === "string"
+        ? (body as { code: string }).code
+        : undefined;
+    throw new ApiError(errorMessage(body, res.status), res.status, code);
   }
   return body as T;
 }

@@ -6,7 +6,7 @@
  * - at most one open break at a time
  * Durations are always computed server-side from stored timestamps.
  */
-import { and, eq, gte, inArray, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { accumulatePause } from "@/features/activities/entry-helpers";
 import { todayKey, zonedDayEnd, zonedDayStart } from "@/lib/time";
 import type { AttendanceDTO, BreakDTO } from "@/lib/types";
@@ -17,6 +17,25 @@ import { hasBreakOverlap, isOpenBreak, toAttendanceDTO, toBreakDTO } from "./dom
 export type TxOrDb = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
 
 type AttendanceRow = typeof dailyAttendance.$inferSelect;
+
+/**
+ * Record a change on an attendance row: always bumps `updated_at` (the
+ * "last change" timestamp compared with `last_synced_at`) and moves a
+ * `synced` day to `changed_after_sync`.
+ */
+async function touchAttendance(
+  dbOrTx: TxOrDb,
+  attendanceId: string,
+  now: Date,
+): Promise<void> {
+  await dbOrTx
+    .update(dailyAttendance)
+    .set({
+      updatedAt: now,
+      reviewState: sql`CASE WHEN ${dailyAttendance.reviewState} = 'synced' THEN 'changed_after_sync'::review_state ELSE ${dailyAttendance.reviewState} END`,
+    })
+    .where(eq(dailyAttendance.id, attendanceId));
+}
 
 async function loadBreaks(attendanceId: string) {
   return db
@@ -639,6 +658,7 @@ export async function startBreak(
     await tx
       .insert(breakEntries)
       .values({ userId, attendanceId: open.id, startedAt: now });
+    await touchAttendance(tx, open.id, now);
   });
   return refreshDTO(open, now);
 }
@@ -668,6 +688,7 @@ export async function endBreak(
     .where(
       and(eq(breakEntries.id, openBreak.id), isNull(breakEntries.endedAt)),
     );
+  await touchAttendance(db, open.id, now);
   return refreshDTO(open, now);
 }
 
@@ -702,6 +723,7 @@ export async function createManualBreak(
       .limit(1)
   )[0];
 
+  const attendanceExisted = attendance !== undefined;
   if (!attendance) {
     const [created] = await db
       .insert(dailyAttendance)
@@ -716,6 +738,22 @@ export async function createManualBreak(
       .returning();
     attendance = created;
   } else {
+    // Validate no overlap before touching clock times, so a rejected break
+    // leaves the attendance unchanged.
+    const existingBreaks = await db
+      .select()
+      .from(breakEntries)
+      .where(eq(breakEntries.attendanceId, attendance.id));
+
+    if (
+      hasBreakOverlap(
+        { startedAt: input.startedAt, endedAt: input.endedAt },
+        existingBreaks,
+      )
+    ) {
+      throw new Error("Break overlaps with an existing break");
+    }
+
     // If break starts before clock-in or ends after clock-out, adjust clock times
     const updates: Partial<typeof dailyAttendance.$inferInsert> = {};
     if (input.startedAt.getTime() < attendance.clockInAt.getTime()) {
@@ -724,31 +762,12 @@ export async function createManualBreak(
     if (attendance.clockOutAt && input.endedAt.getTime() > attendance.clockOutAt.getTime()) {
       updates.clockOutAt = input.endedAt;
     }
-    if (attendance.reviewState === "synced") {
-      updates.reviewState = "changed_after_sync";
-    }
     if (Object.keys(updates).length > 0) {
-      updates.updatedAt = new Date();
       await db
         .update(dailyAttendance)
         .set(updates)
         .where(eq(dailyAttendance.id, attendance.id));
     }
-  }
-
-  // Validate no overlap with existing breaks on this attendance
-  const existingBreaks = await db
-    .select()
-    .from(breakEntries)
-    .where(eq(breakEntries.attendanceId, attendance.id));
-
-  if (
-    hasBreakOverlap(
-      { startedAt: input.startedAt, endedAt: input.endedAt },
-      existingBreaks,
-    )
-  ) {
-    throw new Error("Break overlaps with an existing break");
   }
 
   const [inserted] = await db
@@ -760,6 +779,9 @@ export async function createManualBreak(
       endedAt: input.endedAt,
     })
     .returning();
+  if (attendanceExisted) {
+    await touchAttendance(db, attendance.id, new Date());
+  }
 
   return toBreakDTO({
     id: inserted.id,
@@ -839,11 +861,7 @@ export async function updateBreak(
       if (att.clockOutAt && newEnd && newEnd.getTime() > att.clockOutAt.getTime()) {
         updates.clockOutAt = newEnd;
       }
-      if (att.reviewState === "synced" && Object.keys(updates).length > 0) {
-        updates.reviewState = "changed_after_sync";
-      }
       if (Object.keys(updates).length > 0) {
-        updates.updatedAt = new Date();
         await db
           .update(dailyAttendance)
           .set(updates)
@@ -852,16 +870,8 @@ export async function updateBreak(
     }
   }
 
-  // Mark attendance changed_after_sync if needed
-  await db
-    .update(dailyAttendance)
-    .set({ reviewState: "changed_after_sync", updatedAt: new Date() })
-    .where(
-      and(
-        eq(dailyAttendance.id, existing.attendanceId),
-        eq(dailyAttendance.reviewState, "synced"),
-      ),
-    );
+  // Bump updated_at; a synced day becomes changed_after_sync.
+  await touchAttendance(db, existing.attendanceId, new Date());
 
   return toBreakDTO({
     id: updated.id,
@@ -890,14 +900,6 @@ export async function deleteBreak(
 
   await db.delete(breakEntries).where(eq(breakEntries.id, breakId));
 
-  // Mark attendance changed_after_sync if needed
-  await db
-    .update(dailyAttendance)
-    .set({ reviewState: "changed_after_sync", updatedAt: new Date() })
-    .where(
-      and(
-        eq(dailyAttendance.id, existing.attendanceId),
-        eq(dailyAttendance.reviewState, "synced"),
-      ),
-    );
+  // Bump updated_at; a synced day becomes changed_after_sync.
+  await touchAttendance(db, existing.attendanceId, new Date());
 }

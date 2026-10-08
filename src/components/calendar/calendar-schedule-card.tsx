@@ -12,8 +12,6 @@ import {
   Video,
 } from "lucide-react";
 
-import { toast } from "sonner";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,6 +22,7 @@ import type {
   CalendarEventSuggestionDTO,
   ImportCalendarEventsResultDTO,
 } from "@/features/calendar-sync/types";
+import { syncDayToSheet } from "@/lib/auto-sync";
 import { cn } from "@/lib/utils";
 import { todayKey } from "@/lib/time";
 
@@ -112,23 +111,11 @@ export function CalendarScheduleCard({
 
     // Non-blocking sheet sync; screens opt in so autoSyncTasks stays respected.
     if (syncAfterImport && result.importedCount > 0) {
-      fetch(`/api/days/${effectiveDayKey}/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ allowUnreviewed: true }),
-      })
-        .then(async (res) => {
-          if (!res.ok) return;
-          const data = await res.json().catch(() => null);
-          if (data && !data.idempotent && data.changedCells && data.changedCells.length > 0) {
-            toast.success(
-              `Auto-synced to Google Sheet (${data.changedCells.length} ${
-                data.changedCells.length === 1 ? "cell" : "cells"
-              })`,
-            );
-          }
-        })
-        .catch(() => {});
+      void syncDayToSheet(effectiveDayKey, {
+        auto: true,
+        successMessage: (n) =>
+          `Auto-synced to Google Sheet (${n} ${n === 1 ? "cell" : "cells"})`,
+      });
     }
   };
 

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/components/timeline/api";
-import type { CategoryDTO, DaySummaryDTO } from "@/lib/types";
+import type { CategoryDTO, DaySummaryWithSyncDTO } from "@/lib/types";
 
 export function useTimelineDay(initialDay: string) {
   const router = useRouter();
   const [dayKey, setDayKey] = useState(initialDay);
-  const [summary, setSummary] = useState<DaySummaryDTO | null>(null);
+  const [summary, setSummary] = useState<DaySummaryWithSyncDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchKey, setFetchKey] = useState(0);
@@ -19,7 +19,7 @@ export function useTimelineDay(initialDay: string) {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<DaySummaryDTO>(`/api/days/${dayKey}`)
+    apiFetch<DaySummaryWithSyncDTO>(`/api/days/${dayKey}`)
       .then((data) => {
         if (!cancelled) setSummary(data);
       })
@@ -60,6 +60,14 @@ export function useTimelineDay(initialDay: string) {
     setError(null);
   }
 
+  function markSyncedLocally(syncedDay: string) {
+    setSummary((s) =>
+      s && s.workDate === syncedDay
+        ? { ...s, needsSync: false, lastSyncedAt: new Date().toISOString() }
+        : s,
+    );
+  }
+
   function refresh() {
     setLoading(true);
     setError(null);
@@ -75,6 +83,7 @@ export function useTimelineDay(initialDay: string) {
     categories,
     categoriesError,
     handleDayChange,
+    markSyncedLocally,
     refresh,
   };
 }

@@ -13,8 +13,10 @@ import { validateNoOverlap } from "./domain";
 import {
   accumulatePause,
   assertCategoryExists,
+  entryDayKeys,
   fetchEntriesInRange,
   markDayChanged,
+  markDaysChanged,
   requireEntryDto,
   upsertTask,
 } from "./entry-helpers";
@@ -195,12 +197,14 @@ export async function updateEntry(
       })
       .where(eq(timeEntries.id, entry.id));
 
-    const oldDay = zonedDayKey(entry.startedAt, timeZone);
     const newDay = zonedDayKey(startedAt, timeZone);
-    const changedDays = oldDay === newDay ? [oldDay] : [oldDay, newDay];
-    for (const day of changedDays) {
-      await markDayChanged(tx, userId, day);
-    }
+    // Flag every local day of the old and the new range.
+    await markDaysChanged(tx, userId, [
+      ...new Set([
+        ...entryDayKeys(entry.startedAt, entry.endedAt, timeZone, now),
+        ...entryDayKeys(startedAt, effectiveEnd, timeZone, now),
+      ]),
+    ]);
     await expandAttendanceBounds(
       tx,
       userId,
@@ -214,7 +218,7 @@ export async function updateEntry(
   return requireEntryDto(userId, entryId);
 }
 
-/** Delete an entry; its day is flagged changed if it was synced. */
+/** Delete an entry; every local day it touched is flagged changed. */
 export async function deleteEntry(
   userId: string,
   id: string,
@@ -230,7 +234,11 @@ export async function deleteEntry(
     const entry = existing[0];
     if (entry === undefined) throw new Error("Entry not found");
     await tx.delete(timeEntries).where(eq(timeEntries.id, entry.id));
-    await markDayChanged(tx, userId, zonedDayKey(entry.startedAt, timeZone));
+    await markDaysChanged(
+      tx,
+      userId,
+      entryDayKeys(entry.startedAt, entry.endedAt, timeZone),
+    );
   });
 }
 
@@ -328,6 +336,7 @@ export async function updateTask(
   userId: string,
   taskId: string,
   input: UpdateTaskInput,
+  timeZone: string,
 ): Promise<TaskDTO> {
   const existingRows = await db
     .select()
@@ -361,22 +370,52 @@ export async function updateTask(
     startedAt = input.startedAt;
   }
 
-  const [updated] = await db
-    .update(tasks)
-    .set({
-      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-      ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
-      ...(input.status !== undefined ? { status: input.status } : {}),
-      ...(input.priority !== undefined ? { priority: input.priority } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite } : {}),
-      ...(input.dueAt !== undefined ? { dueAt: input.dueAt } : {}),
-      startedAt,
-      completedAt,
-      lastUsedAt: now,
-    })
-    .where(eq(tasks.id, taskId))
-    .returning();
+  const patch = {
+    ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+    ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+    ...(input.status !== undefined ? { status: input.status } : {}),
+    ...(input.priority !== undefined ? { priority: input.priority } : {}),
+    ...(input.description !== undefined ? { description: input.description } : {}),
+    ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite } : {}),
+    ...(input.dueAt !== undefined ? { dueAt: input.dueAt } : {}),
+    startedAt,
+    completedAt,
+    lastUsedAt: now,
+  };
+
+  // Only the task name and category reach the sheet (notes cells use the
+  // task name; entries carry their own category). Those changes flag every
+  // local day that has entries for this task; other fields skip the fan-out.
+  const sheetRelevantChange =
+    (input.name !== undefined && input.name.trim() !== existing.name) ||
+    (input.categoryId !== undefined && input.categoryId !== existing.categoryId);
+
+  let updated: typeof tasks.$inferSelect;
+  if (sheetRelevantChange) {
+    updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(tasks)
+        .set(patch)
+        .where(eq(tasks.id, taskId))
+        .returning();
+      const entries = await tx
+        .select({ startedAt: timeEntries.startedAt, endedAt: timeEntries.endedAt })
+        .from(timeEntries)
+        .where(and(eq(timeEntries.userId, userId), eq(timeEntries.taskId, taskId)));
+      await markDaysChanged(
+        tx,
+        userId,
+        entries.flatMap((e) => entryDayKeys(e.startedAt, e.endedAt, timeZone, now)),
+      );
+      return row;
+    });
+  } else {
+    [updated] = await db
+      .update(tasks)
+      .set(patch)
+      .where(eq(tasks.id, taskId))
+      .returning();
+  }
 
   const [cat] = await db
     .select({ key: categories.key, name: categories.name })
@@ -402,16 +441,31 @@ export async function updateTask(
   };
 }
 
-/** Delete a task. */
+/**
+ * Delete a task. Its entries cascade away, so every local day that had an
+ * entry for the task is flagged changed.
+ */
 export async function deleteTask(
   userId: string,
   taskId: string,
+  timeZone: string,
 ): Promise<boolean> {
-  const result = await db
-    .delete(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
-    .returning({ id: tasks.id });
-
-  return result.length > 0;
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const entries = await tx
+      .select({ startedAt: timeEntries.startedAt, endedAt: timeEntries.endedAt })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.userId, userId), eq(timeEntries.taskId, taskId)));
+    const result = await tx
+      .delete(tasks)
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+      .returning({ id: tasks.id });
+    await markDaysChanged(
+      tx,
+      userId,
+      entries.flatMap((e) => entryDayKeys(e.startedAt, e.endedAt, timeZone, now)),
+    );
+    return result.length > 0;
+  });
 }
 

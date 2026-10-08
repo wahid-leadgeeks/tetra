@@ -198,6 +198,12 @@ Record SyncLog
 
 Sync must be idempotent and must never overwrite unrelated cells.
 
+### Client auto-sync and the "Not synced" signal
+
+- All client-side background syncs (Timeline saves, Today stop-task/end-break, calendar import) go through `syncDayToSheet` in `src/lib/auto-sync.ts`. Network errors and per-attempt timeouts (45 s) are retried after 1 s and 3 s, waiting for `online` between attempts; a 502 is retried once; other statuses are not retried. Concurrent triggers for a day coalesce into the running sync plus one follow-up. Final failures show a `toast.error` with id `sheet-sync-<day>` (Retry action only for network errors and 502s). With `auto: true`, a `not_configured` 400 (no config, file mode, no credentials) is silent. Retry helpers live in `src/lib/retry.ts`.
+- `DaySummaryWithSyncDTO.needsSync` (returned by `getDaySummary` / `GET /api/days/:date`) is derived, with no extra column: `hasAttendance AND (last_synced_at IS NULL OR max(daily_attendance.updated_at, time_entries.updated_at of overlapping entries) > last_synced_at)`. `last_synced_at` is a snapshot of when the synced summary was read (`executeSync` captures `syncedAt` after `getDaySummary`; `markSynced` writes it and does not touch `updated_at`), so edits made during a sync still count as newer.
+- Invariant: every mutation that affects a day's sheet output must bump `daily_attendance.updated_at` for each affected local day (`markDaysChanged` in `activities/entry-helpers.ts`, `touchAttendance` in `attendance/service.ts`; task rename/re-categorise/delete fan out to all days with entries for the task). Code that inserts rows during a pull must set `updated_at` explicitly so a pulled day is not flagged.
+
 ### Calendar schedule import
 
 The "Schedule -> Review & Import" flow is available on Today and on Timeline (for the viewed day). `importCalendarEvents` is transactional per user: it takes `FOR NO KEY UPDATE` on the user's row (not `FOR UPDATE`, which would deadlock against `startTimer` inserts that take `KEY SHARE` through their FKs), then skips events that already match an entry of the user by title + time (+-2 min). The server checks both the edited `title` and the original `sourceTitle`. Imported days are marked changed (`markDayChanged`). There is no durable link between time entries and calendar events and no schema change.

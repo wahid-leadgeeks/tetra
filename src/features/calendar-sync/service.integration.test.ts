@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@/server/db";
 import { seedBasics, testDb, setupTestDb } from "@/test/pglite-db";
 
@@ -24,6 +24,8 @@ import {
   updateCalendarConfig,
   updateCalendarEvent,
 } from "./service";
+import { getDaySummary } from "@/features/daily-summary/service";
+import { markSynced } from "@/features/sheets-sync/service";
 
 const { calendarConfigs, calendarEvents, dailyAttendance, tasks, timeEntries, users } = schema;
 const TZ = "Asia/Jakarta";
@@ -451,5 +453,44 @@ describe("importCalendarEvents", () => {
       const res = await run(userId, [item({ title: "Weekly planning", sourceTitle: "" })]);
       expect(res).toMatchObject({ importedCount: 1, skippedCount: 0 });
     });
+  });
+});
+
+describe("importCalendarEvents and day needsSync", () => {
+  // Future instants so DB-side `now()` defaults (real clock) are older than
+  // every faked app timestamp.
+  const DAY = "2030-03-04";
+  const T1 = new Date("2030-03-04T06:00:00Z");
+  const T2 = new Date("2030-03-04T07:00:00Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2030-03-04T05:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("an import after markSynced flags the day as needing sync", async () => {
+    const { userId } = await seedBasics();
+    const event = (eventId: string, startedAt: string, endedAt: string) => ({
+      eventId, title: `Meeting ${eventId}`, categoryKey: "unknown", startedAt, endedAt,
+    });
+    await importCalendarEvents(userId, {
+      events: [event("evt-1", "2030-03-04T02:00:00Z", "2030-03-04T02:30:00Z")],
+    } as never);
+
+    vi.setSystemTime(T1);
+    await markSynced(userId, DAY, { syncedAt: T1 });
+    expect((await getDaySummary(userId, DAY, TZ)).needsSync).toBe(false);
+
+    vi.setSystemTime(T2);
+    const res = await importCalendarEvents(userId, {
+      events: [event("evt-2", "2030-03-04T03:00:00Z", "2030-03-04T03:30:00Z")],
+    } as never);
+    expect(res.importedCount).toBe(1);
+    const summary = await getDaySummary(userId, DAY, TZ);
+    expect(summary.needsSync).toBe(true);
+    expect(summary.lastSyncedAt).toBe(T1.toISOString());
   });
 });

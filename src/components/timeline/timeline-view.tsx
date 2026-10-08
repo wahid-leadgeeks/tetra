@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/components/timeline/api";
+import { syncDayToSheet } from "@/lib/auto-sync";
 import { CalendarScheduleCard } from "@/components/calendar/calendar-schedule-card";
 import { DayNavigator } from "@/components/timeline/day-navigator";
 import { DayOverviewCard } from "@/components/timeline/day-overview-card";
@@ -46,6 +47,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
     categories,
     categoriesError,
     handleDayChange,
+    markSyncedLocally,
     refresh,
   } = useTimelineDay(initialDay);
 
@@ -61,6 +63,8 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   const [deleteBreak, setDeleteBreak] = useState<BreakDTO | null>(null);
   const [deletingBreak, setDeletingBreak] = useState(false);
   const [autoSyncTasks, setAutoSyncTasks] = useState(true);
+  const [syncConfigured, setSyncConfigured] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
   const [clockingOut, setClockingOut] = useState(false);
 
@@ -73,7 +77,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       });
       toast.success("Workday closed.");
       refresh();
-      if (autoSyncTasks) {
+      if (autoSyncTasks && syncConfigured) {
         void syncTasksBackground();
       }
     } catch (err) {
@@ -85,9 +89,20 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<{ id?: string; mapping?: { autoSyncTasks?: boolean } }>("/api/sync-config")
+    apiFetch<{
+      id?: string;
+      spreadsheetId?: string;
+      mapping?: { autoSyncTasks?: boolean };
+    } | null>("/api/sync-config")
       .then((config) => {
-        if (!cancelled && config?.mapping?.autoSyncTasks !== undefined) {
+        if (cancelled) return;
+        setSyncConfigured(
+          config !== null &&
+            config !== undefined &&
+            typeof config.id === "string" &&
+            config.spreadsheetId !== "file",
+        );
+        if (config?.mapping?.autoSyncTasks !== undefined) {
           setAutoSyncTasks(Boolean(config.mapping.autoSyncTasks));
         }
       })
@@ -100,25 +115,31 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
   }, []);
 
   async function syncTasksBackground() {
+    const syncedDay = dayKey;
+    await syncDayToSheet(syncedDay, {
+      auto: true,
+      successMessage: (n) => `Auto-synced to Google Sheet (${n} cells)`,
+      onSuccess: () => markSyncedLocally(syncedDay),
+    });
+  }
+
+  async function handleSyncNow() {
+    setSyncing(true);
     try {
-      const res = await apiFetch<{ status: string; changedCells: { a1: string; value: string }[]; idempotent: boolean }>(
-        `/api/days/${dayKey}/sync`,
-        {
-          method: "POST",
-          body: JSON.stringify({ allowUnreviewed: true }),
-        },
-      );
-      if (!res.idempotent && res.changedCells && res.changedCells.length > 0) {
-        toast.success(`Auto-synced to Google Sheet (${res.changedCells.length} cells)`);
-      }
-    } catch {
-      // Non-blocking background sync; keep quiet on routine errors
+      const res = await syncDayToSheet(dayKey, {
+        notifyIdempotent: true,
+        successMessage: (n) =>
+          `Synced to Google Sheet (${n} ${n === 1 ? "cell" : "cells"})`,
+      });
+      if (res) refresh();
+    } finally {
+      setSyncing(false);
     }
   }
 
   function handleSaved() {
     refresh();
-    if (autoSyncTasks) {
+    if (autoSyncTasks && syncConfigured) {
       void syncTasksBackground();
     }
   }
@@ -133,7 +154,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       toast.success("Entry deleted.");
       setDeleteEntry(null);
       refresh();
-      if (autoSyncTasks) {
+      if (autoSyncTasks && syncConfigured) {
         void syncTasksBackground();
       }
     } catch (err) {
@@ -153,7 +174,7 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
       toast.success("Break deleted.");
       setDeleteBreak(null);
       refresh();
-      if (autoSyncTasks) {
+      if (autoSyncTasks && syncConfigured) {
         void syncTasksBackground();
       }
     } catch (err) {
@@ -250,6 +271,9 @@ export function TimelineView({ timeZone, initialDay }: TimelineViewProps) {
             clockingOut={clockingOut}
             handleQuickClockOut={handleQuickClockOut}
             setAttendanceDialogOpen={setAttendanceDialogOpen}
+            needsSync={syncConfigured && (summary?.needsSync ?? false)}
+            syncing={syncing}
+            onSyncNow={handleSyncNow}
           />
           <div data-testid="timeline-schedule-card">
             <CalendarScheduleCard

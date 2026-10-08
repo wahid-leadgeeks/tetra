@@ -30,11 +30,14 @@ import {
   zonedClock,
   zonedDayKey,
 } from "@/lib/time";
+import { isAbortError, isNetworkError, withRetry } from "@/lib/retry";
 import { cn } from "@/lib/utils";
 
 interface CalendarViewProps {
   timezone?: string;
 }
+
+const RETRY_DELAYS_MS = [1000, 3000];
 
 const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const FULL_DAY_NAMES = [
@@ -97,10 +100,16 @@ export function CalendarView({ timezone = "Asia/Jakarta" }: CalendarViewProps) {
   }, [selectedDayKey, timezone]);
 
   const hasSyncedInitialRef = useRef(false);
+  // Monotonic id so only the latest load/refresh may touch state.
+  const refreshSeqRef = useRef(0);
+  const lastLoadFailedRef = useRef(false);
 
   // Load events on mount and when selectedDayKey changes
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    // Invalidate any in-flight manual refresh for a previous day.
+    const seq = ++refreshSeqRef.current;
+
     async function fetchEvents() {
       try {
         const fromDate = addDaysISO(selectedDayKey, -35);
@@ -110,38 +119,51 @@ export function CalendarView({ timezone = "Asia/Jakarta" }: CalendarViewProps) {
           shouldSync ? "&sync=true" : ""
         }`;
 
-        const res = await fetch(url);
-        if (cancelled) return;
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to load events");
-        }
-
-        const data = await res.json();
-        if (cancelled) return;
+        const data = await withRetry(
+          async () => {
+            const res = await fetch(url, { signal: controller.signal });
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              throw new Error(body.error || "Failed to load events");
+            }
+            return await res.json();
+          },
+          {
+            delaysMs: RETRY_DELAYS_MS,
+            shouldRetry: (err) =>
+              isNetworkError(err) && !controller.signal.aborted,
+            signal: controller.signal,
+          },
+        );
+        if (controller.signal.aborted) return;
         setEvents(data.events || []);
+        setError(null);
+        lastLoadFailedRef.current = false;
         hasSyncedInitialRef.current = true;
       } catch (err) {
-        if (!cancelled) {
-          console.error("Load calendar events error:", err);
-          setError(err instanceof Error ? err.message : "Failed to load events");
-        }
+        if (isAbortError(err) || controller.signal.aborted) return;
+        console.error("Load calendar events error:", err);
+        lastLoadFailedRef.current = true;
+        setError(err instanceof Error ? err.message : "Failed to load events");
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
+          // A manual refresh started after this load owns the spinner.
+          if (seq === refreshSeqRef.current) setSyncing(false);
         }
       }
     }
 
     void fetchEvents();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [selectedDayKey]);
 
   // Refresh / Sync events on demand
   const refreshEvents = useCallback(
     async (syncWithGoogle = false) => {
+      const seq = ++refreshSeqRef.current;
       if (syncWithGoogle) {
         setSyncing(true);
       } else {
@@ -157,32 +179,55 @@ export function CalendarView({ timezone = "Asia/Jakarta" }: CalendarViewProps) {
           syncWithGoogle ? "&sync=true" : ""
         }`;
 
-        const res = await fetch(url);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to load events");
-        }
-
-        const data = await res.json();
+        const data = await withRetry(
+          async () => {
+            const res = await fetch(url);
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              throw new Error(body.error || "Failed to load events");
+            }
+            return await res.json();
+          },
+          {
+            delaysMs: RETRY_DELAYS_MS,
+            shouldRetry: (err) =>
+              isNetworkError(err) && seq === refreshSeqRef.current,
+          },
+        );
+        if (seq !== refreshSeqRef.current) return;
         setEvents(data.events || []);
+        lastLoadFailedRef.current = false;
 
         if (syncWithGoogle) {
           toast.success("Synchronized with Google Calendar");
         }
       } catch (err) {
+        if (seq !== refreshSeqRef.current) return;
         console.error("Load calendar events error:", err);
+        lastLoadFailedRef.current = true;
         const msg = err instanceof Error ? err.message : "Failed to load events";
         setError(msg);
         if (syncWithGoogle) {
           toast.error("Google Calendar sync failed: " + msg);
         }
       } finally {
-        setLoading(false);
-        setSyncing(false);
+        if (seq === refreshSeqRef.current) {
+          setLoading(false);
+          setSyncing(false);
+        }
       }
     },
     [selectedDayKey],
   );
+
+  // Reload automatically when the browser comes back online after a failure
+  useEffect(() => {
+    const handler = () => {
+      if (lastLoadFailedRef.current) void refreshEvents(false);
+    };
+    window.addEventListener("online", handler);
+    return () => window.removeEventListener("online", handler);
+  }, [refreshEvents]);
 
   // Group events by day key
   const eventsByDay = useMemo(() => {
